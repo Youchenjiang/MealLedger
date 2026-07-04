@@ -11,7 +11,7 @@ MealLedger uses a strict commit and pull request policy. The goal is to keep his
   - `fix/<short-name>` for bug fixes
   - `docs/<short-name>` for documentation-only work
   - `chore/<short-name>` for maintenance
-- Keep branches short-lived. Rebase or merge `main` before opening a PR if the branch is stale.
+- Keep branches short-lived. Rebase on `main` before opening a PR if the branch is stale.
 
 ## Commit Format
 
@@ -67,7 +67,7 @@ Use a new scope only when none of the above is accurate.
 ## Commit Message Rules
 
 - Use English.
-- Keep the subject under 72 characters.
+- Keep the subject under 50 characters.
 - Use lowercase after the colon.
 - Do not end the subject with a period.
 - Do not use vague subjects like `update files`, `fix bug`, or `misc changes`.
@@ -143,4 +143,3 @@ Before requesting review, include the checks you ran. At minimum:
 - Use `.env.example` for placeholders.
 - Test data must be fake and obviously non-personal.
 - Media files in tests should be tiny synthetic fixtures, not real meal photos or receipts.
-

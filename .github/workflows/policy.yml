@@ -44,7 +44,7 @@ jobs:
             const typePattern = allowedTypes.join("|");
             const scopePattern = allowedScopes.join("|");
             const pattern = new RegExp(
-              `^(${typePattern})\\((${scopePattern})\\): [a-z0-9].{0,70}$`,
+              `^(${typePattern})\\((${scopePattern})\\): [a-z0-9].{0,48}$`,
             );
 
             function validateSubject(subject, label) {

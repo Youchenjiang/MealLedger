@@ -23,7 +23,7 @@ Verification:
 #
 # Rules:
 #   - English only
-#   - Subject under 72 characters
+#   - Subject under 50 characters
 #   - Lowercase after the colon
 #   - No period at the end
 #   - One logical change per commit
