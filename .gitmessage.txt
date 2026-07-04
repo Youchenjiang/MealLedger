@@ -1,0 +1,29 @@
+<type>(<scope>): <description>
+
+Why:
+
+- 
+
+What changed:
+
+- 
+
+Verification:
+
+- 
+
+# Format:
+#   <type>(<scope>): <description>
+#
+# Allowed types:
+#   feat, fix, refactor, docs, test, chore, style, perf, security
+#
+# Preferred scopes:
+#   app, ledger, meal, media, r2, supabase, ai, auth, docs, ci, deps
+#
+# Rules:
+#   - English only
+#   - Subject under 50 characters
+#   - Lowercase after the colon
+#   - No period at the end
+#   - One logical change per commit
