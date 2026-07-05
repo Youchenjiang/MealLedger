@@ -6,6 +6,7 @@ MealLedger uses a strict commit and pull request policy. The goal is to keep his
 
 - `main` must stay deployable.
 - Do not push directly to `main`.
+- Do not create a long-lived `dev` branch unless the roadmap explicitly changes.
 - Create topic branches from `main`:
   - `feature/<short-name>` for features
   - `fix/<short-name>` for bug fixes
@@ -132,10 +133,13 @@ Small PRs are preferred. If a PR touches more than one subsystem, explain why it
 
 Before requesting review, include the checks you ran. At minimum:
 
+- Frontend changes: run `npm run build`, perform a browser smoke test, and confirm the console has no errors.
 - Schema changes: verify SQL applies cleanly to a fresh Supabase project or local Supabase DB.
 - R2 changes: verify signed upload URLs never expose R2 secrets.
 - Export changes: verify exports do not include image bytes or base64 media.
 - AI changes: verify AI output remains draft/suggestion data unless explicitly confirmed by the user.
+
+See [Development Workflow](docs/development-workflow.md) for frontend workflow and generated artifact rules.
 
 ## Privacy Rules
 

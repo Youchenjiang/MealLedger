@@ -9,6 +9,8 @@ dist/
 build/
 .turbo/
 .vite/
+tmp/
+*.tsbuildinfo
 
 # Supabase local state
 .supabase/
