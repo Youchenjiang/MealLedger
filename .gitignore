@@ -1,0 +1,20 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Dependencies and build outputs
+node_modules/
+dist/
+build/
+.turbo/
+.vite/
+
+# Supabase local state
+.supabase/
+supabase/.branches/
+
+# Logs and OS files
+*.log
+Thumbs.db
+.DS_Store
