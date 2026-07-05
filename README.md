@@ -7,9 +7,13 @@ MealLedger stores structured records in Supabase PostgreSQL and large media file
 
 - [Setup notes](docs/setup.md)
 - [Meal, media, and ledger flows](docs/flows.md)
+- [Long-term roadmap](docs/roadmap.md)
+- [Development workflow](docs/development-workflow.md)
+- [Backend architecture](docs/backend-architecture.md)
 - [Supabase schema](supabase/schema.sql)
 - [R2 upload Edge Function](supabase/functions/create-r2-upload-url/index.ts)
 
 ## Development
 
 Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md). The repository enforces Conventional Commit PR titles and commit subjects through GitHub Actions.
+Frontend work must follow [Development Workflow](docs/development-workflow.md).
