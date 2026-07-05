@@ -48,7 +48,7 @@ create table public.transactions (
   merchant_id uuid references public.merchants(id),
   amount numeric(14, 2) not null check (amount >= 0),
   currency_code text not null default 'TWD',
-  exchange_rate_to_twd numeric(14, 6),
+  exchange_rate_to_twd numeric(14, 6) check (exchange_rate_to_twd > 0),
   note text,
   source text not null default 'manual',
   created_at timestamptz not null default now(),
@@ -81,7 +81,7 @@ create table public.media_assets (
   object_key text not null,
   thumbnail_key text,
   content_type text not null,
-  byte_size bigint,
+  byte_size bigint check (byte_size >= 0),
   captured_at timestamptz,
   uploaded_at timestamptz not null default now(),
   ai_description text,
@@ -101,7 +101,7 @@ create table public.meal_transaction_links (
   meal_id uuid not null references public.meal_entries(id) on delete cascade,
   transaction_id uuid not null references public.transactions(id) on delete cascade,
   source link_source not null default 'manual',
-  confidence numeric(4, 3) check (confidence is null or confidence between 0 and 1),
+  confidence numeric(4, 3) check (confidence between 0 and 1),
   created_at timestamptz not null default now(),
   primary key (meal_id, transaction_id)
 );
@@ -121,6 +121,15 @@ create index transactions_user_time_idx on public.transactions (user_id, occurre
 create index meal_entries_user_time_idx on public.meal_entries (user_id, eaten_at desc);
 create index media_assets_user_captured_idx on public.media_assets (user_id, captured_at desc);
 create index media_assets_labels_idx on public.media_assets using gin (ai_labels);
+create index transactions_account_id_idx on public.transactions (account_id);
+create index transactions_transfer_account_id_idx on public.transactions (transfer_account_id) where transfer_account_id is not null;
+create index transactions_category_id_idx on public.transactions (category_id);
+create index transactions_merchant_id_idx on public.transactions (merchant_id);
+create index meal_entries_merchant_id_idx on public.meal_entries (merchant_id);
+create index meal_media_links_media_id_idx on public.meal_media_links (media_id);
+create index meal_transaction_links_transaction_id_idx on public.meal_transaction_links (transaction_id);
+create index ai_imports_user_id_idx on public.ai_imports (user_id);
+create index ai_imports_media_id_idx on public.ai_imports (media_id) where media_id is not null;
 
 create view public.ledger_export
 with (security_invoker = true) as
@@ -182,7 +191,10 @@ as $$
       1,
       0.45
       + case when t.merchant_id is not null and t.merchant_id = meal.merchant_id then 0.35 else 0 end
-      + case when c.name in ('餐飲', '早餐', '午餐', '晚餐', '飲料', '外食') then 0.15 else 0 end
+      + case when c.name in (
+        '餐飲', '早餐', '午餐', '晚餐', '飲料', '外食',
+        'Food', 'Dining', 'Breakfast', 'Lunch', 'Dinner', 'Drinks', 'Eating Out'
+      ) then 0.15 else 0 end
       + greatest(0, 0.05 - abs(extract(epoch from (t.occurred_at - meal.eaten_at))) / extract(epoch from p_window) * 0.05)
     )::numeric(4, 3) as confidence
   from meal

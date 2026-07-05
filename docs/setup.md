@@ -31,6 +31,7 @@ supabase secrets set R2_PUBLIC_BASE_URL="https://media.example.com"
 3. Configure CORS if uploads happen directly from the browser.
 4. Use private objects by default.
 5. Prefer short-lived signed GET URLs for private viewing, or a custom domain only if the photo library can be public/protected elsewhere.
+6. The first upload endpoint creates `media_assets` metadata before the browser PUT completes. A later upload-confirmation function should reconcile missing R2 objects and clean up abandoned rows.
 
 ## Frontend Upload Contract
 
@@ -75,4 +76,3 @@ order by occurred_at;
 ```
 
 This export intentionally includes only `linked_meal_ids` and `linked_media_ids`, not image bytes.
-

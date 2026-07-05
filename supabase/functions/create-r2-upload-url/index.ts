@@ -2,13 +2,22 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID")!;
-const R2_ACCESS_KEY_ID = Deno.env.get("R2_ACCESS_KEY_ID")!;
-const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY")!;
-const R2_BUCKET = Deno.env.get("R2_BUCKET")!;
+const SUPABASE_URL = requireEnv("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+const R2_ACCOUNT_ID = requireEnv("R2_ACCOUNT_ID");
+const R2_ACCESS_KEY_ID = requireEnv("R2_ACCESS_KEY_ID");
+const R2_SECRET_ACCESS_KEY = requireEnv("R2_SECRET_ACCESS_KEY");
+const R2_BUCKET = requireEnv("R2_BUCKET");
 const R2_PUBLIC_BASE_URL = Deno.env.get("R2_PUBLIC_BASE_URL") ?? "";
+
+const corsHeaders = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization, content-type",
+  "access-control-allow-methods": "POST, OPTIONS",
+};
+
+const allowedKinds = ["meal_photo", "receipt", "other"] as const;
+type MediaKind = (typeof allowedKinds)[number];
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const s3 = new S3Client({
@@ -20,14 +29,41 @@ const s3 = new S3Client({
   },
 });
 
+function requireEnv(name: string): string {
+  const value = Deno.env.get(name);
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { ...corsHeaders, "content-type": "application/json" },
   });
 }
 
+function isMediaKind(value: unknown): value is MediaKind {
+  return typeof value === "string" && allowedKinds.includes(value as MediaKind);
+}
+
+function cleanImageContentType(type?: string): string {
+  return type?.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+function getExtensionFromContentType(type: string): string {
+  const subtype = type.split("/")[1];
+  if (subtype === "jpeg" || subtype === "jpg") return "jpg";
+  if (subtype === "png") return "png";
+  if (subtype === "gif") return "gif";
+  if (subtype === "webp") return "webp";
+  if (subtype === "svg+xml" || subtype === "svg") return "svg";
+  if (subtype === "avif") return "avif";
+  if (subtype === "heic" || subtype === "heif") return subtype;
+  return "bin";
+}
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const authHeader = req.headers.get("authorization");
@@ -39,14 +75,15 @@ Deno.serve(async (req) => {
   if (userError || !userData.user) return json({ error: "invalid_user" }, 401);
 
   const body = await req.json().catch(() => null);
-  const contentType = body?.contentType as string | undefined;
+  const contentType = cleanImageContentType(body?.contentType);
   const kind = body?.kind ?? "meal_photo";
   const capturedAt = body?.capturedAt ?? null;
-  const extension = contentType?.split("/")[1]?.replace("jpeg", "jpg") ?? "bin";
+  const extension = getExtensionFromContentType(contentType);
 
-  if (!contentType?.startsWith("image/")) {
+  if (!contentType.startsWith("image/")) {
     return json({ error: "only_image_uploads_are_allowed" }, 400);
   }
+  if (!isMediaKind(kind)) return json({ error: "invalid_media_kind", allowedKinds }, 400);
 
   const mediaId = crypto.randomUUID();
   const objectKey = `${userData.user.id}/originals/${mediaId}.${extension}`;
@@ -71,7 +108,7 @@ Deno.serve(async (req) => {
     captured_at: capturedAt,
   });
 
-  if (insertError) return json({ error: insertError.message }, 500);
+  if (insertError) return json({ error: "failed_to_create_media_asset" }, 500);
 
   return json({
     mediaId,
@@ -83,4 +120,3 @@ Deno.serve(async (req) => {
     publicUrl: R2_PUBLIC_BASE_URL ? `${R2_PUBLIC_BASE_URL}/${objectKey}` : null,
   });
 });
-
