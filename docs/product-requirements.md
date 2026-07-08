@@ -328,3 +328,52 @@ AI governance requirements:
 - A future settings panel should be able to show accept/edit/reject patterns and let the user reset, disable, or clear learned suggestions for a merchant, category, account, or source type.
 - User-owned learned mappings and preferences should be deletable without deleting official ledger records.
 
+### Invoice Records
+
+`invoice_records` and `invoice_line_items` represent structured invoice data from scans, imports, or official Ministry of Finance cloud invoice sync. Imported invoices should create transaction drafts first, then become official ledger transactions only after review.
+
+V1 scope note: V1 should treat invoice data as scan/import draft source metadata. It should not implement the full provider-sync invoice domain unless the scope is explicitly reopened.
+
+Invoice records are external-source records, not the same as the app's official ledger records. They should be stored in their own invoice domain, stay synchronized with the official source when available, and link to app ledger records through explicit matching/link tables.
+
+Invoice linking rules:
+
+- One invoice can link to multiple app ledger records.
+- Invoice line items do not need to match the user's ledger split exactly.
+- Example: one invoice containing face wash and bananas can link to two app records, one for face wash and one for bananas.
+- Shared or multi-person purchases may only be partially represented in the user's ledger because the app records the user's own spending.
+- The app can automatically link an invoice to an already recorded ledger entry, suggest missing ledger entries, or let the user manually link an invoice to existing records.
+
+Invoice deduplication rules:
+
+- Official cloud invoice sync, manual invoice scan, and imported invoice data should deduplicate by stable invoice identifiers when available, such as invoice number, period, seller, random code, total amount, and invoice date.
+- API-synced invoice data should not overwrite user-confirmed ledger records automatically.
+- High-confidence matches between an external source and an existing confirmed ledger record can auto-link as a non-blocking notice when stable identifiers, amount, date, and merchant evidence agree.
+- Auto-linking existing records is different from auto-creating official ledger records. New official ledger records still require confirmation unless covered by an explicit trusted auto-record rule.
+- If a scanned invoice already produced a ledger draft or confirmed ledger record, a later official cloud invoice sync should create or update the external invoice record and suggest a link or merge.
+- Deduplication conflicts should become review tasks showing the scanned source, synced invoice, existing ledger records, and suggested action.
+- User choices should include link to existing, merge duplicate external records, create missing ledger draft, ignore, or keep separate.
+
+### Account Statement Records
+
+Bank account, digital wallet, and credit card statement data should be stored in a separate external-source domain. These records represent electronic passbook or statement output from providers and then link to the app's ledger records.
+
+V1 scope note: V1 should only support statement-like data as manual import or CSV/spreadsheet source metadata if implemented at all. Provider API sync, full statement domain automation, and complex reconciliation UI are V2/spike work.
+
+Statement sync rules:
+
+- Synced statement records can only increase through provider sync.
+- Synced statement records should not be removed by sync if the provider stops returning older rows.
+- Manual adjustment can hide, correct, or mark statement records, but provider sync itself should not silently delete them.
+- The app can automatically link statement records to already recorded ledger entries, suggest missing ledger entries, or let the user manually link a statement row to existing records.
+- Statement records are evidence/source records; official ledger entries remain the app's confirmed accounting records.
+
+Statement deduplication rules:
+
+- Statement rows should deduplicate by provider account, transaction time/date, amount, direction, counterparty/description, and provider transaction id when available.
+- Synced statement rows should never silently create official ledger records. They create suggested matches or drafts until confirmed, unless the user has enabled an explicit auto-record rule.
+- High-confidence statement-to-ledger matches can auto-link as a non-blocking notice when amount, date/time, account, and counterparty evidence agree.
+- If a statement row matches a manual ledger record, the system should suggest a link rather than duplicate the ledger entry.
+- If a statement row matches an auto-recorded ledger record by date, merchant, or provider hint but the amount differs, the app should create a review task instead of ignoring the mismatch.
+- If an imported statement row conflicts with existing records, the conflict remains in review until the user resolves it.
+
