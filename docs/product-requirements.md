@@ -533,3 +533,97 @@ Lifecycle rules:
 - Category merge, account rename, and merchant cleanup should create audit events or migration records.
 - If a reference value must be permanently deleted for privacy reasons, the app should require explicit confirmation and explain the effect on historical records and reports.
 
+## Capture And Import Flows
+
+### Capture Entry Model
+
+The first version should support both a dedicated `Capture` screen and a quick action entry point. The dedicated screen is useful for guided workflows and teaching. The quick action is useful for repeated daily entry.
+
+Traditional Chinese UI should distinguish these capture choices:
+
+- `手動記帳`
+- `掃描發票`
+- `掃描收據`
+- `付款紀錄`
+- `紀錄餐點`
+- `附加照片`
+
+`發票`, `收據`, and `付款紀錄` should remain separate choices because they come from different evidence sources and have different linking rules.
+
+### Manual Transaction
+
+1. User adds amount, account, category, merchant, time, and note.
+2. User may attach existing or newly captured photos.
+3. The transaction can remain photo-free.
+
+Manual entry should show related history while the user types. Suggestions should help fill fields without silently overwriting user input.
+
+Manual entry suggestion requirements:
+
+- Typing in merchant should show matching merchants and recent related records.
+- Example: typing `陽光` can suggest `陽光耳鼻喉科診所`.
+- Merchant-based suggestions can offer last-used item/name, amount, account, category, event, tags, and recurrence pattern as light placeholder suggestions.
+- Typing in item/name should also suggest related merchant, amount, account, category, and other fields from prior records.
+- Suggested values should be visually distinct from confirmed input, such as light placeholder text.
+- The user can accept a suggestion field by field.
+- The user can clear a suggested field without clearing the whole form.
+- Suggestions must not replace required explicit confirmation for amount, account, transaction kind, recurrence, or official posting.
+- The user can configure whether suggestions use the most recent matching record or show multiple related records to choose from.
+- For income entry, category and source can be selected from existing values or created inline.
+
+### Scan Receipt Or Invoice
+
+1. User chooses scan receipt or invoice.
+2. App uploads the image as a receipt or invoice scan source.
+3. OCR or invoice parsing creates an import draft.
+4. User reviews the suggested transaction fields.
+5. User confirms, edits, or discards the draft.
+6. After confirmation or discard, the original scan image remains available until the user deletes it. The app should remind the user about storage and privacy.
+
+### Record Meal
+
+1. User chooses record meal.
+2. User may add one or more photos.
+3. App creates or updates a meal draft.
+4. App may suggest transaction candidates by time, merchant, invoice, or amount.
+5. User decides whether to link the meal to a transaction.
+
+Lightweight meal records require only a meal time. Photos, merchant/place, notes, meal tags, linked transactions, and linked invoices are optional. If the user starts from a photo, the photo timestamp can provide the initial meal time.
+
+### Batch Import
+
+1. User imports multiple invoice images, receipt images, or meal photos.
+2. App groups them into reviewable draft items.
+3. User can confirm drafts one by one or in batches.
+4. Batch import must preserve source files and avoid writing unreviewed AI output into official transactions.
+
+Batch import grouping rules:
+
+- Each import creates an import batch.
+- Each batch contains one or more draft groups.
+- Multi-page receipts or invoices can be grouped into one receipt/invoice draft.
+- Multiple meal photos can be grouped into one meal draft.
+- The user can split, merge, reorder, or relabel draft groups before confirmation.
+- AI/OCR may suggest groups, but grouping remains user-reviewable.
+
+Batch import resource limits:
+
+- The app should enforce per-file size limits, per-batch file count limits, and supported file type rules before upload or OCR processing.
+- Large images should be resized or compressed for OCR/preview when possible while preserving the original only if the user chooses to keep it.
+- AI/OCR processing should run through a queue with visible progress, retry, failure, and cancellation states.
+- Temporary uploaded scan files should have `owner_id`, `expires_at`, and draft/import job linkage when possible.
+- Orphaned temporary files, such as uploads abandoned when the browser closes, should be cleaned by a scheduled backend job and/or object-storage lifecycle rules.
+- If a batch is too large, the app should ask the user to split it rather than silently running an expensive or unstable job.
+- The first version can choose conservative defaults and adjust them later based on real usage and infrastructure cost.
+
+## Linking Rules
+
+- Transaction to photo: optional, many photos allowed.
+- Meal to photo: optional, many photos allowed.
+- Meal to transaction: optional, many-to-many.
+- Invoice to transaction draft: common path, but still requires confirmation.
+- Photo intent is single-purpose at the logical product layer. A logical media record should be a meal photo, a receipt/invoice scan input, or an attachment, not several at once.
+- Receipt and invoice scan images are temporary by default and retained only when the user explicitly keeps them as evidence or attachments.
+- The same real-world dining event may include separate meal photos, an invoice record, and a payment transaction, but these records should remain separable.
+- The same underlying media file may support more than one link intent, such as both a meal photo and receipt evidence, without duplicating file bytes.
+
