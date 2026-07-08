@@ -70,4 +70,4 @@ MealLedger uses lightweight agile planning with risk-driven testing. The long-te
 - For UI shell and navigation work, use build checks and browser smoke tests.
 - For invoice import, use fake fixtures only; never commit real invoice data.
 - Product requirements and unresolved questions are tracked in [Product Requirements Notes](product-requirements.md).
-- Backend ownership and provider boundaries are defined in [Backend Architecture](backend-architecture.md).
+- Backend ownership and provider boundaries are defined in [Backend Architecture](../engineering/backend-architecture.md).
