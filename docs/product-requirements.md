@@ -377,3 +377,41 @@ Statement deduplication rules:
 - If a statement row matches an auto-recorded ledger record by date, merchant, or provider hint but the amount differs, the app should create a review task instead of ignoring the mismatch.
 - If an imported statement row conflicts with existing records, the conflict remains in review until the user resolves it.
 
+### Security And Access Control
+
+Sensitive files and source records, including receipt images, invoice images, OCR text, invoice records, and statement rows, must be protected at the storage and API layer, not only by frontend UI warnings.
+
+Security requirements:
+
+- Object storage keys must be scoped by user or tenant ownership and should not be guessable.
+- Direct public reads are not allowed for receipt, invoice, meal, or statement evidence files.
+- File access should use short-lived signed URLs generated only after server-side authorization. First version should target minute-scale validity, such as 5 to 15 minutes.
+- Signed URL requests must verify the current user's ownership or explicit sharing permission.
+- Deleting or hiding a source file should immediately block future signed URL generation. Already-issued signed URLs may remain valid until expiry.
+- V1 should not use proxy-read for ordinary media because routing every image through the backend would hurt CDN caching and app responsiveness. Proxy-read can remain a future option for explicitly high-sensitivity evidence.
+- V1 accepts eventual invalidation for already-issued signed URLs. The UI should not promise that every previously issued URL becomes unreadable instantly after deletion.
+- Media marked as highly sensitive can use stricter cache settings such as `Cache-Control: no-store`, shorter signed URL TTLs, or a future proxy-read path.
+- Cache headers for sensitive files should avoid shared public caching. CDN caching must not make deleted or hidden sensitive files available beyond the signed URL/access policy.
+- Row-level security must protect structured records in Supabase tables.
+- Link tables must also enforce ownership so users cannot link their ledger records to another user's media, invoices, or statements.
+- Signed URL issuance must use server-side ownership checks and must be tested for IDOR-style horizontal access attempts, especially before any future sharing or split-bill collaboration features.
+- Deleting or hiding sensitive source data should revoke future access links where possible and prevent new signed URLs.
+- Temporary receipt and invoice scan files should use `Cache-Control: no-store` or equivalent private non-shared caching by default.
+- Audit logs should record security-relevant source access and destructive actions at least enough to debug accidental exposure or deletion.
+- Account deletion should have a separate destructive-data workflow from ordinary record deletion. It should include database deletion/anonymization, object-storage deletion, provider credential revocation, and audit/retry visibility.
+- R2 or other object-storage files selected for permanent deletion should enter a deletion queue so failures can be retried and audited.
+- Once a source file is queued or marked for deletion, new signed URL generation must stop immediately. Already-issued signed URLs may remain usable only until their short expiry.
+
+External provider credentials require stricter handling than ordinary app data:
+
+- Ministry of Finance identifiers, bank tokens, wallet tokens, and credit card sync credentials must be encrypted at rest.
+- Provider credentials should be stored separately from normal ledger records and never exposed to the browser after setup.
+- Server-side sync jobs should access provider credentials through a narrow service boundary.
+- Credentials should be scoped per user and provider account.
+- Revoking a provider connection should stop future sync jobs without deleting already imported source records unless the user separately deletes them.
+- Expired, revoked, or invalid provider credentials should mark the connection as `reauth_required` or `auth_expired`, stop pretending the sync is current, and surface a user-visible notification.
+- Sync status should show last successful sync time, last failed sync time, failure reason category, and whether user action is required.
+- Sync jobs should use retry limits and exponential backoff for transient failures.
+- Jobs that require expired or revoked credentials should pause until the user re-authenticates rather than repeatedly calling provider APIs.
+- Logs must not include raw provider tokens, authorization codes, or secrets.
+
