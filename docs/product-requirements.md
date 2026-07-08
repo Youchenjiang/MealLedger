@@ -727,3 +727,42 @@ V1 invoice and statement scope:
 - Ministry of Finance cloud invoice sync and bank/account statement API sync remain spike or V2 work.
 - V1 schema and naming should not block future provider sync, but V1 implementation should not build production provider credential flows.
 
+## V1 Accepted Tradeoffs
+
+- V1 PWA offline support is a convenience and recovery aid, not a guarantee of durable multi-day offline operation. If strong offline capture for hiking, travel, or long no-network periods becomes a launch requirement, the project should move Capacitor/native persistence into V1 before shipping.
+- V1 accepts that IndexedDB may be evicted by the browser or operating system. The product response is clear local-only status, persistent-storage requests when available, fast sync when online, and warnings for unsynced important drafts/media.
+- Even while choosing PWA first, V1 should keep browser storage behind replaceable adapters so a later Capacitor migration does not require rewriting React screens or domain logic.
+- V1 AI/OCR lineage is intentionally lightweight. Draft-level `JSONB` plus TTL cleanup is the default; deeply normalized feature stores, long-term trace retention, and model-training datasets are later architecture work.
+- V1 external AI/OCR security relies on authenticated server-side mediation, rate limits, quotas, file limits, and abuse controls. Provider keys must never ship to the browser.
+- V1 signed URL security accepts short-lived eventual invalidation for already-issued URLs. Immediate revocation for every cached media read is not a V1 guarantee.
+- V1 conflict handling prioritizes data preservation over automation. It should avoid silent overwrites, avoid JSON-level merge screens, and use simple conflict drafts/review items when automatic sync is unsafe.
+
+## App Shell Impact
+
+- The primary language should be ledger-first, not meal-first.
+- Navigation should likely include `Overview`, `Ledger`, `Capture`, `Meals`, `Imports`, and `Media` or `Photos`.
+- The capture flow should let the user choose between accounting intent and meal intent.
+- Empty states should not imply that photos are required to use the app.
+- The app should make linking feel helpful and reversible, not mandatory.
+- The app needs instructional UI for first-time setup, manual entry suggestions, missing-field handling, recurrence choices, import review, undo, and event/category distinctions.
+- The app shell should reserve room for sync status, queued offline work, conflict review, and unresolved draft counts.
+- Sync status should include provider-auth problems such as `reauth_required`, `auth_expired`, and failed sync runs that need user action.
+- Detail pages should show relationship data in a clear hierarchy: the main record first, then compact sections for linked invoice, statement row, meal, media, and related drafts. Full graph editing should live in an explicit relationship-management mode.
+- Review queues should support grouped review, bulk approve where safe, bulk ignore/archive/snooze, and clear explanations of why a draft still needs human confirmation.
+- `缺漏支出` should surface in Overview review cards, Ledger filters, and Review Queue counts. Users should be able to open a missing-detail record from any of those entry points and complete it.
+- AI governance can start as stored decision data, with a later settings view for suggestion accuracy, resets, and merchant/category-specific controls.
+
+## Implementation Direction
+
+- V1 frontend should use Vite, React, and TypeScript as a PWA.
+- V1 backend/storage/auth should use Supabase for Auth, Postgres, RLS-protected structured data, and server-side access boundaries.
+- V1 local offline state should use IndexedDB, likely through a wrapper such as Dexie, for drafts, queued uploads, idempotency keys, and sync state.
+- V1 code should be Capacitor-ready: React components should depend on domain services/repositories, not directly on IndexedDB, browser file APIs, or service-worker queue internals.
+- Local persistence, sync queue, media storage, and upload handling should each have adapter boundaries, such as `LedgerRepository`, `SyncQueue`, `MediaStorage`, and `UploadQueue`.
+- The IndexedDB/Dexie implementation is the V1 adapter. A future Capacitor implementation can replace it with SQLite and native filesystem adapters without changing ledger domain rules or most UI components.
+- PWA IndexedDB should be treated as lightweight offline support, not guaranteed long-term durable storage. The UI should clearly show which drafts, records, and media are not yet backed up to the cloud.
+- V1 must request browser storage persistence with `navigator.storage.persist()` when available, and should show whether persistent storage was granted.
+- If persistent storage is unavailable or denied, the UI should warn that local-only offline data may be cleared by the browser or operating system.
+- V1 should sync queued work as soon as connectivity returns and warn when large media or important drafts remain local-only.
+- Capacitor should become a priority if the product needs strong multi-day offline guarantees, native SQLite/File System persistence, packaged mobile distribution, push notifications, or more reliable camera/file handling.
+- Flutter is not the preferred V1 path because the current product risk is ledger schema, sync, forms, reports, and web/PWA delivery rather than highly custom native UI.
