@@ -415,3 +415,121 @@ External provider credentials require stricter handling than ordinary app data:
 - Jobs that require expired or revoked credentials should pause until the user re-authenticates rather than repeatedly calling provider APIs.
 - Logs must not include raw provider tokens, authorization codes, or secrets.
 
+### Drafts And Suggestions
+
+Import, OCR, and AI workflows should produce draft records. Drafts can suggest transaction fields, meal fields, links, categories, and duplicate warnings without changing the official ledger until the user confirms them.
+
+Import review must handle incomplete spreadsheet rows. The user may import rows that only have date, merchant, amount, account, or a partial note. The app should keep the partial row as a draft, show missing fields, and suggest matches from nearby records, merchants, accounts, invoices, photos, or repeated patterns. Incomplete imported rows may be stored before confirmation, but they must not enter the official ledger until the user confirms them.
+
+Import review requirements:
+
+- Preserve the original row values even when the parsed transaction is incomplete.
+- Mark missing required fields clearly.
+- Let the user search old records while reviewing a draft.
+- Suggest likely account, amount, merchant, category, and linked records when enough evidence exists.
+- Allow the user to confirm, edit, merge with another draft, ignore, or leave unresolved.
+- Keep guessed fields visually distinct from user-confirmed fields.
+- Block incomplete or unconfirmed import drafts from official ledger exports and reports.
+- Support undo for recent import-review actions.
+- Support reverting a whole time range of imported or edited records.
+- Keep enough local and database backup/audit data to recover from incorrect imports or bulk edits.
+- Log suggestion decisions, including accept, edit, reject, ignore, merge, split, and undo.
+
+Idempotency requirements:
+
+- Manual create, batch confirm, import confirm, and auto-record APIs should accept or generate an idempotency key.
+- Idempotency keys should be generated when a draft/action is created or when work enters the offline queue, not only at request-send time.
+- Queued work should persist the same idempotency key across reloads, reconnects, and retries.
+- Batch confirmation should have stable per-batch and per-draft item keys so partial retries do not duplicate completed rows.
+- Repeating the same request with the same idempotency key must not create duplicate official ledger records.
+- Batch confirmation should record per-draft results so a retry can complete only unfinished items.
+- Official ledger records created from drafts should retain a reference to the source draft or recurrence occurrence to prevent duplicate confirmation.
+- Client UI should still disable repeated submit actions, but backend idempotency is required.
+
+Auto-record recovery requirements:
+
+- Every scheduled sync, recurrence, or auto-record job should have a run id.
+- Official ledger records created by a job must reference the originating run id and source records.
+- The user should be able to review and revert an auto-record run as a batch if it created incorrect or duplicate records.
+- Reverting an auto-record run should preserve audit history. The first version can archive, void, or reversal-mark generated records instead of hard-deleting them.
+- Auto-record jobs should use safety thresholds. If a run would create an unexpectedly large number of official records, it should stop and ask for review.
+
+Draft lifecycle requirements:
+
+- Unconfirmed drafts, reminders, and variable-amount recurrence items should remain visible until the user resolves, snoozes, archives, or deletes them.
+- Drafts should not silently become official ledger records because they are old.
+- The app should support stale-draft states, such as `needs_review`, `snoozed`, `overdue`, `archived`, and `ignored`.
+- Recurring variable-amount drafts can accumulate across cycles, but the UI should group and warn instead of leaving an unbounded flat list.
+- The first version should surface review pressure when unresolved items exceed a simple default threshold, such as 10 active review items or items older than 14 days. These thresholds can become configurable later.
+- Overview, Capture, and Imports should show review counts so `缺漏支出`, failed imports, and old AI/OCR drafts do not disappear into a hidden queue.
+- Bulk review tools should support common cleanup actions such as assign category/account/source, snooze, archive, ignore, merge, mark as `缺漏支出`, or confirm selected drafts.
+- Bulk approve is allowed only for drafts that satisfy required-field validation and user-visible confidence/source rules. High-risk AI/OCR suggestions should not become official records merely because the model is confident.
+- Trusted auto-record rules are allowed when explicitly enabled by the user for narrow cases such as fixed subscriptions or fixed transfers.
+- Cleanup should archive or hide only by user action or explicit retention setting, not by surprise deletion.
+
+`unresolved_expense` lifecycle requirements:
+
+- A `缺漏支出` record can remain as low-information spending when the user only knows statistical time/period, amount, and account.
+- When merchant, item/name, category, and other required expense fields are later completed, the app should prompt the user to convert it to a normal `expense`.
+- Conversion should preserve the same stable record id and existing links when possible, using status/kind changes plus audit history instead of creating a replacement record that breaks references.
+- Reports should count unresolved expenses as spending until converted, archived, or explicitly corrected.
+
+### Offline And Sync Conflict Handling
+
+The app should be usable for short weak-network moments such as commuting, brief travel gaps, or quick capture during outdoor activities. V1 does not promise durable multi-day offline operation for hiking or international travel. Offline support should protect capture speed first; server-side AI/OCR and provider sync can wait.
+
+Offline requirements:
+
+- Manual ledger entries, meal records, scan intents, and media capture metadata can be saved locally before upload.
+- Offline media files remain local and pending upload until the network is available.
+- OCR, AI parsing, invoice sync, and account statement sync should be queued until the device reconnects.
+- Local records should have temporary local ids and idempotency keys so server reconciliation can map them to canonical records without duplicating entries.
+- The UI should show sync state such as `local only`, `uploading`, `queued for OCR`, `synced`, `conflict`, and `failed`.
+
+Conflict rules:
+
+- Sync must not silently overwrite user-confirmed local changes with server or provider data.
+- Drafts, official records, source records, and link records should use optimistic concurrency control, such as a version field or checked `updated_at`, for user edits and background jobs.
+- Background sync jobs must check the expected version before updating a user-editable draft or record.
+- Version mismatches should become merge/conflict tasks rather than silent overwrites.
+- If an offline record later matches an imported invoice, statement row, or existing server record, the app should create a link/merge review task rather than duplicate the official ledger record.
+- Non-conflicting offline additions should sync automatically.
+- V1 should not promise automatic field-by-field merging for version conflicts. If the same record changed on both local and server, preserve both versions and ask the user to choose or manually merge.
+- Field-level merge can be revisited later for narrow safe fields, but tags, media links, relationship links, amounts, accounts, and official/draft status should not be auto-merged in V1.
+- If both sides changed the same important field, such as amount, account, date, merchant, category, or official/draft status, the conflict should preserve both versions and ask the user to choose, merge, or keep separate.
+- Conflict UI should show human-readable summaries and proposed outcomes, not JSON-level diffs.
+- Draft conflicts can offer actions such as keep local, keep cloud, duplicate as separate draft, archive old version, or decide later.
+- V1 may model a version conflict as a separate `conflict` draft or review item rather than mutating the original record in place.
+- Confirmed official records should not use silent last-write-wins. If an automatic choice is made for a low-risk draft, the overwritten version should remain recoverable in history.
+- Large conflict sets should be grouped by source batch, date range, provider, or record type so the user is not overwhelmed by one notification per row.
+- Backend idempotency still applies after reconnect, so retrying queued requests does not create duplicate official records.
+
+### Search, Filtering, And History Lookup
+
+Search is a core ledger feature, not an optional reporting add-on.
+
+The ledger should support filters for:
+
+- Date range and statistical period.
+- Account and currency.
+- Transaction kind, including income, expense, refund, transfer, fund addition, adjustment, and `缺漏支出`.
+- Category, child category, tag, event/project/activity, and source.
+- Merchant, item/name, note-like source text, and imported source label.
+- Amount range.
+- Linked evidence, such as invoice, receipt scan, account statement row, meal record, or media.
+- Review state, such as confirmed, draft, unresolved, needs review, archived, ignored, or conflict.
+
+History lookup should also power manual entry suggestions, import review, photo-to-ledger lookup, and ledger-to-photo lookup.
+
+### Reference Data Lifecycle
+
+Accounts, categories, merchants, sources, tags, and events are reference data. Historical ledger records should remain understandable after reference data changes.
+
+Lifecycle rules:
+
+- Accounts or categories used by confirmed ledger records should not be hard-deleted by default.
+- Deleting in the UI should normally archive or hide the reference value from new entry while preserving historical records.
+- Historical records should retain enough display text to remain readable even if the reference value is later renamed or archived.
+- Category merge, account rename, and merchant cleanup should create audit events or migration records.
+- If a reference value must be permanently deleted for privacy reasons, the app should require explicit confirmation and explain the effect on historical records and reports.
+
