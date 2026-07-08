@@ -627,3 +627,103 @@ Batch import resource limits:
 - The same real-world dining event may include separate meal photos, an invoice record, and a payment transaction, but these records should remain separable.
 - The same underlying media file may support more than one link intent, such as both a meal photo and receipt evidence, without duplicating file bytes.
 
+## First-Version Decisions
+
+- First version uses Supabase Auth for cloud sync and protected storage access. Email magic link is required for V1; Google OAuth is optional if it does not delay the core ledger flow.
+- An offline-only/no-account mode is not promised in the first version because it changes sync, backup, and recovery architecture.
+- V1 scope should prioritize manual ledger correctness: accounts, categories, merchants, transactions, transfers, refunds, fund additions, adjustments, unresolved expenses, basic meal records, clean export, and temporary scan/import drafts.
+- V1 can support cloud AI/OCR as an optional draft helper, but local/offline AI models should be treated as V2+ unless a small reliable implementation is proven.
+- V1 should not include Ministry of Finance cloud invoice sync or bank/account statement API sync as production features. Those integrations should start as separate spike or V2 work because credentials, provider limits, and background sync failure modes are high-risk.
+- V1 offline support should cover local capture, local drafts, and queued upload/sync for first-party app data. External provider sync while offline is outside V1.
+- Category defaults should start from the cleaned taxonomy, not every old spreadsheet label. Old labels should be preserved as import aliases unless they are clearly useful as first-class defaults.
+- The app should ship with a clean default taxonomy for new users, covering income categories, expense categories, transfer/funding semantics, common tags, and meal-period tags.
+- `特殊` should be migrated into clearer categories instead of becoming a default catch-all.
+- `0` and `?` should be import-review aliases, not normal categories.
+- `登山` should be available as an event and can also have suggested child categories.
+- Split bills and shared meals should be represented by accurate account cash flow first. Friend payback can be recorded as refund-like negative spending. Shared context can be stored as optional event/meal metadata. The app does not need full debt tracking in the first version.
+- A receipt or invoice can link to multiple user ledger records, but the user's ledger records only need to represent the user's own spending.
+- First version should not include full category budget limits, remaining-budget warnings, envelope budgeting, or monthly budget planning. The old spreadsheet's "新增預算" maps to `初始資金` or fund additions, not a spending-budget feature.
+- MealLedger is a personal ledger first. It should not claim tax or legal compliance in the first version.
+- The data model should still preserve enough tags, events, categories, sources, invoice links, statement links, and source record ids to support future reimbursement or tax-oriented exports.
+- Future reimbursement exports should be filterable by date range, category, event, source, account, invoice link, statement link, and merchant. They should export structured fields and optional source identifiers, not image bytes.
+- Tax or reimbursement workflows should be built as export/report views over confirmed ledger and source records, not by changing the meaning of core personal ledger entries.
+
+## V1 Implementation Defaults
+
+Authentication defaults:
+
+- Required sign-in method: email magic link through Supabase Auth.
+- Optional sign-in method: Google OAuth.
+- Not included in V1: anonymous cloud accounts, shared ledgers, organization accounts, or multi-user collaboration.
+- RLS ownership boundary should use `auth.uid()` as the primary user owner id.
+- Magic link requests should be rate-limited by email, IP, and device/session where the hosting stack supports it.
+
+Retention and TTL defaults:
+
+- Signed URL TTL: 10 minutes.
+- Temporary receipt/invoice scan file TTL: 24 hours.
+- `extraction_payload` TTL: clear immediately after confirmation when possible; otherwise expire after 24 hours for unconfirmed scan/import drafts.
+- Orphan temporary file cleanup: scheduled cleanup every 6 hours and/or object-storage lifecycle rules.
+- Local-only warning: show immediately when unsynced local data exists; escalate if important drafts or media remain local-only for more than 24 hours.
+- Large local-only media warning: escalate when unsynced local media reaches 20 files or 100 MB, whichever comes first.
+
+Idempotency defaults:
+
+- Manual create and batch confirm idempotency keys should be retained for 7 days.
+- Import batch and auto-record run idempotency keys should be retained for 30 days.
+- Repeating a request with the same idempotency key should return the original result and must not create another official record.
+
+`extraction_payload` V1 schema:
+
+- Maximum inline database size: 64 KB. Larger payloads go to temporary object storage with a database pointer.
+- Required keys: `schema_version`, `source_type`, `processor`, `status`, `candidates`, `warnings`, `error`, `created_at`, and `expires_at`.
+- Allowed `source_type` values for V1: `receipt_scan`, `invoice_scan`, `meal_photo`, `spreadsheet_row`, and `manual_import`.
+- `processor` should include provider/source, parser or model name, version when available, and whether the suggestion came from `cloud_model`, `local_model`, or `manual`.
+- `candidates` should contain only bounded candidate fields needed for review, such as date, merchant, item/name, amount, account, category, invoice number, and duplicate/link candidates.
+- Candidate fields should be strongly typed in TypeScript and validated at the Edge Function boundary before entering Postgres.
+
+AI/OCR timeout defaults:
+
+- Edge Function or server-side AI/OCR request timeout: 60 seconds.
+- Frontend should allow manual takeover after 20 seconds without cancelling the queued job.
+- Timeout, WAF block, rate limit, or provider failure should move the draft to `ai_failed` or `manual_review` with a retry option.
+
+Ledger loading defaults:
+
+- Overview default period: current month.
+- Ledger list default window: recent 30 days.
+- Quick ranges: current month, previous month, recent 90 days, and custom date range.
+- Page size: 50 records with cursor pagination.
+
+Conflict UI defaults:
+
+- Conflict comparison fields: date/time, amount, account, merchant, item/name, category, transaction kind, draft/official status, and linked evidence count.
+- Required actions: keep local, keep cloud, duplicate as separate draft, archive old version, and decide later.
+- The UI should show human-readable field summaries, not raw JSON.
+- V1 conflict UI should be a simple comparison card, not a field-level merge editor.
+- Backend conflict responses should provide display-ready summaries for local version, cloud version, changed fields, and suggested action.
+
+V1 default taxonomy:
+
+- Expense parents: `飲食`, `交通`, `日用`, `居家清潔`, `醫療`, `學習`, `電子`, `服飾`, `娛樂`, `禮物人情`, `手續費罰款`, `旅行活動`, `訂閱`, `其他`, `缺漏支出`.
+- Suggested expense children include `早餐`, `午餐`, `晚餐`, `早午餐`, `宵夜`, `點心`, `水果`, `文具`, `鞋襪`, `園藝`, `登山裝備`, `登山服飾`, `登山補給`, `登山工具`, `AI`, `郵費`, `罰款`, and `手續費`.
+- Income parents: `薪資`, `零用補助`, `獎金獎學金`, `紅包`, `利息`, `退款報銷`, `其他收入`, `初始資金`.
+- Default tags: `請客`, `代墊`, `待還款`, `浪費`, `報銷`, `旅行`, `登山`, `早餐`, `午餐`, `晚餐`, `宵夜`, `點心`.
+- Legacy labels such as `特殊`, `0`, and `?` should be import aliases or review states, not first-class default categories.
+
+V1 export defaults:
+
+- Required clean export: normalized ledger CSV and JSON.
+- Required spreadsheet-compatible export: multi-table CSV ZIP containing at least transactions, transfers, fund additions, refunds, unresolved expenses, adjustments, and account summary.
+- Clean exports must not include image bytes or base64 data.
+- Full media backup export is post-V1 unless it becomes a backup requirement before launch.
+
+V1 invoice and statement scope:
+
+- V1 invoice and statement rules apply only to manual scans, manual imports, CSV/spreadsheet imports, and user-created external-source metadata.
+- V1 should avoid building the full `invoice_records` / `statement_records` provider-sync domain unless a dedicated spike moves it into scope.
+- V1 matching should stay lightweight: exact or near-exact date, amount, merchant/counterparty, and account hints can suggest or auto-link existing records as non-blocking notices.
+- V1 should not build complex invoice/statement deduplication dashboards or reconciliation workflows.
+- Ministry of Finance cloud invoice sync and bank/account statement API sync remain spike or V2 work.
+- V1 schema and naming should not block future provider sync, but V1 implementation should not build production provider credential flows.
+
