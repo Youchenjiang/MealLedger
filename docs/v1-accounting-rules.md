@@ -16,6 +16,8 @@ Use `transfer` for money movement between accounts. Transfers do not count as in
 
 Use `adjustment` only when the account balance must be corrected and the real transaction is unknown, intentionally not reconstructed, or outside the ledger's useful detail. `adjustment` must require a reason and should appear in audit/export views.
 
+`adjustment` changes account balance and asset views, but does not count as income, expense, refund, or transfer. Positive and negative adjustments should appear in a separate `balance_adjustment` report section.
+
 ## Backfill vs Adjustment
 
 If the user can identify the original event, backfill the proper record type on the original date. Examples: missed lunch, forgotten transfer, missed refund, or late-entered income.
@@ -27,6 +29,8 @@ If the user only knows money was spent but lacks details, use `unresolved_expens
 ## Unresolved Expense Lifecycle
 
 An unresolved expense can be saved with time or period, account, and amount. It remains official spending, but reports group it under `缺漏支出` or `未分類支出`.
+
+V1 should store unresolved expense time precision explicitly. Supported values are `day`, `month`, and `period`. Day precision uses `date`; month or period precision uses `period_start` and `period_end` so the app does not need to invent a fake transaction date.
 
 Partial completion is allowed while the record remains `unresolved_expense`. When merchant, item/name, category, and other required expense fields are complete, the app should prompt conversion to `expense`.
 
@@ -44,15 +48,15 @@ Refund accounts do not need to match original expense accounts. The refund accou
 
 If a refund differs from the linked original expense because of exchange drift, fee differences, discounts, rounding, or partial refund behavior, record the difference under `exchange_difference` or a user-selected difference category. Reports should keep exchange difference separate from normal spending categories unless the user chooses otherwise.
 
-If a refund amount is greater than the linked original expense, V1 should warn the user and require confirmation. The extra amount should be treated as exchange difference, fee reversal, discount, bonus, or another explicit category.
+If a refund amount is greater than the linked original expense, V1 should warn the user and require confirmation. The portion up to the linked refundable amount remains `refund` and counts as negative spending. The excess portion must be split into one explicit record or sub-line such as `exchange_difference`, `fee_reversal`, `income`, or a user-selected category. The same excess amount must not count as both income and negative spending.
 
 ## Shared Payment Rules
 
 V1 does not implement full debt tracking. When the user pays for others, record the actual cash flow first.
 
-Friend payback should be entered as refund-like negative spending and can link to the original shared expense. `代墊` and `待還款` tags support lightweight review.
+Friend payback should use `kind=refund` with `refund_subtype=payback` and can link to the original shared expense. `代墊` and `待還款` tags support lightweight review before settlement.
 
-Personal net-spending reports may exclude or net marked payback items. Cash-flow reports always use the actual payment and payback dates.
+Personal net-spending reports may net the payback principal against the linked original shared expense. Transfer fees, exchange differences, and unrelated bonuses should remain separate. Cash-flow reports always use the actual payment and payback dates.
 
 ## Account And Currency Rules
 
@@ -65,6 +69,8 @@ Currency precision should be defined per currency. V1 defaults: TWD and JPY use 
 Input should reject extra fractional digits beyond the account currency precision. Calculations should use integer minor units internally to avoid floating-point drift.
 
 Rounding should happen at input or import boundaries, not repeatedly inside reports. If imported data has more precision than allowed, V1 should show a review warning before rounding.
+
+V1 rounding mode is `round half away from zero` at the currency precision boundary. Internal calculations should not re-round already normalized minor units.
 
 Cross-currency transfer fees can use a third account and third currency. UI may present this as an optional fee section, but persistence should create a separate fee `expense` in the fee account's currency.
 
