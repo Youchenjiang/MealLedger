@@ -276,3 +276,55 @@ Long ledger performance requirements:
 - Future implementation can use materialized views, summary tables, or trigger-maintained read models in Supabase to keep report reads fast.
 - The UI should support incremental loading so multi-year ledgers remain usable with tens of thousands of records.
 
+### Data Lineage And AI/OCR Pipeline
+
+AI/OCR data must preserve lineage from source input to draft to confirmed ledger record. The app should not collapse raw evidence, OCR text, AI suggestions, user edits, and official ledger records into one table.
+
+Pipeline stages:
+
+- `raw_source`: original media, imported spreadsheet row, invoice record, statement row, or other external evidence.
+- `interim_extraction`: OCR text, parsed table rows, detected merchant text, detected totals, or other machine-readable extraction output.
+- `processed_suggestion`: AI/OCR suggested fields such as transaction kind, merchant, item/name, category, amount, account, source, event, links, or duplicate candidates.
+- `user_decision`: accepted, edited, rejected, ignored, merged, split, or left unresolved.
+- `official_record`: confirmed ledger record written only after explicit user confirmation or an enabled auto-record rule.
+
+Lineage requirements:
+
+- Drafts and suggestions reference their source records.
+- AI/OCR suggestions should record model provider, model name, model version when available, prompt/template version, parser version, and run timestamp.
+- Suggestions should record which extracted features were used, such as detected amount, merchant text, invoice number, date/time, account hint, keywords, location hint, or prior-record match.
+- Feature-to-suggestion mapping should be inspectable enough to debug why a category, merchant, account, duplicate, or link was suggested.
+- For receipt and invoice scans, raw scan files, OCR text, prompt text, and detailed model traces are temporary working data unless the user explicitly retains them.
+- Official ledger records can reference retained source records through link tables, but confirming a ledger record should not require keeping raw scan images or full OCR/AI traces.
+- Temporary scan working data should have a TTL. The exact duration can be configurable, but the product rule is that scans are input workflow artifacts, not permanent ledger content.
+- External-source domains such as official cloud invoices and account statement rows can remain as synchronized source records because they are provider-derived records, not raw scan working files.
+- V1 should avoid over-normalizing AI/OCR traces. Temporary extraction, feature, and model-trace data can be stored as a compact `JSONB` payload on the draft or import job rather than split into many relational tables.
+- V1 should define a maximum size for `extraction_payload`. Oversized trace data should be stored as a temporary object-storage file with a database pointer instead of bloating Postgres rows.
+- V1 should define a small schema for `extraction_payload`, including required keys, allowed source types, parser/model identifiers, candidate fields, confidence hints, and error state. It should not be an unbounded dump of arbitrary provider output.
+- Edge Functions should validate and sanitize `extraction_payload` before writing it. Invalid candidate values should be dropped, downgraded, or marked for `manual_review`.
+- Candidate amounts must be non-negative for expenses and refunds, currencies must be allowed values, and implausible dates or extreme deviations from related history should lower confidence instead of silently producing high-confidence drafts.
+- Oversized payload objects should use compensating cleanup instead of assuming atomic transactions across Postgres and object storage. If pointer creation fails, the object should be deleted or marked orphaned; if draft confirmation/deletion/expiry happens, the object should be queued for cleanup.
+- Temporary payload objects should carry owner, draft/import job id, status, and expiry metadata when possible.
+- Full prompts, raw model outputs, screenshots, and verbose traces should not be stored by default unless debug mode, explicit user retention, or a support workflow requires them.
+- After confirmation, the app should discard that working payload according to TTL unless the user explicitly retains source evidence or a future debugging/retention setting says otherwise.
+- User edits and rejections of suggestions should be logged as decision events for audit and future assistant improvement.
+- Suggestion feedback can be used for future ranking or classification only as user-owned product data; it should not silently train an external model without a separate consent decision.
+
+AI/OCR degradation and model-choice requirements:
+
+- AI/OCR failure, timeout, offline status, or queue delay must not block manual ledger entry.
+- The frontend must not call external AI/OCR providers directly with provider API keys.
+- Cloud AI/OCR requests should go through a server-controlled boundary such as Supabase Edge Functions, where the app can enforce authentication, rate limits, file limits, queueing, and cost controls.
+- Public AI/OCR endpoints should also be deployable behind platform abuse controls such as WAF rules, IP/request throttling, bot mitigation, or provider-level quota alerts when the hosting stack supports them.
+- A scan or import draft can remain in `pending_ai`, `ai_failed`, or `manual_review` state while the user edits fields manually.
+- If AI/OCR finishes after the user has confirmed or edited fields, it may add suggestions but must not overwrite user-confirmed fields.
+- The app can offer cloud AI/OCR for better accuracy and optional local/offline model processing for weak-network or privacy-first situations.
+- Cloud and local model suggestions should be labeled by source, such as `cloud_model`, `local_model`, or `manual`, and both remain draft-only until confirmed.
+
+AI governance requirements:
+
+- Suggestion outcome statistics should be attributable by model/provider version, prompt/template version, source kind, merchant, account, category, and decision outcome when applicable.
+- The first version only needs to store enough outcome data for later review. A full AI accuracy dashboard can be deferred.
+- A future settings panel should be able to show accept/edit/reject patterns and let the user reset, disable, or clear learned suggestions for a merchant, category, account, or source type.
+- User-owned learned mappings and preferences should be deletable without deleting official ledger records.
+
