@@ -4,9 +4,11 @@ This document defines deletion, archive, link, and master-data lifecycle rules f
 
 ## Link And Cascade Rules
 
-Transactions, meals, media assets, invoices, and statement records are separate entities. Link tables connect them.
+Transactions, meals, media assets, and source payloads are separate entities. Link tables connect them.
 
-Deleting or archiving a transaction removes or hides its link rows from active views, but does not delete the linked meal, invoice record, statement record, or media asset.
+V1 does not require production `invoice_records` or `statement_records` tables for official government invoice sync or bank statement sync. Manual scans and manual CSV imports can be represented as draft/source payloads until V2 sync features justify dedicated external-record tables.
+
+Deleting or archiving a transaction removes or hides its link rows from active views, but does not delete the linked meal, source payload, or media asset.
 
 Deleting or archiving a meal removes or hides its link rows from active views, but does not delete linked transactions or media assets.
 
@@ -26,7 +28,11 @@ If a user chooses to keep a scan after confirmation, the system should move or c
 
 ## Official Record Deletion
 
-Official ledger records should be soft-deleted or voided in V1. Soft-deleted records are excluded from normal reports and search results by default, but remain available in audit and recovery views.
+Official ledger records can be soft-deleted or voided in V1, but the two states mean different things.
+
+Soft deletion means the user wants to hide or remove a record from normal use. Soft-deleted records are excluded from normal reports and search results by default, but remain available in audit and recovery views.
+
+Void means the record is an official correction artifact. Voided records are excluded from normal totals, remain visible in audit/export views, and should point to the replacing or correcting record when one exists.
 
 Hard deletion is reserved for account deletion, legal privacy deletion, or explicit user actions with a warning.
 
@@ -36,7 +42,7 @@ Undo can restore a recently soft-deleted record when its related master data sti
 
 Accounts with historical official records cannot be hard-deleted in normal V1 flows.
 
-Users can archive or disable an account. Disabled accounts remain visible in history and reports, but are hidden from new-entry selectors by default.
+V1 uses one account lifecycle state: `disabled`. Disabled accounts remain visible in history and reports, but are hidden from new-entry selectors by default. The word "archived" is UI copy for the same state unless a later version adds a separate state.
 
 Account renaming updates the current display name. Ledger records should keep stable account ids. V1 may also store an import/display snapshot for audit and export.
 
@@ -52,7 +58,9 @@ Users can disable a category. Disabled categories remain in historical reports a
 
 Category renaming updates the current reporting name while preserving stable ids. Old names should be kept as aliases for import mapping when useful.
 
-Category merging may be supported in V1 only if it is implemented as an audited operation. The merge should move future reporting to the target category, preserve aliases, and keep a clear old-to-new audit record.
+Category merging is post-V1 by default. V1 should prefer aliases and manual recategorization over automatic merge.
+
+If category merge is later added, the default behavior should not rewrite historical transaction `category_id` values silently. It should preserve old category ids, add an audited alias or redirect for future selection, and make report rollups explicit.
 
 ## Tags, Events, And Categories
 
@@ -66,13 +74,22 @@ Event means a named project, trip, activity, or time-bounded context that can gr
 
 V1 events are flat. Event hierarchy, budgets by event, and event templates are post-V1.
 
-Events can be archived. Archived events remain visible on historical records but are hidden from new-entry selectors by default.
+Events can be disabled. Disabled events remain visible on historical records but are hidden from new-entry selectors by default.
 
 ## Draft And Conflict Lifecycle
 
 Drafts may be deleted by the user before confirmation.
 
+Manual drafts can be kept until the user confirms, deletes, or archives them.
+
 Drafts created by AI/OCR, imports, recurrence, or sync conflicts should keep enough source context for review until the user confirms, ignores, deletes, or the documented TTL expires.
+
+V1 default draft review policy:
+
+- AI/OCR and import drafts remain active for 30 days, then move to archived review unless the user pins them.
+- Recurrence reminder drafts remain active until the next cycle plus 7 days, then move to archived review.
+- Conflict drafts remain active until resolved or manually archived.
+- Archived drafts do not affect balances or official reports.
 
 Conflict records should keep both versions in human-readable form. V1 should prefer creating an independent `conflict` review draft over attempting complex field-by-field merge.
 
