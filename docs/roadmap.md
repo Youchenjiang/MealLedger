@@ -69,4 +69,5 @@ MealLedger uses lightweight agile planning with risk-driven testing. The long-te
 - For ledger, invoice, export, and RLS work, define acceptance cases before implementation.
 - For UI shell and navigation work, use build checks and browser smoke tests.
 - For invoice import, use fake fixtures only; never commit real invoice data.
+- Product requirements and unresolved questions are tracked in [Product Requirements Notes](product-requirements.md).
 - Backend ownership and provider boundaries are defined in [Backend Architecture](backend-architecture.md).

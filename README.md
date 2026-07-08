@@ -1,5 +1,5 @@
 # MealLedger
-A personal meal and expense ledger that links food photos, dining records, and transactions while keeping large media files separate from clean financial exports.
+A personal accounting app that can optionally link transactions, invoice scans, meal records, and photos while keeping large media files separate from clean financial exports.
 
 ## Architecture
 
@@ -7,6 +7,7 @@ MealLedger stores structured records in Supabase PostgreSQL and large media file
 
 - [Setup notes](docs/setup.md)
 - [Meal, media, and ledger flows](docs/flows.md)
+- [Product requirements notes](docs/product-requirements.md)
 - [Long-term roadmap](docs/roadmap.md)
 - [Development workflow](docs/development-workflow.md)
 - [Backend architecture](docs/backend-architecture.md)
