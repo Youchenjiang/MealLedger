@@ -20,6 +20,7 @@ Use this index as the starting point for review. The documentation is grouped by
 
 - [Setup notes](engineering/setup.md)
 - [Development workflow](engineering/development-workflow.md)
+- [Spec-driven workflow](engineering/spec-driven-workflow.md)
 - [Backend architecture](engineering/backend-architecture.md)
 
 ## Testing
