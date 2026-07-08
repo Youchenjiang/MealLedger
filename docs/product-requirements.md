@@ -160,3 +160,75 @@ Recurring rules:
 - Auto-record is allowed only when all required fields, including amount, are known for that cycle.
 - For recurring transfers, both source and destination accounts must be known before auto-recording.
 
+### Original Labels And Notes
+
+Imported spreadsheet text should be preserved without forcing it into user-facing notes. The app should distinguish:
+
+- `source_label`: the original imported text from the spreadsheet row when it helps audit import mapping.
+- `note`: optional user-written explanation, such as why an expense was marked wasteful.
+- `system_suggestion`: AI or import assistant guesses that require user confirmation.
+
+Notes are not a substitute for structured fields. When a label can be structured into category, source, event, period, or item name, the app should suggest that split while preserving the original `source_label`.
+
+Income official fields remain fixed: date, account, amount, category, and source. During import, the app may suggest mapping old combined text into those fixed fields. For example, `紅包(母)` can be suggested as category `紅包` and source `母`, but the user can keep or change the mapping.
+
+### Category Taxonomy
+
+Categories should support at least two levels: parent category and child category. The old spreadsheet has many useful labels, but some labels are broad domains while others are meal periods, sources, people, or unresolved placeholders.
+
+Expense category examples from the existing spreadsheet:
+
+- Daily life: `日用`, `清潔`, `文具`, `郵費`, `禮物`
+- Food: `早餐`, `午餐`, `晚餐`, `早午餐`, `宵夜`, `點心`, `水果`
+- Transport and travel: `交通`
+- Event spending: `登山`
+- Shopping and belongings: `電子`, `服飾`, `鞋襪`, `收藏`, `園藝`
+- Personal and activities: `學習`, `醫藥`, `娛樂`, `租賃`, `特殊`, `浪費`
+- Temporary or unresolved labels: `0`, `?`
+- Subscription examples: `AI`
+
+Income and funding labels from the old spreadsheet should not all become flat income categories. They often include source, person, month, employer, scholarship name, reimbursement reason, or one-time event. The app should preserve the original row text during import, then optionally suggest values for the fixed income fields.
+
+Suggested income import mapping:
+
+- Category examples: allowance, salary, scholarship, red envelope, reward, reimbursement, interest, subsidy, government payment, original balance, unknown.
+- Source examples: parent, relative, school, employer, bank, government, platform, unknown.
+- Extra imported words such as month, contest, trip, certificate, or reimbursement target should be suggested as event or note only when useful.
+
+Category requirements:
+
+- Categories are user-editable.
+- Parent and child categories can be different by transaction kind.
+- The original imported label should be retained as `source_label` or import metadata when it helps audit mapping.
+- Ambiguous labels such as `0` and `?` should map to unresolved or review-needed categories instead of being silently deleted.
+- Refunds should keep an expense-related category so reports can subtract them from the matching spending area.
+- Reports should support parent-category rollups and child-category drilldown.
+- Meal-period labels such as `早餐`, `午餐`, `晚餐`, `早午餐`, `宵夜`, and `點心` can be used both as expense child categories and meal tags.
+- The app should support category mapping suggestions during import, but the user must be able to keep the original label.
+
+Recommended category cleanup:
+
+- Merge narrow food labels under a parent like `飲食`, while keeping meal periods as child categories or meal tags.
+- Keep `水果` under `飲食` unless the user wants a separate health or grocery grouping.
+- Split broad labels such as `特殊` into more descriptive children instead of using it as a permanent catch-all. Existing examples suggest children such as fees, fines, deposits, tickets, gifts, treating others, religious/custom spending, and reimbursement preparation.
+- Treat `浪費` as a personal review category or tag. It is useful emotionally, but reports may also need the actual spending domain.
+- Treat `0` and `?` as unresolved/import-review states, not long-term report categories.
+- Keep `登山` as a valid event category because the existing ledger uses it for hiking gear, clothing, food supplies, hydration, and small outdoor-use items. The app can still suggest child categories such as gear, clothing, food supply, hydration, and small tools.
+- Preserve old labels as aliases so historical exports can still match the spreadsheet.
+
+Category and tag distinction:
+
+- A transaction can have one reporting category for accounting rollups.
+- A transaction can have multiple tags for context such as activity, emotion, trip, meal period, reimbursement status, or review state.
+- Event-like labels such as `登山` can use a separate event field and may also appear as category or tag when useful.
+- Review-like labels such as `浪費` are better as tags unless the user explicitly wants a spending bucket named `浪費`.
+
+Events are optional grouping concepts for records that cross normal categories. An event can group expenses, income, funding, and transfers related to the same real-world purpose, such as hiking purchases, a trip, a certification exam, a competition, or reimbursable work. Unlike category, it does not need to be the reporting bucket; it can group equipment, food, transport, deposits, fees, reimbursements, and funding under one real-world event.
+
+Import cleanup examples:
+
+- `登山`: keep as an event grouping; optionally suggest children like `登山 > 裝備`, `登山 > 服飾`, `登山 > 補給`, `登山 > 工具`.
+- `特殊`: suggest migration into clearer categories such as `手續費`, `罰款`, `訂金`, `門票`, `禮物`, `請客`, `宗教習俗`, `報銷準備`, or `其他`.
+- `AI`: use a normal category such as `訂閱 > AI` for clear AI tools or subscription transactions.
+- `浪費`: keep the note explaining why it was wasteful, and optionally add a normal category so spending reports remain useful.
+
