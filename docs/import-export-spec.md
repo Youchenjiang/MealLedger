@@ -28,6 +28,10 @@ The normalized ledger CSV template should support these columns:
 - `target_account`
 - `target_amount`
 - `target_currency`
+- `fee_account`
+- `fee_amount`
+- `fee_currency`
+- `fee_category`
 - `tags`
 - `event`
 - `source_label`
@@ -38,6 +42,12 @@ The spreadsheet-style import path may also accept separated tables for expenses,
 V1 should provide a default mapping for the user's existing spreadsheet headers, including `日期`, `帳戶`, `金額`, `來源`, `店家`, `名稱`, `種類`, `原帳戶`, and `後帳戶`.
 
 Saving custom import mappings is post-V1 unless it is simple to keep as local browser preference.
+
+Multi-value import fields such as `tags` should use `|` as the default separator. Import should trim whitespace, drop empty values, and remove duplicates while preserving the first seen order.
+
+For same-currency transfers, `target_amount` may be empty and should default to `amount`. For cross-currency transfers, `amount`, `currency`, `target_amount`, and `target_currency` are required.
+
+Transfer fee columns are optional. When provided, the importer should create a separate fee `expense` linked to the imported transfer. This preserves normalized ledger records while still allowing a one-row spreadsheet import.
 
 ## Legacy Classification Mapping
 
@@ -57,6 +67,21 @@ V1 should also warn about business duplicates inside the import batch and agains
 - same account
 - same amount
 - same merchant, item name, or source label when available
+
+Transfers should use a transfer-specific duplicate heuristic:
+
+- same date
+- same source account
+- same target account
+- same source amount
+- same target amount when present
+- same source label when present
+
+Fund additions should compare date, account, amount, source, and source label.
+
+Adjustments should compare date or period, account, amount, reason, and source label.
+
+Refunds should compare date, account, amount, linked expense ids when present, merchant or source label, and refund subtype.
 
 Duplicate handling options are skip, keep separate, merge into draft, or link to existing. V1 must not destructively overwrite official records during import.
 
@@ -97,6 +122,33 @@ ledger/unresolved_expenses.csv
 ledger/adjustments.csv
 reports/account_summary.csv
 ```
+
+`manifest.json` should include:
+
+- `app`
+- `schema_version`
+- `exported_at`
+- `user_id_hash`
+- `export_mode`
+- `date_range`
+- `currency_modes`
+- `files`
+- `record_counts`
+
+`reports/account_summary.csv` should include:
+
+- `account_id`
+- `account_name`
+- `currency`
+- `opening_balance`
+- `income_total`
+- `expense_total`
+- `refund_total`
+- `transfer_in_total`
+- `transfer_out_total`
+- `adjustment_total`
+- `closing_balance`
+- `record_count`
 
 Exported rows may include tags, event id, event name, source label, and linked media ids. They must not include media bytes.
 
