@@ -232,3 +232,47 @@ Import cleanup examples:
 - `AI`: use a normal category such as `訂閱 > AI` for clear AI tools or subscription transactions.
 - `浪費`: keep the note explaining why it was wasteful, and optionally add a normal category so spending reports remain useful.
 
+### Meal Records
+
+`meal_entries` are optional food or dining records. They can describe what was eaten, where, when, and with whom. A meal may link to zero, one, or many transactions depending on the real-world case.
+
+### Media Assets
+
+`media_assets` store metadata for images and other files. The actual file bytes live in object storage such as Cloudflare R2. Media can be attached to meals, transaction drafts, invoice scans, or confirmed ledger records through link tables.
+
+Product intent is single-purpose at the link/usage layer, not at the physical file layer. A single stored file can be reused for multiple purposes without re-uploading the same bytes, as long as each link states its intent clearly.
+
+The first version should prefer capture speed and clear usage metadata. If a photo contains both a meal and receipt evidence, the UI can create one `meal_photo` link and one `receipt_evidence` link to the same underlying file. The user should not need to upload the same file twice. Storage deduplication can happen below the product model using checksum/object metadata.
+
+Receipt and invoice scan images are short-lived working files by default. They support OCR/AI parsing and user confirmation, but they are not long-term system evidence unless the user explicitly keeps them as media attachments or receipt evidence. The app should surface storage and privacy choices when users scan or import these files.
+
+OCR text, AI labels, extracted features, prompts, and model traces are also working data by default. After confirmation, the official ledger should store only user-confirmed structured fields and minimal audit data unless the user chooses to retain source evidence. If the user abandons a scan or draft, the working data should be deleted according to the temporary retention policy.
+
+Performance requirements:
+
+- Ledger list views should not load original image bytes, base64 data, full media link graphs, or signed URLs.
+- List views may use cached metadata such as media count, primary thumbnail metadata, captured time, media intent, and latest linked media timestamp.
+- Detail views should load full media links lazily and request signed URLs only when the user opens the relevant media.
+- V1 offline media browsing is limited to media already stored locally, recently cached thumbnails, or unsynced local captures. Already-synced cloud media is not guaranteed to be viewable offline after its signed URL expires.
+- If complete offline media browsing becomes a launch requirement, the app needs an explicit local media cache policy and likely Capacitor/native filesystem support.
+- Exports should never join or embed image bytes. Clean ledger exports should remain small even when records have many linked photos.
+- Media link tables should be indexed by owner, linked record id, media intent, and captured/created time so photo-to-ledger and ledger-to-photo lookup stays fast as the database grows.
+- Uploaded images should support server-side or client-side resizing, thumbnail generation, and metadata extraction so normal UI views do not depend on full-resolution originals.
+- The app should not auto-delete user-retained meal photos, attachments, or explicitly kept evidence by surprise. Temporary receipt/invoice scan working files should expire through a clear TTL policy.
+
+Data portability requirements:
+
+- Clean ledger export remains separate from media-heavy backup export.
+- Full backup export should support a ZIP-like package containing structured CSV/JSON metadata, media files, and a manifest mapping ledger ids, media ids, link ids, and file paths.
+- Backup export should preserve enough source/link metadata to restore or inspect relationships outside the app.
+
+Long ledger performance requirements:
+
+- Ledger views should use cursor pagination or bounded date windows rather than loading every historical transaction.
+- The default ledger view should be recent-first, with quick jumps by month, year, account, category, and event.
+- Large reports should use indexed filters and, when needed, derived summaries instead of scanning every row on each page load.
+- The primary read path for Overview, Ledger, and reports should use confirmed official records or a flattened read model, not the full AI/OCR/import/source graph.
+- Source, draft, invoice, statement, media, and lineage tables should be treated as review/detail data unless the user explicitly opens related evidence.
+- Future implementation can use materialized views, summary tables, or trigger-maintained read models in Supabase to keep report reads fast.
+- The UI should support incremental loading so multi-year ledgers remain usable with tens of thousands of records.
+
