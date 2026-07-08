@@ -74,3 +74,89 @@ Additional official-record requirements:
 - Refund records follow expense-like required fields and report as negative spending.
 - Expense item/name is separate from merchant and category.
 
+### Ledger Records
+
+`transactions` are the official accounting records. They hold amount, account, category, merchant, time, note, and transfer relationships. These records are the source of truth for ledger export and reports.
+
+Time fields should preserve both absolute and local context:
+
+- Store an absolute timestamp for ordering and sync, such as UTC.
+- Preserve the user's local date/time and timezone or offset at capture/import time.
+- Meal-period inference, invoice matching, and travel workflows should use local context, not only UTC.
+- Imported external records should preserve provider time fields and timezone assumptions when known.
+- If timezone is unknown, the app should mark it as inferred and avoid high-confidence automatic matching based only on time.
+
+Transaction-like ledger records need distinct kinds so the app does not mislabel money movement:
+
+- `income`: earned or received income.
+- `fund_addition`: money added to an account for setup, original savings, budget refill, unknown source, or other non-income funding sources.
+- `expense`: normal spending.
+- `refund`: money returned under the original expense category. Reports should treat refunds as negative spending, not income.
+- `unresolved_expense`: spending with limited details that still reduces account balance. Requires statistical period/time, amount, and account before it can be saved as this kind.
+- `transfer`: movement between two accounts, retained as its own history and excluded from spending totals.
+- `adjustment`: explicit correction when the account balance needs to be fixed with a reason.
+
+### Naming And Reporting Semantics
+
+Internal kind names should stay stable and normalized. Traditional Chinese UI labels can be refined, but they should map to one consistent internal vocabulary.
+
+Suggested internal-to-UI mapping:
+
+- `income`: `收入`
+- `fund_addition`: `初始資金`
+- `expense`: `支出`
+- `refund`: `退款`
+- `unresolved_expense`: `缺漏支出`
+- `transfer`: `轉帳`
+- `adjustment`: `餘額調整`
+
+Reporting rules:
+
+- `fund_addition` changes account balance but does not count as income, especially for original balances, unknown source money, or setup funding. The preferred Traditional Chinese UI label is `初始資金`.
+- `refund` belongs under its own transaction kind and the relevant expense category. Spending reports subtract refunds from expenses.
+- Cross-period refunds should default to the period when the refund actually happened. A refund can link back to the original expense for drilldown, but the app should not silently rewrite old monthly reports.
+- Reports may offer an alternate "original purchase period" view later, but cash-flow and normal monthly spending views use the refund date.
+- Refunds can flow into an account different from the original expense account. The refund account should reflect where money actually returned, while category and original-transaction links explain what spending area was reduced.
+- A refund can be greater or smaller than the linked original expense. For cross-currency card refunds, fee differences, discounts, or exchange-rate drift, the app should show the difference and let the user categorize or adjust it instead of silently creating an adjustment.
+- Refunds can carry an `exchange_difference` or similar subfield for exchange-rate drift, fee differences, discounts, or rounding. Reports should keep this difference separate from normal spending categories such as food or transportation unless the user chooses otherwise.
+- `transfer` changes account balances and remains reviewable as transfer history, but does not count as income or expense.
+- `unresolved_expense` counts as spending even when merchant, item name, or category is incomplete. The preferred Traditional Chinese UI label is `缺漏支出`.
+- In category reports, unresolved expenses should roll up under a visible placeholder such as `未分類支出` or `缺漏支出` so category totals still reconcile with total spending.
+- `adjustment` should be visible in audit/export views so balance corrections are not hidden.
+
+Shared payment and payback rules:
+
+- First version does not need a full debt or receivable system.
+- When the user pays for others, the ledger should prioritize actual account cash flow. If the user paid 1000 from a wallet, the account balance should decrease by 1000.
+- Payback from friends should be recorded like a refund or return under the relevant category, not as earned income.
+- Paybacks should be linkable to the original shared expense when known.
+- The app should provide a lightweight pending-payback review surface for shared expenses that the user has marked as waiting for repayment.
+- Reports should support a filter or view that excludes or nets marked payback-related spending and refunds when the user wants a cleaner monthly personal-spending view.
+- Reports should distinguish cash-flow view from personal net-spending view. Cash-flow uses the actual payment and payback dates; personal net-spending can exclude or net marked payback items for easier monthly review.
+- Shared context, people, and split notes can be stored as event, tag, or link metadata, but they should not replace the confirmed cash-flow records.
+- Reports should subtract friend paybacks from spending in the same way they subtract refunds.
+
+### Recurring Records
+
+Recurring transactions need explicit user intent when entered. Recurrence can apply to expenses, income, and transfers. For subscription-like expenses such as `訂閱 > AI`, repeated income, or repeated account transfers, the app should ask whether the entry applies only to the current cycle, should prompt the user again next cycle, or should be recorded automatically next cycle.
+
+Recurring options:
+
+- Current cycle only: save one record and do not schedule a future reminder.
+- Prompt next cycle: create a recurrence reminder that asks the user before posting.
+- Auto-record next cycle: create a recurrence rule that posts future records automatically.
+
+Recurring rules:
+
+- The first occurrence must still satisfy normal required fields.
+- Auto-record should be clearly marked and easy to pause or cancel.
+- Prompted recurrence should create a draft/reminder, not an official ledger record, until the user confirms.
+- Future recurrence changes should not rewrite historical confirmed records unless the user explicitly chooses a retroactive edit.
+- Interest can be recurring income when the account provides it periodically, but the recurrence cadence and calculation method may need user review or later provider-specific rules.
+- Recurrence must support both fixed amount and variable amount records.
+- V1 variable-amount recurrence should create a draft or reminder with amount pending, not an auto-posted official ledger record.
+- Later versions may support estimated amount, maximum amount, due date, bill-pool linking, or cash-flow forecast treatment for variable bills such as utilities and credit cards.
+- If external bills or statement records arrive later, they can fill in or suggest the actual amount before user confirmation.
+- Auto-record is allowed only when all required fields, including amount, are known for that cycle.
+- For recurring transfers, both source and destination accounts must be known before auto-recording.
+
