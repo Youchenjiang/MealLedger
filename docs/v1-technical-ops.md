@@ -8,6 +8,10 @@ V1 starts as a PWA. It must request persistent browser storage with `navigator.s
 
 The UI must show whether local-only data has been backed up to the cloud. Local-only records and media should be visibly marked.
 
+If persistent storage is denied or unsupported, the app should enter degraded offline mode. Degraded mode still allows quick manual entries, but should warn before large media capture, recommend immediate sync, and keep the local-only badge visible until upload succeeds.
+
+The app should attempt background sync whenever connectivity returns and the user is authenticated. If the browser clears IndexedDB before sync, the app cannot reconstruct lost local-only data; it should explain that only cloud-backed records can be restored.
+
 If local-only data is older than 24 hours, or if the local queue contains more than 20 files or 100 MB, the app should escalate the warning and encourage the user to reconnect.
 
 The code should keep storage behind repository interfaces so a later Capacitor + SQLite/File System shell can replace IndexedDB without rewriting business logic.
@@ -30,10 +34,10 @@ V1 search should support basic Traditional Chinese substring search for merchant
 
 Core database indexes should cover these access paths:
 
-- `user_id, date desc`
-- `user_id, account_id, date desc`
-- `user_id, category_id, date desc`
-- `user_id, kind, date desc`
+- `user_id, deleted_at, date desc`
+- `user_id, deleted_at, account_id, date desc`
+- `user_id, deleted_at, category_id, date desc`
+- `user_id, deleted_at, kind, date desc`
 - normalized merchant or source text
 - draft or review status
 - link table owner and linked record ids
@@ -51,6 +55,8 @@ Temporary receipt and invoice scans should use `Cache-Control: no-store` when fe
 
 Signed URLs default to 10 minutes. V1 accepts eventual invalidation for already issued URLs, while preventing new signed URLs after deletion, authorization failure, or retention expiry.
 
+When a signed URL expires while a detail view is open, the client should request a fresh URL if the user still has access. Failed refresh should show a media unavailable state rather than a broken image.
+
 ## AI And OCR Boundary
 
 The PWA must not call paid AI/OCR providers directly. AI/OCR calls go through a server boundary such as Supabase Edge Functions.
@@ -65,6 +71,10 @@ Default scan limits:
 - 200 scans per user per month as a soft limit.
 - 60 seconds server timeout per scan job.
 - Manual takeover option after 20 seconds of visible waiting.
+
+When a user exceeds the soft scan limit, V1 should stop starting new paid scan jobs and guide the user to manual entry. Admin or local-development overrides can be separate from product behavior.
+
+If the user chooses manual takeover while a background OCR job is still running, the returned OCR result must not overwrite fields the user changed. It can appear as a later suggestion with field-level accept actions.
 
 Failures should degrade to manual entry. A failed AI/OCR job should not block saving a draft or official manual record.
 
@@ -101,6 +111,14 @@ Operational monitoring should track:
 - AI/OCR failure rate above 10%.
 - AI/OCR daily cost and call volume.
 - Media storage growth and orphan cleanup failures.
+
+V1 alert routing should start simple: developer-facing notifications for private testing, then an operations channel before public launch. Each alert should have an owner, severity, and runbook link before it becomes production-blocking.
+
+Suggested severity defaults:
+
+- Critical: data loss, auth outage, RLS or media access leak.
+- High: export failure spike, sync failure spike, AI/OCR cost spike.
+- Medium: slow imports, orphan cleanup backlog, thumbnail failures.
 
 Support or repair scripts must leave audit records. Production data should not be manually edited without a tracked repair operation.
 
