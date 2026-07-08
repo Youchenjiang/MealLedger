@@ -74,9 +74,15 @@ Test USD and common foreign currencies accept two decimal places by default.
 
 Test imported amounts with excessive precision create review warnings before rounding.
 
+Test reports group balances and spending by currency and never directly sum TWD, JPY, USD, or other currencies into one raw total.
+
+Test rounding uses `round half away from zero` only at input or import boundaries.
+
 ## Unresolved Expense
 
 Test unresolved expense can be saved with time or period, account, and amount.
+
+Test unresolved expense with month precision exports `period_start` and `period_end` without inventing a fake day.
 
 Test unresolved expense counts as spending and appears under `缺漏支出` or `未分類支出` in category reports.
 
@@ -95,6 +101,10 @@ Test fixed known recurrence can auto-record only when all required fields are kn
 Test variable-amount recurrence creates a draft or reminder, not an official record.
 
 Test monthly recurrence on the 31st falls back to the last valid day of short months.
+
+Test monthly recurrence on February 29 behaves correctly in leap years and non-leap years.
+
+Test transaction and recurrence dates near timezone boundaries remain assigned to the user's intended local date.
 
 Test recurrence edits affect future cycles only by default.
 
@@ -116,7 +126,15 @@ Test idempotent retry does not create duplicate imported records.
 
 Test business duplicate warning for same date, account, amount, and merchant or source label.
 
+Test transfer duplicate warning uses source account, target account, source amount, target amount, and source label.
+
+Test same-currency transfer import accepts empty `target_amount` and defaults it to `amount`.
+
+Test transfer import with fee columns creates a linked fee expense.
+
 Test import refuses over-limit batches before partial processing.
+
+Test 5,000-row import completes within the V1 performance target once that target is set.
 
 ## Export
 
@@ -127,6 +145,10 @@ Test JSON export is UTF-8 without BOM.
 Test single-table export contains normalized ledger rows.
 
 Test multi-table ZIP contains manifest, ledger tables, and account summary.
+
+Test `manifest.json` includes schema version, exported timestamp, file list, and record counts.
+
+Test `reports/account_summary.csv` balances opening balance, income, expenses, refunds, transfers, adjustments, and closing balance.
 
 Test exported rows include tags, events, source labels, and linked media ids when available.
 
@@ -140,7 +162,35 @@ Test repeated submit with the same idempotency key returns the original result o
 
 Test version conflict creates a conflict draft instead of silently overwriting user edits.
 
+Test offline edit followed by cloud edit on the same record creates a conflict draft with both versions.
+
+Test two clients editing the same record preserve audit history after conflict resolution.
+
 Test soft-deleted records disappear from normal reports but remain recoverable.
+
+Test voided records remain visible in audit/export views but are excluded from normal totals.
+
+## Master Data Changes
+
+Test category rename updates current display while preserving stable ids and export/audit snapshots.
+
+Test disabled category remains visible in historical reports and is hidden from new-entry selectors.
+
+Test disabled account remains included in balances and history but is hidden from new-entry selectors.
+
+Test category alias mapping does not silently rewrite historical `category_id` values.
+
+Test account currency cannot be changed after confirmed records exist.
+
+## Performance Baselines
+
+Test ledger list loads a bounded date window rather than all historical rows.
+
+Test reports exclude soft-deleted rows through indexed active-record queries.
+
+Test export above 10,000 records uses the large-export path or shows progress instead of blocking the UI.
+
+Test search uses backend filtering for persisted records and does not require loading all history into the client.
 
 ## Media And Drafts
 
