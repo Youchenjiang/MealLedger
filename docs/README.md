@@ -53,6 +53,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Capture media design](specs/capture-media/design.md)
 - [Capture media tasks](specs/capture-media/tasks.md)
 - [Capture media test plan](specs/capture-media/test-plan.md)
+- [Import export requirements](specs/import-export/requirements.md)
+- [Import export design](specs/import-export/design.md)
+- [Import export tasks](specs/import-export/tasks.md)
+- [Import export test plan](specs/import-export/test-plan.md)
 
 ## Suggested Review Order
 
