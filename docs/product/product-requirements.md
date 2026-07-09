@@ -323,14 +323,14 @@ AI/OCR degradation and model-choice requirements:
 
 AI governance requirements:
 
-- Suggestion outcome statistics should be attributable by model/provider version, prompt/template version, source kind, merchant, account, category, and decision outcome when applicable.
+- Suggestion outcome statistics should be attributable to model/provider version, prompt/template version, source kind, merchant, account, category, and decision outcome when applicable.
 - The first version only needs to store enough outcome data for later review. A full AI accuracy dashboard can be deferred.
 - A future settings panel should be able to show accept/edit/reject patterns and let the user reset, disable, or clear learned suggestions for a merchant, category, account, or source type.
 - User-owned learned mappings and preferences should be deletable without deleting official ledger records.
 
 ### Invoice Records
 
-`invoice_records` and `invoice_line_items` represent structured invoice data from scans, imports, or official Ministry of Finance cloud invoice sync. Imported invoices should create transaction drafts first, then become official ledger transactions only after review.
+Future `invoice_records` and `invoice_line_items` can represent structured invoice data from scans, imports, or official Ministry of Finance cloud invoice sync. V1 should keep manual scans and imports in source payloads and drafts unless a later provider-sync spike promotes dedicated invoice tables into scope. Imported invoices should create transaction drafts first, then become official ledger transactions only after review.
 
 V1 scope note: V1 should treat invoice data as scan/import draft source metadata. It should not implement the full provider-sync invoice domain unless the scope is explicitly reopened.
 
@@ -622,7 +622,7 @@ Batch import resource limits:
 - Meal to photo: optional, many photos allowed.
 - Meal to transaction: optional, many-to-many.
 - Invoice to transaction draft: common path, but still requires confirmation.
-- Photo intent is single-purpose at the logical product layer. A logical media record should be a meal photo, a receipt/invoice scan input, or an attachment, not several at once.
+- Media intent is single-purpose at the link layer. A media link should be a meal photo, a receipt/invoice scan input, or an attachment, not several at once.
 - Receipt and invoice scan images are temporary by default and retained only when the user explicitly keeps them as evidence or attachments.
 - The same real-world dining event may include separate meal photos, an invoice record, and a payment transaction, but these records should remain separable.
 - The same underlying media file may support more than one link intent, such as both a meal photo and receipt evidence, without duplicating file bytes.
@@ -707,7 +707,8 @@ V1 default taxonomy:
 
 - Expense parents: `飲食`, `交通`, `日用`, `居家清潔`, `醫療`, `學習`, `電子`, `服飾`, `娛樂`, `禮物人情`, `手續費罰款`, `旅行活動`, `訂閱`, `其他`, `缺漏支出`.
 - Suggested expense children include `早餐`, `午餐`, `晚餐`, `早午餐`, `宵夜`, `點心`, `水果`, `文具`, `鞋襪`, `園藝`, `登山裝備`, `登山服飾`, `登山補給`, `登山工具`, `AI`, `郵費`, `罰款`, and `手續費`.
-- Income parents: `薪資`, `零用補助`, `獎金獎學金`, `紅包`, `利息`, `退款報銷`, `其他收入`, `初始資金`.
+- Income parents: `薪資`, `零用補助`, `獎金獎學金`, `紅包`, `利息`, `退款報銷`, `其他收入`.
+- `初始資金` belongs to `fund_addition` behavior and setup/funding UI, not earned-income category reporting.
 - Default tags: `請客`, `代墊`, `待還款`, `浪費`, `報銷`, `旅行`, `登山`, `早餐`, `午餐`, `晚餐`, `宵夜`, `點心`.
 - Legacy labels such as `特殊`, `0`, and `?` should be import aliases or review states, not first-class default categories.
 

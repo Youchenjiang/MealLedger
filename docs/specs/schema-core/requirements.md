@@ -48,6 +48,9 @@ THE SYSTEM SHALL support links to one or more original expense records.
 WHEN the record kind is unresolved expense
 THE SYSTEM SHALL support day, month, or period time precision.
 
+WHEN a ledger record belongs to one primary event
+THE SYSTEM SHALL store that primary event directly on the ledger record.
+
 WHEN a record is soft-deleted
 THE SYSTEM SHALL exclude it from active queries by default while preserving audit/recovery data.
 
@@ -79,10 +82,16 @@ THE SYSTEM SHALL store source context separately from official ledger records.
 WHEN a draft is confirmed
 THE SYSTEM SHALL create or update official records through an audited action.
 
+WHEN a draft targets an existing record
+THE SYSTEM SHALL preserve the target record id for traceability.
+
 ## Media Requirements
 
 WHEN the system stores media metadata
 THE SYSTEM SHALL store object keys and metadata only, never image bytes.
+
+WHEN the system stores media metadata
+THE SYSTEM SHALL preserve captured time when known so media can be sorted independently of upload time.
 
 WHEN one physical media object supports multiple product links
 THE SYSTEM SHALL avoid duplicating file bytes.
@@ -94,6 +103,9 @@ THE SYSTEM SHALL support expiry and cleanup metadata.
 
 WHEN a client submits a create or confirm action
 THE SYSTEM SHALL support idempotency keys scoped to the user and action.
+
+WHEN an idempotent action succeeds
+THE SYSTEM SHALL store enough response data to replay the same result without creating duplicate records.
 
 WHEN editable records are updated
 THE SYSTEM SHALL use a version token for optimistic concurrency.

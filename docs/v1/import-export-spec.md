@@ -2,6 +2,8 @@
 
 This document defines the first implementable import and export behavior. It keeps V1 focused on ledger migration and clean export, while leaving official cloud invoice and bank API sync for later phases.
 
+This file is the canonical V1 import/export policy. Feature-level specs under `docs/specs/import-export/` translate these rules into requirements, design, tasks, and tests for implementation; they should not redefine conflicting behavior.
+
 ## V1 Import Scope
 
 V1 must support CSV import. CSV files should be UTF-8 or UTF-8 with BOM, comma-delimited, and use one header row.

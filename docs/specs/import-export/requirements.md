@@ -2,6 +2,8 @@
 
 Import/export lets users migrate from spreadsheets and leave with clean ledger data. V1 keeps this separate from media backup and external provider sync.
 
+The canonical V1 import/export policy is [V1 import and export spec](../../v1/import-export-spec.md). This feature spec breaks that policy into implementable requirements and should stay aligned with it.
+
 ## Scope
 
 This spec covers:

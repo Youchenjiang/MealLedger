@@ -118,6 +118,7 @@ Important fields:
 - `account_id`
 - `amount_minor`
 - `currency`
+- `event_id`
 - `category_id`
 - `merchant_id`
 - `merchant_text`
@@ -139,15 +140,12 @@ Stores second-side transfer data when a `ledger_records` row has `kind=transfer`
 Important fields:
 
 - `ledger_record_id`
-- `source_account_id`
-- `source_amount_minor`
-- `source_currency`
 - `destination_account_id`
 - `destination_amount_minor`
 - `destination_currency`
 - `fee_ledger_record_id`
 
-The main `ledger_records.account_id` can point to the source account for list filtering, while `transfer_details` preserves both sides.
+The main `ledger_records.account_id`, `amount_minor`, and `currency` store the source side of the transfer. `transfer_details` stores only the destination side and linked fee record to avoid duplicating source fields.
 
 ### `refund_links`
 
@@ -194,15 +192,6 @@ Important fields:
 - `ledger_record_id`
 - `tag_id`
 
-### `ledger_record_events`
-
-Links ledger records to events.
-
-Important fields:
-
-- `ledger_record_id`
-- `event_id`
-
 ### `meal_entries`
 
 Stores meal records independent of transactions.
@@ -243,6 +232,7 @@ Important fields:
 - `checksum_sha256`
 - `content_type`
 - `byte_size`
+- `captured_at`
 - `media_kind`
 - `retention_kind`
 - `expires_at`
@@ -286,6 +276,7 @@ Important fields:
 - `draft_type`
 - `status`
 - `source_payload_id`
+- `target_record_id`
 - `candidate_json`
 - `conflict_local_json`
 - `conflict_remote_json`
@@ -317,6 +308,7 @@ Important fields:
 - `idempotency_key`
 - `action_type`
 - `request_hash`
+- `response_json`
 - `result_type`
 - `result_id`
 - `expires_at`
