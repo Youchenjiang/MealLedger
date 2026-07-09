@@ -139,7 +139,7 @@ Before requesting review, include the checks you ran. At minimum:
 - Export changes: verify exports do not include image bytes or base64 media.
 - AI changes: verify AI output remains draft/suggestion data unless explicitly confirmed by the user.
 
-See [Development Workflow](docs/development-workflow.md) for frontend workflow and generated artifact rules.
+See [Development Workflow](docs/engineering/development-workflow.md) for frontend workflow and generated artifact rules.
 
 ## Privacy Rules
 

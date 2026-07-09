@@ -5,6 +5,20 @@ A personal accounting app that can optionally link transactions, invoice scans, 
 
 MealLedger stores structured records in Supabase PostgreSQL and large media files in Cloudflare R2. The database keeps media metadata and relationship IDs only, so ledger exports stay small and do not include image bytes.
 
+## Start Here
+
+If you are new to the project, read these first:
+
+1. [Documentation index](docs/README.md)
+2. [Product requirements notes](docs/product/product-requirements.md)
+3. [V1 implementation sequence](docs/engineering/implementation-sequence.md)
+4. [Spec-driven workflow](docs/engineering/spec-driven-workflow.md)
+5. [PR review checklist](docs/engineering/pr-review-checklist.md)
+
+For implementation work, start from the relevant feature spec under `docs/specs/`.
+
+## Key Documents
+
 - [Documentation index](docs/README.md)
 - [Setup notes](docs/engineering/setup.md)
 - [Meal, media, and ledger flows](docs/product/flows.md)
