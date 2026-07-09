@@ -22,6 +22,7 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Development workflow](engineering/development-workflow.md)
 - [Spec-driven workflow](engineering/spec-driven-workflow.md)
 - [PR review checklist](engineering/pr-review-checklist.md)
+- [V1 implementation sequence](engineering/implementation-sequence.md)
 - [Backend architecture](engineering/backend-architecture.md)
 
 ## Testing
