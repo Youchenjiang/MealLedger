@@ -27,6 +27,13 @@ Use this index as the starting point for review. The documentation is grouped by
 
 - [Accounting test plan](testing/accounting-test-plan.md)
 
+## Feature Specs
+
+- [App shell requirements](specs/app-shell/requirements.md)
+- [App shell design](specs/app-shell/design.md)
+- [App shell tasks](specs/app-shell/tasks.md)
+- [App shell test plan](specs/app-shell/test-plan.md)
+
 ## Suggested Review Order
 
 1. Product requirements notes.
