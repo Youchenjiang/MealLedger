@@ -33,6 +33,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [App shell design](specs/app-shell/design.md)
 - [App shell tasks](specs/app-shell/tasks.md)
 - [App shell test plan](specs/app-shell/test-plan.md)
+- [Manual ledger requirements](specs/manual-ledger/requirements.md)
+- [Manual ledger design](specs/manual-ledger/design.md)
+- [Manual ledger tasks](specs/manual-ledger/tasks.md)
+- [Manual ledger test plan](specs/manual-ledger/test-plan.md)
 
 ## Suggested Review Order
 
