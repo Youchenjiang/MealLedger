@@ -2,6 +2,8 @@
 
 MealLedger uses lightweight agile delivery with risk-driven testing. Work is organized as small PRs against `main`; there is no long-lived `dev` branch.
 
+Medium or high-risk product work should follow the [Spec-Driven Workflow](spec-driven-workflow.md) before implementation. This is required for ledger correctness, import/export, privacy, sync, and cross-module data contracts. PRs should be reviewed with the [PR Review Checklist](pr-review-checklist.md).
+
 ## Branch Flow
 
 1. Start from latest `main`.
