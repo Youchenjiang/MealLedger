@@ -7,6 +7,7 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Product requirements notes](product/product-requirements.md)
 - [Meal, media, and ledger flows](product/flows.md)
 - [Long-term roadmap](product/roadmap.md)
+- [V1 non-goals and known limitations](product/v1-non-goals.md)
 
 ## V1 Implementation Specs
 
