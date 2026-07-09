@@ -45,6 +45,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Default taxonomy design](specs/default-taxonomy/design.md)
 - [Default taxonomy tasks](specs/default-taxonomy/tasks.md)
 - [Default taxonomy test plan](specs/default-taxonomy/test-plan.md)
+- [Onboarding requirements](specs/onboarding/requirements.md)
+- [Onboarding design](specs/onboarding/design.md)
+- [Onboarding tasks](specs/onboarding/tasks.md)
+- [Onboarding test plan](specs/onboarding/test-plan.md)
 
 ## Suggested Review Order
 
