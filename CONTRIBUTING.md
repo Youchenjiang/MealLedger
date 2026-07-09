@@ -62,13 +62,28 @@ Prefer one of these scopes:
 | `docs` | Repository documentation |
 | `ci` | GitHub Actions and automation |
 | `deps` | Dependency updates |
+| `product` | Product direction, roadmap, and non-goals |
+| `accounting` | Accounting rules and reporting semantics |
+| `taxonomy` | Categories, tags, aliases, and events |
+| `imports` | Import and export planning |
+| `security` | Security, privacy, and access control docs |
+| `sync` | Offline, sync, conflict, and idempotency docs |
+| `flows` | Product flow documentation |
+| `v1` | V1 defaults, tradeoffs, and scope decisions |
+| `data` | Data lifecycle and schema planning |
+| `ops` | Technical operations and monitoring |
+| `test` | Test planning |
+| `privacy` | Privacy and compliance planning |
+| `workflow` | Development, PR, and review workflows |
+| `spec` | Feature-level specs |
+| `decisions` | Architecture decision records |
 
 Use a new scope only when none of the above is accurate.
 
 ## Commit Message Rules
 
 - Use English.
-- Keep the subject under 50 characters.
+- Keep the subject under 72 characters.
 - Use lowercase after the colon.
 - Do not end the subject with a period.
 - Do not use vague subjects like `update files`, `fix bug`, or `misc changes`.
