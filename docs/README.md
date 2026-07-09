@@ -41,6 +41,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Schema core design](specs/schema-core/design.md)
 - [Schema core tasks](specs/schema-core/tasks.md)
 - [Schema core test plan](specs/schema-core/test-plan.md)
+- [Default taxonomy requirements](specs/default-taxonomy/requirements.md)
+- [Default taxonomy design](specs/default-taxonomy/design.md)
+- [Default taxonomy tasks](specs/default-taxonomy/tasks.md)
+- [Default taxonomy test plan](specs/default-taxonomy/test-plan.md)
 
 ## Suggested Review Order
 
