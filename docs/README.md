@@ -37,6 +37,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Manual ledger design](specs/manual-ledger/design.md)
 - [Manual ledger tasks](specs/manual-ledger/tasks.md)
 - [Manual ledger test plan](specs/manual-ledger/test-plan.md)
+- [Schema core requirements](specs/schema-core/requirements.md)
+- [Schema core design](specs/schema-core/design.md)
+- [Schema core tasks](specs/schema-core/tasks.md)
+- [Schema core test plan](specs/schema-core/test-plan.md)
 
 ## Suggested Review Order
 
