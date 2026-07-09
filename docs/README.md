@@ -25,6 +25,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [V1 implementation sequence](engineering/implementation-sequence.md)
 - [Backend architecture](engineering/backend-architecture.md)
 
+## Decisions
+
+- [Architecture decision records](decisions/README.md)
+
 ## Testing
 
 - [Accounting test plan](testing/accounting-test-plan.md)
