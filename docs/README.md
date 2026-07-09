@@ -49,6 +49,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Onboarding design](specs/onboarding/design.md)
 - [Onboarding tasks](specs/onboarding/tasks.md)
 - [Onboarding test plan](specs/onboarding/test-plan.md)
+- [Capture media requirements](specs/capture-media/requirements.md)
+- [Capture media design](specs/capture-media/design.md)
+- [Capture media tasks](specs/capture-media/tasks.md)
+- [Capture media test plan](specs/capture-media/test-plan.md)
 
 ## Suggested Review Order
 
