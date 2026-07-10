@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
   AlertCircle,
   Banknote,
   Camera,
   CheckCircle2,
-  Database,
-  Download,
-  FileText,
   Home,
   ImagePlus,
   LogIn,
-  Plus,
   ReceiptText,
-  Search,
   Settings,
   ShieldCheck,
   Upload,
@@ -43,7 +39,7 @@ export function App() {
   const [route, setRoute] = useState<AppRoute>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [reviewCount, setReviewCount] = useState(0);
+  const [draftCount, setDraftCount] = useState(0);
 
   useEffect(() => {
     const handlePopState = () => setRoute(routeFromLocation());
@@ -68,30 +64,24 @@ export function App() {
   const statusItems = useMemo(() => {
     const items = [
       {
-        label: isOnline ? "Local mode" : "Offline",
-        detail: isOnline ? "Changes stay on this device until sync is enabled." : "Drafts stay visible on this device.",
+        label: isOnline ? "Sync not enabled" : "Offline",
+        detail: isOnline ? "This preview keeps changes on this device." : "Drafts stay visible on this device.",
         icon: isOnline ? Wifi : WifiOff,
-        tone: "warn",
+        tone: "neutral",
       },
       {
-        label: "No local drafts",
-        detail: "No scans, imports, or edits are waiting for review.",
-        icon: CheckCircle2,
-        tone: "good",
+        label: draftCount > 0 ? `${draftCount} draft${draftCount === 1 ? "" : "s"} waiting` : "No drafts to review",
+        detail:
+          draftCount > 0
+            ? "Confirm drafts before they become ledger records."
+            : "Nothing is waiting for confirmation.",
+        icon: draftCount > 0 ? AlertCircle : CheckCircle2,
+        tone: draftCount > 0 ? "warn" : "good",
       },
     ];
 
-    if (reviewCount > 0) {
-      items.push({
-        label: `${reviewCount} drafts need review`,
-        detail: "Imported or scanned drafts need confirmation before they enter the ledger.",
-        icon: AlertCircle,
-        tone: "warn",
-      });
-    }
-
     return items;
-  }, [isOnline, reviewCount]);
+  }, [isOnline, draftCount]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -166,7 +156,7 @@ export function App() {
           </section>
         </section>
 
-        {renderRoute(route, reviewCount, navigate)}
+        {renderRoute(route, draftCount, setDraftCount, navigate)}
       </section>
     </main>
   );
@@ -186,11 +176,11 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
           </div>
         </div>
         <div>
-          <p className="eyebrow">Workspace preview</p>
-          <h1>Plan personal records before connecting real data.</h1>
+          <p className="eyebrow">MealLedger</p>
+          <h1>Track spending first, attach meals when useful.</h1>
           <p className="lede">
-            Review the empty states, draft review boundaries, and export promises before adding
-            accounts, uploads, imports, or sync.
+            Start with ledger records, keep scans and photos separate, and confirm every draft
+            before it counts.
           </p>
         </div>
         <button className="primary-action" type="button" onClick={onSignIn}>
@@ -202,14 +192,25 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
   );
 }
 
-function renderRoute(route: AppRoute, reviewCount: number, navigate: (item: NavItem) => void) {
+function renderRoute(
+  route: AppRoute,
+  draftCount: number,
+  setDraftCount: Dispatch<SetStateAction<number>>,
+  navigate: (item: NavItem) => void,
+) {
   switch (route) {
     case "overview":
-      return <OverviewPage navigate={navigate} />;
+      return <OverviewPage draftCount={draftCount} navigate={navigate} />;
     case "ledger":
-      return <LedgerPage />;
+      return <LedgerPage draftCount={draftCount} navigate={navigate} />;
     case "capture":
-      return <CapturePage />;
+      return (
+        <CapturePage
+          draftCount={draftCount}
+          navigate={navigate}
+          onCreateDraft={() => setDraftCount((count) => count + 1)}
+        />
+      );
     case "settings":
       return <SettingsPage />;
     default:
@@ -217,13 +218,17 @@ function renderRoute(route: AppRoute, reviewCount: number, navigate: (item: NavI
   }
 }
 
-function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
+function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: (item: NavItem) => void }) {
   return (
     <div className="route-stack">
       <section className="summary-grid">
         <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
         <EmptyMetric label="Ledger records" value="No records" detail="Confirmed transactions will appear here." />
-        <EmptyMetric label="Draft reviews" value="None" detail="Scans and imports will wait for confirmation." />
+        <EmptyMetric
+          label="Draft reviews"
+          value={draftCount > 0 ? `${draftCount} waiting` : "None"}
+          detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for confirmation."}
+        />
       </section>
       <section className="content-grid">
         <Panel title="Start with a new record" eyebrow="First step">
@@ -231,7 +236,7 @@ function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
             Begin with a transaction draft, then confirm it before it becomes part of the ledger.
           </p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
-            Go to Capture
+            Start a record
           </button>
         </Panel>
         <Panel title="Review before it counts" eyebrow="Data safety">
@@ -245,19 +250,21 @@ function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
   );
 }
 
-function LedgerPage() {
+function LedgerPage({ draftCount, navigate }: { draftCount: number; navigate: (item: NavItem) => void }) {
   const ledgerColumns = [
+    "Record ID",
     "Date",
     "Account",
     "Type",
     "Category",
-    "Merchant / Source",
+    "Merchant / Payee",
+    "Transfer account",
     "Amount",
     "Currency",
     "Notes",
     "Tags",
     "Attachment",
-    "Source",
+    "Entry source",
     "Balance",
     "Status",
   ];
@@ -270,11 +277,15 @@ function LedgerPage() {
             Confirmed transactions appear here after review. The table keeps spreadsheet-friendly
             fields visible from the start.
           </p>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
+            Start a record
+          </button>
         </Panel>
-        <Panel title="Clean export" eyebrow="Portability">
+        <Panel title={draftCount > 0 ? "Drafts waiting" : "Clean export"} eyebrow="Portability">
           <p className="panel-copy">
-            CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain
-            separate files.
+            {draftCount > 0
+              ? `${draftCount} draft${draftCount === 1 ? "" : "s"} must be confirmed before appearing here.`
+              : "CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain separate files."}
           </p>
         </Panel>
       </section>
@@ -290,27 +301,39 @@ function LedgerPage() {
   );
 }
 
-function CapturePage() {
+function CapturePage({
+  draftCount,
+  navigate,
+  onCreateDraft,
+}: {
+  draftCount: number;
+  navigate: (item: NavItem) => void;
+  onCreateDraft: () => void;
+}) {
   const actions = [
     {
       title: "Record a transaction",
       detail: "The primary path for expenses, income, transfers, refunds, and adjustments.",
       icon: Banknote,
+      available: true,
     },
     {
       title: "Scan receipt or invoice",
       detail: "Create a draft from a source image; confirm before it enters the ledger.",
       icon: ReceiptText,
+      available: false,
     },
     {
       title: "Attach meal photo",
       detail: "Meal notes can support a transaction, but ordinary accounting never requires them.",
       icon: ImagePlus,
+      available: false,
     },
     {
       title: "Attachment",
       detail: "Keep supporting evidence separate from clean ledger exports.",
       icon: Upload,
+      available: false,
     },
   ];
 
@@ -324,6 +347,19 @@ function CapturePage() {
         <div className="planned-actions">
           {actions.map((action) => {
             const Icon = action.icon;
+            if (action.available) {
+              return (
+                <button className="action-card primary-card" type="button" key={action.title} onClick={onCreateDraft}>
+                  <Icon size={22} aria-hidden="true" />
+                  <span>
+                    <strong>{action.title}</strong>
+                    <small>{action.detail}</small>
+                    <em>Creates local draft</em>
+                  </span>
+                </button>
+              );
+            }
+
             return (
               <button className="action-card unavailable" disabled type="button" key={action.title}>
                 <Icon size={22} aria-hidden="true" />
@@ -337,6 +373,17 @@ function CapturePage() {
           })}
         </div>
       </Panel>
+      {draftCount > 0 ? (
+        <Panel title="Draft ready for review" eyebrow="Local draft">
+          <p className="panel-copy">
+            {draftCount} manual transaction draft{draftCount === 1 ? "" : "s"} exist locally. They
+            are not confirmed ledger records yet.
+          </p>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[1])}>
+            Review in Ledger
+          </button>
+        </Panel>
+      ) : null}
     </section>
   );
 }
@@ -346,17 +393,14 @@ function SettingsPage() {
     {
       title: "CSV import review",
       detail: "Map spreadsheet columns, preview errors, and create drafts before ledger writes.",
-      icon: FileText,
     },
     {
       title: "Clean ledger export",
       detail: "Export CSV and JSON without bundling receipt or meal photo bytes.",
-      icon: Download,
     },
     {
       title: "Statement reconciliation",
       detail: "Bank or wallet records can later match confirmed transactions.",
-      icon: Database,
     },
   ];
 
@@ -376,24 +420,19 @@ function SettingsPage() {
       </Panel>
       <Panel title="Import and export safeguards" eyebrow="Data portability">
         <p className="panel-copy">
-          Spreadsheet migration and export need visible guarantees before users trust the app with
-          years of records.
+          Clean exports include confirmed ledger records only. Attachments stay as metadata
+          references, not image bytes, and CSV/JSON use the same stable field set.
         </p>
-        <section className="planned-actions compact" aria-label="Upcoming data tools">
+        <dl className="settings-list" aria-label="Data tool status">
           {dataTools.map((item) => {
-            const Icon = item.icon;
             return (
-              <article className="action-card unavailable" key={item.title}>
-                <Icon size={22} aria-hidden="true" />
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>{item.detail}</small>
-                  <em>Coming soon</em>
-                </span>
-              </article>
+              <div key={item.title}>
+                <dt>{item.title}</dt>
+                <dd>{item.detail}</dd>
+              </div>
             );
           })}
-        </section>
+        </dl>
       </Panel>
     </section>
   );
