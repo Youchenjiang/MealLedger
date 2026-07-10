@@ -2,38 +2,30 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Banknote,
-  BookOpen,
   Camera,
   CheckCircle2,
-  Cloud,
   Database,
   Download,
-  FileDown,
   FileText,
   Home,
   ImagePlus,
   LogIn,
-  LogOut,
   Plus,
   ReceiptText,
-  RotateCw,
   Search,
   Settings,
   ShieldCheck,
   Upload,
-  Utensils,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
-import type { AppRoute, AuthState, NavItem, SyncState } from "./types";
+import type { AppRoute, AuthState, NavItem } from "./types";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
   { route: "ledger", label: "Ledger", path: "/ledger", icon: Banknote },
   { route: "capture", label: "Capture", path: "/capture", icon: Camera },
-  { route: "meals", label: "Meals", path: "/meals", icon: Utensils },
-  { route: "imports", label: "Imports", path: "/imports", icon: FileDown },
   { route: "settings", label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -51,7 +43,6 @@ export function App() {
   const [route, setRoute] = useState<AppRoute>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [syncState, setSyncState] = useState<SyncState>("local-only");
   const [reviewCount, setReviewCount] = useState(0);
 
   useEffect(() => {
@@ -77,30 +68,30 @@ export function App() {
   const statusItems = useMemo(() => {
     const items = [
       {
-        label: isOnline ? "Online" : "Offline",
-        detail: isOnline ? "Navigation remains available." : "Local draft mode is visible.",
+        label: isOnline ? "Connected" : "Offline",
+        detail: isOnline ? "Ready to sync when backend wiring is added." : "Drafts should stay visible on this device.",
         icon: isOnline ? Wifi : WifiOff,
         tone: isOnline ? "good" : "warn",
       },
       {
-        label: syncLabel(syncState),
-        detail: syncDetail(syncState),
-        icon: syncState === "synced" ? CheckCircle2 : Cloud,
-        tone: syncState === "failed" ? "danger" : syncState === "synced" ? "good" : "warn",
+        label: "No local drafts",
+        detail: "Nothing is waiting for backup or review in this empty shell.",
+        icon: CheckCircle2,
+        tone: "good",
       },
     ];
 
     if (reviewCount > 0) {
       items.push({
-        label: `${reviewCount} review items`,
-        detail: "Drafts and conflicts wait here before official ledger writes.",
+        label: `${reviewCount} drafts need review`,
+        detail: "Imported or scanned drafts should be confirmed before they enter the ledger.",
         icon: AlertCircle,
         tone: "warn",
       });
     }
 
     return items;
-  }, [isOnline, reviewCount, syncState]);
+  }, [isOnline, reviewCount]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -120,7 +111,7 @@ export function App() {
           </div>
           <div>
             <p className="brand-name">MealLedger</p>
-            <p className="brand-caption">Ledger first, meals optional</p>
+            <p className="brand-caption">Personal ledger with optional meal notes</p>
           </div>
         </div>
 
@@ -144,7 +135,7 @@ export function App() {
 
         <div className="storage-note">
           <ShieldCheck size={18} aria-hidden="true" />
-          <span>Clean ledger exports stay separate from media bytes.</span>
+          <span>Ledger exports stay separate from receipt and meal photos.</span>
         </div>
       </aside>
 
@@ -152,7 +143,7 @@ export function App() {
         <section className="page-header" aria-labelledby="page-title">
           <header className="topbar">
             <div className="topbar-title">
-              <p className="eyebrow">V1 app shell</p>
+              <p className="eyebrow">Personal finance workspace</p>
               <h1 id="page-title">{routeTitle(route)}</h1>
             </div>
           </header>
@@ -175,14 +166,7 @@ export function App() {
           </section>
         </section>
 
-        {renderRoute(route, reviewCount, navigate, {
-          onAddReview: () => setReviewCount((value) => (value === 0 ? 3 : value + 1)),
-          onClearReview: () => setReviewCount(0),
-          onSignOutPreview: () => setAuthState("signed-out"),
-          onToggleLocalOnly: () => setSyncState((value) => (value === "local-only" ? "synced" : "local-only")),
-          onToggleNetwork: () => setIsOnline((value) => !value),
-          isOnline,
-        })}
+        {renderRoute(route, reviewCount, navigate)}
       </section>
     </main>
   );
@@ -198,41 +182,27 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
           </div>
           <div>
             <p className="brand-name">MealLedger</p>
-            <p className="brand-caption">Accounting-first personal records</p>
+            <p className="brand-caption">Personal finance records</p>
           </div>
         </div>
         <div>
-          <p className="eyebrow">Signed-out state</p>
-          <h1>Start with a safe shell before real ledger data exists.</h1>
+          <p className="eyebrow">Demo workspace</p>
+          <h1>See the ledger-first workspace before connecting real data.</h1>
           <p className="lede">
-            Supabase Auth will connect later. This preview keeps the shell usable without real
-            credentials, uploads, imports, or official ledger writes.
+            This local demo shows the navigation, empty states, and data-safety boundaries before
+            authentication, uploads, imports, or sync are connected.
           </p>
         </div>
         <button className="primary-action" type="button" onClick={onSignIn}>
           <LogIn size={18} aria-hidden="true" />
-          Preview signed-in shell
+          Enter demo workspace
         </button>
       </section>
     </main>
   );
 }
 
-type PreviewControls = {
-  isOnline: boolean;
-  onAddReview: () => void;
-  onClearReview: () => void;
-  onSignOutPreview: () => void;
-  onToggleLocalOnly: () => void;
-  onToggleNetwork: () => void;
-};
-
-function renderRoute(
-  route: AppRoute,
-  reviewCount: number,
-  navigate: (item: NavItem) => void,
-  previewControls: PreviewControls,
-) {
+function renderRoute(route: AppRoute, reviewCount: number, navigate: (item: NavItem) => void) {
   switch (route) {
     case "overview":
       return <OverviewPage navigate={navigate} />;
@@ -240,12 +210,8 @@ function renderRoute(
       return <LedgerPage />;
     case "capture":
       return <CapturePage />;
-    case "meals":
-      return <MealsPage />;
-    case "imports":
-      return <ImportsPage />;
     case "settings":
-      return <SettingsPage previewControls={previewControls} />;
+      return <SettingsPage />;
     default:
       return <NotFoundPage navigate={navigate} />;
   }
@@ -256,24 +222,23 @@ function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
     <div className="route-stack">
       <section className="summary-grid">
         <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
-        <EmptyMetric label="Recent activity" value="No records" detail="Official records will appear after confirmation." />
-        <EmptyMetric label="Draft reviews" value="None" detail="Review items appear only after imports, scans, or sync conflicts." />
+        <EmptyMetric label="Ledger records" value="No records" detail="Confirmed transactions will appear here." />
+        <EmptyMetric label="Draft reviews" value="None" detail="Scans and imports will wait for confirmation." />
       </section>
       <section className="content-grid">
-        <Panel title="Ledger foundation" eyebrow="Next action">
+        <Panel title="First workflow to build" eyebrow="Start here">
           <p className="panel-copy">
-            The shell is ready for the first real ledger flow: accounts, categories, and manual
-            transaction entry.
+            The first usable path should be account setup, manual transaction entry, and a ledger
+            table that proves balances are calculated from confirmed records.
           </p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[1])}>
-            <ListIcon />
             Open Ledger
           </button>
         </Panel>
-        <Panel title="Local-only visibility" eyebrow="Sync safety">
+        <Panel title="Data safety promise" eyebrow="Guardrail">
           <p className="panel-copy">
-            The shell reserves space for local-only warnings so offline drafts are never mistaken
-            for backed-up records.
+            Imported rows, scanned receipts, meal photos, and AI suggestions should stay as drafts
+            until the user confirms them.
           </p>
         </Panel>
       </section>
@@ -282,49 +247,40 @@ function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
 }
 
 function LedgerPage() {
-  const plannedLedgerTools = [
-    {
-      title: "Manual transaction",
-      detail: "Expense, income, transfer, refund, fund addition, and adjustment forms are not wired yet.",
-      icon: Plus,
-    },
-    {
-      title: "Search and filters",
-      detail: "Filtering by date, account, category, merchant, event, and amount will come with real records.",
-      icon: Search,
-    },
+  const ledgerColumns = [
+    "Date",
+    "Account",
+    "Type",
+    "Category",
+    "Merchant / Source",
+    "Amount",
+    "Currency",
+    "Status",
   ];
 
   return (
     <div className="route-stack">
       <section className="content-grid">
-        <Panel title="Ledger is empty" eyebrow="Official records">
+        <Panel title="Ledger table shape" eyebrow="Confirmed records">
           <p className="panel-copy">
-            Manual expenses, income, transfers, refunds, fund additions, and adjustments will appear
-            here after they are confirmed.
+            Transactions should land in a predictable table before charts or automation are added.
+            This shell shows the fields a migrated spreadsheet user will look for first.
           </p>
         </Panel>
-        <Panel title="No fake balances" eyebrow="Accounting guardrail">
+        <Panel title="Export matters early" eyebrow="Portability">
           <p className="panel-copy">
-            This shell avoids sample balances so smoke-test data cannot be confused with real
-            account totals.
+            Clean CSV and JSON exports must remain available without bundling photo bytes into the
+            ledger file.
           </p>
         </Panel>
       </section>
-      <section className="planned-actions" aria-label="Planned ledger tools">
-        {plannedLedgerTools.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article className="action-card planned" key={item.title}>
-              <Icon size={22} aria-hidden="true" />
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.detail}</small>
-                <em>Planned</em>
-              </span>
-            </article>
-          );
-        })}
+      <section className="table-card" aria-label="Ledger table fields">
+        <div className="table-row table-head">
+          {ledgerColumns.map((column) => (
+            <span key={column}>{column}</span>
+          ))}
+        </div>
+        <div className="table-empty">No confirmed ledger records yet.</div>
       </section>
     </div>
   );
@@ -333,33 +289,33 @@ function LedgerPage() {
 function CapturePage() {
   const actions = [
     {
-      title: "Manual ledger entry",
-      detail: "Expense, income, transfer, refund, or adjustment.",
+      title: "Record a transaction",
+      detail: "The primary path for expenses, income, transfers, refunds, and adjustments.",
       icon: Banknote,
     },
     {
       title: "Scan receipt or invoice",
-      detail: "Temporary source file, then user-confirmed draft.",
+      detail: "Create a draft from a source image; confirm before it enters the ledger.",
       icon: ReceiptText,
     },
     {
-      title: "Meal photo",
-      detail: "Meal record first; ledger link remains optional.",
+      title: "Attach meal photo",
+      detail: "Meal notes can support a transaction, but ordinary accounting never requires them.",
       icon: ImagePlus,
     },
     {
       title: "Attachment",
-      detail: "Attach evidence without creating a meal.",
+      detail: "Keep supporting evidence separate from clean ledger exports.",
       icon: Upload,
     },
   ];
 
   return (
     <section className="capture-layout">
-      <Panel title="Choose a capture path" eyebrow="Capture">
+      <Panel title="Capture starts as a draft" eyebrow="Input sources">
         <p className="panel-copy">
-          Start from the thing you have now. Nothing here creates an official ledger record until a
-          later confirmation step.
+          Manual entries, scans, meal photos, and attachments should all lead to a review step
+          before anything becomes an official ledger record.
         </p>
         <div className="planned-actions">
           {actions.map((action) => {
@@ -370,7 +326,7 @@ function CapturePage() {
                 <span>
                   <strong>{action.title}</strong>
                   <small>{action.detail}</small>
-                  <em>Planned</em>
+                  <em>Next</em>
                 </span>
               </article>
             );
@@ -381,109 +337,22 @@ function CapturePage() {
   );
 }
 
-function MealsPage() {
-  const plannedMealWorkflows = [
+function SettingsPage() {
+  const dataTools = [
     {
-      title: "Meal entry",
-      detail: "A meal can exist without a ledger record or photo.",
-      icon: Utensils,
-    },
-    {
-      title: "Meal photos",
-      detail: "One meal may keep zero, one, or many photos.",
-      icon: ImagePlus,
-    },
-    {
-      title: "Ledger matching",
-      detail: "Nearby transactions can be suggested later without automatic writes.",
-      icon: Banknote,
-    },
-  ];
-
-  return (
-    <section className="route-stack">
-      <Panel title="Meal timeline is empty" eyebrow="Meals">
-        <p className="panel-copy">
-          No meal workflow is implemented in this shell yet. Meals are optional records and should
-          never be required for ordinary accounting.
-        </p>
-      </Panel>
-      <section className="planned-actions" aria-label="Planned meal paths">
-        {plannedMealWorkflows.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article className="action-card planned" key={item.title}>
-              <Icon size={22} aria-hidden="true" />
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.detail}</small>
-                <em>Planned</em>
-              </span>
-            </article>
-          );
-        })}
-      </section>
-    </section>
-  );
-}
-
-function ImportsPage() {
-  const plannedImports = [
-    {
-      title: "Spreadsheet import",
-      detail: "CSV rows will map into drafts before any official ledger write.",
+      title: "CSV import review",
+      detail: "Map spreadsheet columns, preview errors, and create drafts before ledger writes.",
       icon: FileText,
     },
     {
-      title: "Receipt or invoice batch",
-      detail: "Scans stay temporary unless the user chooses to keep source files.",
-      icon: ReceiptText,
-    },
-    {
-      title: "Statement records",
-      detail: "Future bank or wallet records will reconcile against ledger entries.",
-      icon: Database,
-    },
-  ];
-
-  return (
-    <section className="route-stack">
-      <Panel title="Import history is empty" eyebrow="CSV and drafts">
-        <p className="panel-copy">
-          No importer is implemented in this shell yet. V1 imports should create review drafts first,
-          then write official ledger records only after user confirmation.
-        </p>
-      </Panel>
-      <section className="planned-actions" aria-label="Planned import paths">
-        {plannedImports.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article className="action-card planned" key={item.title}>
-              <Icon size={22} aria-hidden="true" />
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.detail}</small>
-                <em>Planned</em>
-              </span>
-            </article>
-          );
-        })}
-      </section>
-    </section>
-  );
-}
-
-function SettingsPage({ previewControls }: { previewControls: PreviewControls }) {
-  const plannedSettingsLinks = [
-    {
       title: "Clean ledger export",
-      detail: "CSV and JSON export will stay separate from media bytes.",
+      detail: "Export CSV and JSON without bundling receipt or meal photo bytes.",
       icon: Download,
     },
     {
-      title: "Repository documentation",
-      detail: "Product and implementation references live in docs, not as runtime links yet.",
-      icon: BookOpen,
+      title: "Statement reconciliation",
+      detail: "Future bank or wallet records should link to confirmed transactions.",
+      icon: Database,
     },
   ];
 
@@ -492,22 +361,22 @@ function SettingsPage({ previewControls }: { previewControls: PreviewControls })
       <Panel title="Account and sync" eyebrow="Settings">
         <dl className="settings-list">
           <div>
-            <dt>Supabase</dt>
-            <dd>{isSupabaseConfigured ? "Environment variables configured" : "Not configured for local smoke test"}</dd>
+            <dt>Authentication</dt>
+            <dd>{isSupabaseConfigured ? "Cloud environment is configured" : "Cloud sign-in is not configured locally"}</dd>
           </div>
           <div>
             <dt>Storage</dt>
-            <dd>Local-only state and offline warnings are visible before backend wiring.</dd>
+            <dd>Drafts, uploads, and photo evidence should clearly show whether they are backed up.</dd>
           </div>
         </dl>
       </Panel>
-      <Panel title="Export and documentation" eyebrow="Project links">
+      <Panel title="Import and export safeguards" eyebrow="Data portability">
         <p className="panel-copy">
-          These are not interactive settings yet. The shell only records where export and docs
-          affordances will belong once those flows exist.
+          Spreadsheet migration and export need visible guarantees before users trust the app with
+          years of records.
         </p>
-        <section className="planned-actions compact" aria-label="Planned settings links">
-          {plannedSettingsLinks.map((item) => {
+        <section className="planned-actions compact" aria-label="Upcoming data tools">
+          {dataTools.map((item) => {
             const Icon = item.icon;
             return (
               <article className="action-card planned" key={item.title}>
@@ -515,39 +384,11 @@ function SettingsPage({ previewControls }: { previewControls: PreviewControls })
                 <span>
                   <strong>{item.title}</strong>
                   <small>{item.detail}</small>
-                  <em>Planned</em>
+                  <em>Next</em>
                 </span>
               </article>
             );
           })}
-        </section>
-      </Panel>
-      <Panel title="Preview controls" eyebrow="Local smoke test">
-        <p className="panel-copy">
-          These controls only exist for app-shell preview states. They will be replaced by real auth,
-          sync, and review flows later.
-        </p>
-        <section className="mock-controls" aria-label="Smoke test controls">
-          <button type="button" onClick={previewControls.onSignOutPreview}>
-            <LogOut size={16} aria-hidden="true" />
-            Show signed-out state
-          </button>
-          <button type="button" onClick={previewControls.onClearReview}>
-            <CheckCircle2 size={16} aria-hidden="true" />
-            Clear review mock
-          </button>
-          <button type="button" onClick={previewControls.onToggleNetwork}>
-            {previewControls.isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
-            Toggle network
-          </button>
-          <button type="button" onClick={previewControls.onToggleLocalOnly}>
-            <Cloud size={16} />
-            Toggle local-only
-          </button>
-          <button type="button" onClick={previewControls.onAddReview}>
-            <AlertCircle size={16} />
-            Add review item
-          </button>
         </section>
       </Panel>
     </section>
@@ -557,7 +398,7 @@ function SettingsPage({ previewControls }: { previewControls: PreviewControls })
 function NotFoundPage({ navigate }: { navigate: (item: NavItem) => void }) {
   return (
     <Panel title="Page not found" eyebrow="Safe recovery">
-      <p className="panel-copy">This route is not part of the V1 shell. Return to Overview.</p>
+      <p className="panel-copy">This page is not part of the current workspace. Return to Overview.</p>
       <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[0])}>
         <Home size={18} />
         Go to Overview
@@ -590,10 +431,6 @@ function EmptyMetric({ label, value, detail }: { label: string; value: string; d
   );
 }
 
-function ListIcon() {
-  return <RotateCw size={18} aria-hidden="true" />;
-}
-
 function routeTitle(route: AppRoute) {
   switch (route) {
     case "overview":
@@ -602,39 +439,9 @@ function routeTitle(route: AppRoute) {
       return "Ledger";
     case "capture":
       return "Capture";
-    case "meals":
-      return "Meals";
-    case "imports":
-      return "Imports";
     case "settings":
       return "Settings";
     default:
       return "Unknown route";
-  }
-}
-
-function syncLabel(state: SyncState) {
-  switch (state) {
-    case "synced":
-      return "Synced";
-    case "syncing":
-      return "Syncing";
-    case "failed":
-      return "Sync failed";
-    case "local-only":
-      return "Local-only data";
-  }
-}
-
-function syncDetail(state: SyncState) {
-  switch (state) {
-    case "synced":
-      return "No pending local changes in this mock state.";
-    case "syncing":
-      return "Uploads and drafts would be queued behind this state.";
-    case "failed":
-      return "The user should get retry and manual-entry options.";
-    case "local-only":
-      return "Some data is not backed up to the cloud yet.";
   }
 }

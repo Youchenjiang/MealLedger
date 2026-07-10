@@ -159,9 +159,7 @@ button {
 }
 
 .topbar,
-.panel-heading,
-.action-row,
-.mock-controls {
+.panel-heading {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -211,8 +209,7 @@ h2 {
 
 .primary-action,
 .secondary-action,
-.icon-button,
-.mock-controls button {
+.icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -229,8 +226,7 @@ h2 {
   background: #2f5d50;
 }
 
-.secondary-action,
-.mock-controls button {
+.secondary-action {
   gap: 8px;
   min-height: 38px;
   padding: 0 12px;
@@ -284,10 +280,6 @@ h2 {
   border-color: #dda7a0;
 }
 
-.mock-controls {
-  flex-wrap: wrap;
-}
-
 .route-stack {
   display: grid;
   gap: 16px;
@@ -301,7 +293,8 @@ h2 {
 
 .summary-card,
 .panel,
-.action-card {
+.action-card,
+.table-card {
   border: 1px solid #ddd6ca;
   border-radius: 8px;
   background: #fffdf8;
@@ -352,6 +345,43 @@ h2 {
 
 .planned-actions.compact {
   grid-template-columns: 1fr;
+}
+
+.table-card {
+  overflow-x: auto;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(92px, 0.8fr) minmax(110px, 1fr) minmax(96px, 0.8fr) minmax(110px, 1fr)
+    minmax(150px, 1.2fr) minmax(96px, 0.8fr) minmax(88px, 0.7fr) minmax(96px, 0.8fr);
+  min-width: 860px;
+}
+
+.table-row span,
+.table-empty {
+  padding: 12px 14px;
+  border-right: 1px solid #ebe4d8;
+}
+
+.table-row span:last-child {
+  border-right: 0;
+}
+
+.table-head {
+  color: #5f594f;
+  background: #faf7f0;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.table-empty {
+  min-width: 860px;
+  border-top: 1px solid #ebe4d8;
+  color: #69645c;
 }
 
 .action-card {
@@ -425,7 +455,7 @@ h2 {
   }
 
   .nav-list {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -490,7 +520,7 @@ h2 {
   }
 
   .workspace {
-    padding-bottom: 152px;
+    padding-bottom: 16px;
   }
 
   .page-header {
@@ -503,15 +533,6 @@ h2 {
 
   h1 {
     font-size: 26px;
-  }
-
-  .action-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .action-row > * {
-    width: 100%;
   }
 
   .planned-actions {
