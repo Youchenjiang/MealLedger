@@ -2,6 +2,16 @@
 
 The app shell is low accounting risk, so verification focuses on build, routing, smoke tests, layout, and state visibility.
 
+## Automated Gate
+
+Test `npm run test` succeeds.
+
+Test `npm run test:coverage` succeeds before committing app-shell behavior changes.
+
+The initial app-shell coverage threshold is 70% lines, 70% functions, 70% statements, and 60% branches. Raise the thresholds as logic moves out of the shell into domain modules.
+
+Automated tests must cover the minimal signed-out to signed-in navigation path, manual draft creation, transfer draft validation, draft review visibility, draft discard, and the rule that draft creation does not create confirmed ledger records.
+
 ## Build
 
 Test `npm run build` succeeds.
