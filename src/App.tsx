@@ -146,11 +146,6 @@ export function App() {
             <p className="eyebrow">V1 app shell</p>
             <h1>{routeTitle(route)}</h1>
           </div>
-          <div className="topbar-actions">
-            <button className="icon-button" type="button" aria-label="Show signed-out state" onClick={() => setAuthState("signed-out")}>
-              <LogOut size={18} aria-hidden="true" />
-            </button>
-          </div>
         </header>
 
         <section className="status-strip" aria-label="Application status">
@@ -170,32 +165,14 @@ export function App() {
           })}
         </section>
 
-        <details className="mock-controls-panel">
-          <summary>Preview state controls</summary>
-          <section className="mock-controls" aria-label="Smoke test controls">
-            <button type="button" onClick={() => setReviewCount(0)}>
-              <CheckCircle2 size={16} aria-hidden="true" />
-              Clear review mock
-            </button>
-            <button type="button" onClick={() => setIsOnline((value) => !value)}>
-              {isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
-              Toggle network
-            </button>
-            <button
-              type="button"
-              onClick={() => setSyncState((value) => (value === "local-only" ? "synced" : "local-only"))}
-            >
-              <Cloud size={16} />
-              Toggle local-only
-            </button>
-            <button type="button" onClick={() => setReviewCount((value) => (value === 0 ? 3 : value + 1))}>
-              <AlertCircle size={16} />
-              Add review item
-            </button>
-          </section>
-        </details>
-
-        {renderRoute(route, reviewCount, navigate)}
+        {renderRoute(route, reviewCount, navigate, {
+          onAddReview: () => setReviewCount((value) => (value === 0 ? 3 : value + 1)),
+          onClearReview: () => setReviewCount(0),
+          onSignOutPreview: () => setAuthState("signed-out"),
+          onToggleLocalOnly: () => setSyncState((value) => (value === "local-only" ? "synced" : "local-only")),
+          onToggleNetwork: () => setIsOnline((value) => !value),
+          isOnline,
+        })}
       </section>
     </main>
   );
@@ -231,7 +208,21 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
   );
 }
 
-function renderRoute(route: AppRoute, reviewCount: number, navigate: (item: NavItem) => void) {
+type PreviewControls = {
+  isOnline: boolean;
+  onAddReview: () => void;
+  onClearReview: () => void;
+  onSignOutPreview: () => void;
+  onToggleLocalOnly: () => void;
+  onToggleNetwork: () => void;
+};
+
+function renderRoute(
+  route: AppRoute,
+  reviewCount: number,
+  navigate: (item: NavItem) => void,
+  previewControls: PreviewControls,
+) {
   switch (route) {
     case "overview":
       return <OverviewPage reviewCount={reviewCount} navigate={navigate} />;
@@ -244,7 +235,7 @@ function renderRoute(route: AppRoute, reviewCount: number, navigate: (item: NavI
     case "imports":
       return <ImportsPage reviewCount={reviewCount} />;
     case "settings":
-      return <SettingsPage />;
+      return <SettingsPage previewControls={previewControls} />;
     default:
       return <NotFoundPage navigate={navigate} />;
   }
@@ -313,24 +304,50 @@ function LedgerPage() {
 
 function CapturePage() {
   const actions = [
-    { title: "Manual ledger entry", detail: "Expense, income, transfer, refund, or adjustment.", icon: Banknote },
-    { title: "Scan receipt or invoice", detail: "Temporary source file, then user-confirmed draft.", icon: ReceiptText },
-    { title: "Meal photo", detail: "Meal record first; ledger link remains optional.", icon: ImagePlus },
-    { title: "Attachment", detail: "Attach evidence without creating a meal.", icon: Upload },
+    {
+      title: "Manual ledger entry",
+      detail: "Expense, income, transfer, refund, or adjustment.",
+      icon: Banknote,
+    },
+    {
+      title: "Scan receipt or invoice",
+      detail: "Temporary source file, then user-confirmed draft.",
+      icon: ReceiptText,
+    },
+    {
+      title: "Meal photo",
+      detail: "Meal record first; ledger link remains optional.",
+      icon: ImagePlus,
+    },
+    {
+      title: "Attachment",
+      detail: "Attach evidence without creating a meal.",
+      icon: Upload,
+    },
   ];
 
   return (
-    <section className="action-grid">
-      {actions.map((action) => {
-        const Icon = action.icon;
-        return (
-          <button className="action-card" type="button" key={action.title}>
-            <Icon size={22} aria-hidden="true" />
-            <strong>{action.title}</strong>
-            <span>{action.detail}</span>
-          </button>
-        );
-      })}
+    <section className="capture-layout">
+      <Panel title="Choose a capture path" eyebrow="Capture">
+        <p className="panel-copy">
+          Start from the thing you have now. Nothing here creates an official ledger record until a
+          later confirmation step.
+        </p>
+        <div className="capture-actions">
+          {actions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <button className="action-card" type="button" key={action.title}>
+                <Icon size={22} aria-hidden="true" />
+                <span>
+                  <strong>{action.title}</strong>
+                  <small>{action.detail}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Panel>
     </section>
   );
 }
@@ -381,7 +398,7 @@ function ImportsPage({ reviewCount }: { reviewCount: number }) {
   );
 }
 
-function SettingsPage() {
+function SettingsPage({ previewControls }: { previewControls: PreviewControls }) {
   return (
     <section className="content-grid">
       <Panel title="Account and sync" eyebrow="Settings">
@@ -411,6 +428,34 @@ function SettingsPage() {
           Runtime UI avoids direct local file paths; implementation references remain in repository
           documentation.
         </p>
+      </Panel>
+      <Panel title="Preview controls" eyebrow="Local smoke test">
+        <p className="panel-copy">
+          These controls only exist for app-shell preview states. They will be replaced by real auth,
+          sync, and review flows later.
+        </p>
+        <section className="mock-controls" aria-label="Smoke test controls">
+          <button type="button" onClick={previewControls.onSignOutPreview}>
+            <LogOut size={16} aria-hidden="true" />
+            Show signed-out state
+          </button>
+          <button type="button" onClick={previewControls.onClearReview}>
+            <CheckCircle2 size={16} aria-hidden="true" />
+            Clear review mock
+          </button>
+          <button type="button" onClick={previewControls.onToggleNetwork}>
+            {previewControls.isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
+            Toggle network
+          </button>
+          <button type="button" onClick={previewControls.onToggleLocalOnly}>
+            <Cloud size={16} />
+            Toggle local-only
+          </button>
+          <button type="button" onClick={previewControls.onAddReview}>
+            <AlertCircle size={16} />
+            Add review item
+          </button>
+        </section>
       </Panel>
     </section>
   );

@@ -153,7 +153,6 @@ button {
 
 .topbar,
 .panel-heading,
-.topbar-actions,
 .action-row,
 .mock-controls {
   display: flex;
@@ -163,11 +162,6 @@ button {
 
 .topbar {
   justify-content: space-between;
-}
-
-.topbar-actions {
-  justify-content: flex-end;
-  flex-wrap: wrap;
 }
 
 .eyebrow {
@@ -204,8 +198,7 @@ h2 {
 .primary-action,
 .secondary-action,
 .icon-button,
-.mock-controls button,
-.action-card {
+.mock-controls button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -281,32 +274,6 @@ h2 {
   flex-wrap: wrap;
 }
 
-.mock-controls-panel {
-  justify-self: start;
-}
-
-.mock-controls-panel summary {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: 8px;
-  color: #5f594f;
-  cursor: pointer;
-}
-
-.mock-controls-panel summary:hover,
-.mock-controls-panel summary:focus-visible {
-  color: #2f5d50;
-  background: #edf4ef;
-  outline: none;
-}
-
-.mock-controls-panel[open] {
-  display: grid;
-  gap: 10px;
-}
-
 .route-stack {
   display: grid;
   gap: 16px;
@@ -358,21 +325,27 @@ h2 {
   line-height: 1.5;
 }
 
-.action-grid {
+.capture-layout {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
+}
+
+.capture-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .action-card {
   display: grid;
-  align-content: start;
-  justify-items: start;
-  min-height: 156px;
-  gap: 10px;
-  padding: 18px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-height: 94px;
+  padding: 14px;
   color: #2c2925;
   text-align: left;
+  cursor: pointer;
 }
 
 .action-card:hover,
@@ -382,6 +355,11 @@ h2 {
 }
 
 .action-card span {
+  display: grid;
+  gap: 4px;
+}
+
+.action-card small {
   color: #69645c;
   font-size: 13px;
   line-height: 1.4;
@@ -439,8 +417,7 @@ h2 {
 
   .topbar,
   .content-grid,
-  .summary-grid,
-  .action-grid {
+  .summary-grid {
     grid-template-columns: 1fr;
   }
 
@@ -449,9 +426,6 @@ h2 {
     flex-direction: column;
   }
 
-  .topbar-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 640px) {
@@ -495,14 +469,16 @@ h2 {
     font-size: 26px;
   }
 
-  .topbar-actions,
   .action-row {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .topbar-actions > *,
   .action-row > * {
     width: 100%;
+  }
+
+  .capture-actions {
+    grid-template-columns: 1fr;
   }
 }
