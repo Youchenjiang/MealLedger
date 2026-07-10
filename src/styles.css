@@ -378,6 +378,29 @@ h2 {
 }
 
 @media (max-width: 980px) {
+  .workspace {
+    padding: 20px;
+  }
+
+  .topbar,
+  .content-grid,
+  .summary-grid,
+  .status-grid,
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) and (pointer: coarse) {
   .app-shell {
     grid-template-columns: 1fr;
     padding-bottom: 84px;
@@ -413,27 +436,6 @@ h2 {
     padding: 6px 4px;
     font-size: 12px;
     text-align: center;
-  }
-
-  .workspace {
-    padding: 20px;
-  }
-
-  .topbar,
-  .content-grid,
-  .summary-grid,
-  .status-grid,
-  .action-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .topbar-actions {
-    justify-content: flex-start;
   }
 }
 
