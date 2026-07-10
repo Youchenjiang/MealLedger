@@ -214,7 +214,8 @@ h2 {
 
 .primary-action,
 .secondary-action,
-.icon-button {
+.icon-button,
+.text-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -248,6 +249,20 @@ h2 {
   height: 38px;
   color: #2f5d50;
   background: #edf4ef;
+}
+
+.text-action {
+  min-height: 34px;
+  padding: 0 10px;
+  color: #75582e;
+  background: #f1e6d0;
+}
+
+.text-action:hover,
+.text-action:focus-visible {
+  color: #513817;
+  outline: 2px solid #dcc78b;
+  outline-offset: 2px;
 }
 
 .status-strip {
@@ -343,6 +358,16 @@ h2 {
 .panel-copy {
   color: #5f594f;
   line-height: 1.5;
+}
+
+.draft-summary {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #ebe4d8;
+  border-radius: 8px;
+  color: #3b3731;
+  background: #fcfaf5;
+  line-height: 1.4;
 }
 
 .capture-layout {

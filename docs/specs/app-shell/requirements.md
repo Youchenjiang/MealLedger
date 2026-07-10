@@ -42,11 +42,20 @@ THE SYSTEM SHALL show capture choices for manual entry, scan receipt or invoice,
 WHEN the user selects manual entry from Capture
 THE SYSTEM SHALL show a minimal transaction draft form.
 
+WHEN the minimal transaction draft form is shown
+THE SYSTEM SHALL support expense, income, transfer, refund, and adjustment draft kinds.
+
+WHEN the user selects a transfer draft kind
+THE SYSTEM SHALL require a transfer account before creating the draft.
+
 WHEN the user submits the minimal transaction draft form
 THE SYSTEM SHALL create a local draft that is visible in the review queue.
 
 WHEN a local draft is created
 THE SYSTEM SHALL NOT create a confirmed ledger record.
+
+WHEN the user discards a local draft
+THE SYSTEM SHALL remove it from the local review queue without affecting confirmed ledger records.
 
 WHEN the user selects Settings
 THE SYSTEM SHALL show account, sync, import, and export safeguards.

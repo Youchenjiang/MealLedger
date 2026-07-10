@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import {
   AlertCircle,
   Banknote,
@@ -27,6 +27,7 @@ type TransactionDraft = {
   kind: DraftKind;
   category: string;
   counterparty: string;
+  transferAccount: string;
   amount: string;
   currency: string;
   note: string;
@@ -210,7 +211,7 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
 function renderRoute(
   route: AppRoute,
   drafts: TransactionDraft[],
-  setDrafts: (drafts: TransactionDraft[]) => void,
+  setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>,
   navigate: (item: NavItem) => void,
 ) {
   const draftCount = drafts.length;
@@ -219,13 +220,19 @@ function renderRoute(
     case "overview":
       return <OverviewPage draftCount={draftCount} navigate={navigate} />;
     case "ledger":
-      return <LedgerPage drafts={drafts} navigate={navigate} />;
+      return (
+        <LedgerPage
+          drafts={drafts}
+          navigate={navigate}
+          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+        />
+      );
     case "capture":
       return (
         <CapturePage
           drafts={drafts}
           navigate={navigate}
-          onCreateDraft={(draft) => setDrafts([draft, ...drafts])}
+          onCreateDraft={(draft) => setDrafts((current) => [draft, ...current])}
         />
       );
     case "settings":
@@ -267,7 +274,15 @@ function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: 
   );
 }
 
-function LedgerPage({ drafts, navigate }: { drafts: TransactionDraft[]; navigate: (item: NavItem) => void }) {
+function LedgerPage({
+  drafts,
+  navigate,
+  onDiscardDraft,
+}: {
+  drafts: TransactionDraft[];
+  navigate: (item: NavItem) => void;
+  onDiscardDraft: (id: string) => void;
+}) {
   const draftCount = drafts.length;
   const ledgerColumns = [
     "Record ID",
@@ -322,6 +337,7 @@ function LedgerPage({ drafts, navigate }: { drafts: TransactionDraft[]; navigate
                 <strong>{draft.counterparty}</strong>
                 <span>
                   {draft.date} · {draft.account} · {draft.category}
+                  {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ""}
                 </span>
               </div>
               <div className="draft-amount">
@@ -330,6 +346,9 @@ function LedgerPage({ drafts, navigate }: { drafts: TransactionDraft[]; navigate
                 </strong>
                 <span>{draft.kind}</span>
               </div>
+              <button className="text-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
+                Discard
+              </button>
             </article>
           ))}
         </section>
@@ -361,12 +380,14 @@ function CapturePage({
     kind: "expense",
     category: "Daily",
     counterparty: "",
+    transferAccount: "",
     amount: "",
     currency: "TWD",
     note: "",
   });
 
   const draftCount = drafts.length;
+  const latestDraft = drafts[0];
   const actions = [
     {
       title: "Record a transaction",
@@ -400,15 +421,32 @@ function CapturePage({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onCreateDraft({
+    const nextDraft = {
       ...form,
-      id: `draft-${Date.now()}`,
+      id: crypto.randomUUID(),
+      account: form.account.trim(),
+      category: form.category.trim(),
       counterparty: form.counterparty.trim(),
+      transferAccount: form.transferAccount.trim(),
+      amount: form.amount.trim(),
       note: form.note.trim(),
+    };
+
+    if (!nextDraft.account || !nextDraft.category || !nextDraft.counterparty || !nextDraft.amount) {
+      return;
+    }
+
+    if (nextDraft.kind === "transfer" && !nextDraft.transferAccount) {
+      return;
+    }
+
+    onCreateDraft({
+      ...nextDraft,
     });
     setForm((current) => ({
       ...current,
       counterparty: "",
+      transferAccount: "",
       amount: "",
       note: "",
     }));
@@ -460,6 +498,8 @@ function CapturePage({
             <span>Account</span>
             <input
               required
+              pattern=".*\S.*"
+              title="Enter an account name."
               value={form.account}
               onChange={(event) => updateForm("account", event.target.value)}
               placeholder="Cash"
@@ -479,6 +519,8 @@ function CapturePage({
             <span>Category</span>
             <input
               required
+              pattern=".*\S.*"
+              title="Enter a category."
               value={form.category}
               onChange={(event) => updateForm("category", event.target.value)}
               placeholder="Daily"
@@ -488,11 +530,26 @@ function CapturePage({
             <span>Merchant / source</span>
             <input
               required
+              pattern=".*\S.*"
+              title="Enter a merchant, payee, or source."
               value={form.counterparty}
               onChange={(event) => updateForm("counterparty", event.target.value)}
               placeholder="7-Eleven"
             />
           </label>
+          {form.kind === "transfer" ? (
+            <label>
+              <span>Transfer account</span>
+              <input
+                required
+                pattern=".*\S.*"
+                title="Enter the destination account."
+                value={form.transferAccount}
+                onChange={(event) => updateForm("transferAccount", event.target.value)}
+                placeholder="Post office savings"
+              />
+            </label>
+          ) : null}
           <label>
             <span>Amount</span>
             <input
@@ -533,6 +590,12 @@ function CapturePage({
             {draftCount} manual transaction draft{draftCount === 1 ? "" : "s"} exist locally. They
             are not confirmed ledger records yet.
           </p>
+          {latestDraft ? (
+            <p className="draft-summary">
+              Latest: {latestDraft.counterparty}, {latestDraft.currency} {latestDraft.amount}
+              {latestDraft.kind === "transfer" ? ` to ${latestDraft.transferAccount}` : ""}
+            </p>
+          ) : null}
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[1])}>
             Review in Ledger
           </button>

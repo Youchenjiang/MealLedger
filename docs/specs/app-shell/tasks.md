@@ -48,7 +48,10 @@ Add a local manual transaction draft form to Capture.
 Expected verification:
 
 - User can enter date, account, type, category, merchant/source, amount, currency, and optional note.
+- User can create initial expense, income, transfer, refund, and adjustment draft kinds.
+- Transfer drafts require a transfer account.
 - Submitted draft appears in the Ledger review queue.
+- User can discard a submitted draft from the Ledger review queue.
 - Confirmed ledger records remain empty.
 
 ## Task 7: Final Smoke Test

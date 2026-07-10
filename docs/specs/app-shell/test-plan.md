@@ -62,9 +62,15 @@ Test required manual draft fields reject an empty submit through native browser 
 
 Test a valid manual draft can be submitted with date, account, type, category, merchant/source, amount, currency, and optional note.
 
+Test expense, income, transfer, refund, and adjustment draft kinds can be selected.
+
+Test transfer draft submission requires a transfer account.
+
 Test submitted manual draft appears in the Capture review summary.
 
 Test submitted manual draft appears in the Ledger review queue.
+
+Test a submitted manual draft can be discarded from the Ledger review queue.
 
 Test confirmed ledger records remain empty after draft creation.
 

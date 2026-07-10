@@ -63,9 +63,20 @@ The app-shell spec includes one real, local-only path so the shell is not a dead
 3. Capture shows a minimal manual transaction draft form.
 4. The user enters date, account, type, category, merchant/source, amount, currency, and optional note.
 5. The submitted record appears as a local draft in the Ledger review queue.
-6. The confirmed ledger table stays empty because confirmation and official ledger writes belong to later specs.
+6. The user can discard a local draft from the Ledger review queue.
+7. The confirmed ledger table stays empty because confirmation and official ledger writes belong to later specs.
 
-The form is intentionally a draft capture surface, not final accounting CRUD. It does not create accounts or categories, calculate balances, validate transfer pairs, persist to Supabase, or export data.
+The form is intentionally a draft capture surface, not final accounting CRUD. It does not create accounts or categories, calculate balances, persist to Supabase, or export data.
+
+The first draft form supports these initial draft kinds:
+
+- expense
+- income
+- transfer
+- refund
+- adjustment
+
+Transfer drafts require a transfer account so the draft does not lose the counter-account intent. Full transfer balancing, transfer pair IDs, refund linking, and adjustment reason workflows belong to later ledger specs.
 
 ## State Model
 
