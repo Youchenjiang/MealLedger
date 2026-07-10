@@ -33,3 +33,9 @@ For implementation work, start from the relevant feature spec under `docs/specs/
 
 Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md). The repository enforces Conventional Commit PR titles and commit subjects through GitHub Actions.
 Frontend work must follow [Development Workflow](docs/engineering/development-workflow.md).
+
+```sh
+npm install
+npm run dev
+npm run build
+```
