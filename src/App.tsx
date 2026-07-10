@@ -147,10 +147,6 @@ export function App() {
             <h1>{routeTitle(route)}</h1>
           </div>
           <div className="topbar-actions">
-            <button className="secondary-action" type="button" onClick={() => setReviewCount(0)}>
-              <CheckCircle2 size={18} aria-hidden="true" />
-              Clear review mock
-            </button>
             <button className="icon-button" type="button" aria-label="Show signed-out state" onClick={() => setAuthState("signed-out")}>
               <LogOut size={18} aria-hidden="true" />
             </button>
@@ -177,6 +173,10 @@ export function App() {
         <details className="mock-controls-panel">
           <summary>Preview state controls</summary>
           <section className="mock-controls" aria-label="Smoke test controls">
+            <button type="button" onClick={() => setReviewCount(0)}>
+              <CheckCircle2 size={16} aria-hidden="true" />
+              Clear review mock
+            </button>
             <button type="button" onClick={() => setIsOnline((value) => !value)}>
               {isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
               Toggle network
