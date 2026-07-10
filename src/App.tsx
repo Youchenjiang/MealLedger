@@ -364,24 +364,47 @@ function CapturePage() {
 }
 
 function MealsPage() {
+  const plannedMealWorkflows = [
+    {
+      title: "Meal entry",
+      detail: "A meal can exist without a ledger record or photo.",
+      icon: Utensils,
+    },
+    {
+      title: "Meal photos",
+      detail: "One meal may keep zero, one, or many photos.",
+      icon: ImagePlus,
+    },
+    {
+      title: "Ledger matching",
+      detail: "Nearby transactions can be suggested later without automatic writes.",
+      icon: Banknote,
+    },
+  ];
+
   return (
-    <section className="content-grid">
+    <section className="route-stack">
       <Panel title="Meal timeline is empty" eyebrow="Meals">
         <p className="panel-copy">
-          Meals can have zero, one, or many photos. They can link to ledger records later, but they
-          do not have to.
-        </p>
-        <button className="secondary-action align-start" type="button">
-          <Utensils size={18} />
-          Add meal placeholder
-        </button>
-      </Panel>
-      <Panel title="Future matching" eyebrow="Optional links">
-        <p className="panel-copy">
-          The matching flow will suggest nearby transactions by time, merchant, amount, and source
-          confidence without writing official records.
+          No meal workflow is implemented in this shell yet. Meals are optional records and should
+          never be required for ordinary accounting.
         </p>
       </Panel>
+      <section className="capture-actions" aria-label="Planned meal paths">
+        {plannedMealWorkflows.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article className="action-card planned" key={item.title}>
+              <Icon size={22} aria-hidden="true" />
+              <span>
+                <strong>{item.title}</strong>
+                <small>{item.detail}</small>
+                <em>Planned</em>
+              </span>
+            </article>
+          );
+        })}
+      </section>
     </section>
   );
 }
