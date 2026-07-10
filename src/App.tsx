@@ -243,7 +243,7 @@ function renderRoute(
     case "meals":
       return <MealsPage />;
     case "imports":
-      return <ImportsPage reviewCount={reviewCount} />;
+      return <ImportsPage />;
     case "settings":
       return <SettingsPage previewControls={previewControls} />;
     default:
@@ -386,25 +386,48 @@ function MealsPage() {
   );
 }
 
-function ImportsPage({ reviewCount }: { reviewCount: number }) {
+function ImportsPage() {
+  const plannedImports = [
+    {
+      title: "Spreadsheet import",
+      detail: "CSV rows will map into drafts before any official ledger write.",
+      icon: FileText,
+    },
+    {
+      title: "Receipt or invoice batch",
+      detail: "Scans stay temporary unless the user chooses to keep source files.",
+      icon: ReceiptText,
+    },
+    {
+      title: "Statement records",
+      detail: "Future bank or wallet records will reconcile against ledger entries.",
+      icon: Database,
+    },
+  ];
+
   return (
-    <section className="content-grid">
+    <section className="route-stack">
       <Panel title="Import history is empty" eyebrow="CSV and drafts">
         <p className="panel-copy">
-          Spreadsheet imports, scanned source drafts, and future statement records will show their
-          review status here.
-        </p>
-        <button className="secondary-action align-start" type="button">
-          <FileText size={18} />
-          CSV import placeholder
-        </button>
-      </Panel>
-      <Panel title={`${reviewCount} draft reviews`} eyebrow="Human confirmation">
-        <p className="panel-copy">
-          AI, OCR, recurring records, and import candidates stay as drafts until the user confirms
-          them.
+          No importer is implemented in this shell yet. V1 imports should create review drafts first,
+          then write official ledger records only after user confirmation.
         </p>
       </Panel>
+      <section className="capture-actions" aria-label="Planned import paths">
+        {plannedImports.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article className="action-card planned" key={item.title}>
+              <Icon size={22} aria-hidden="true" />
+              <span>
+                <strong>{item.title}</strong>
+                <small>{item.detail}</small>
+                <em>Planned</em>
+              </span>
+            </article>
+          );
+        })}
+      </section>
     </section>
   );
 }
