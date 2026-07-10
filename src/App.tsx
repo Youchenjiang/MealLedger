@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { FormEvent } from "react";
 import {
   AlertCircle,
   Banknote,
@@ -17,6 +17,20 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppRoute, AuthState, NavItem } from "./types";
+
+type DraftKind = "expense" | "income" | "transfer" | "refund" | "adjustment";
+
+type TransactionDraft = {
+  id: string;
+  date: string;
+  account: string;
+  kind: DraftKind;
+  category: string;
+  counterparty: string;
+  amount: string;
+  currency: string;
+  note: string;
+};
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -39,7 +53,8 @@ export function App() {
   const [route, setRoute] = useState<AppRoute>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [draftCount, setDraftCount] = useState(0);
+  const [drafts, setDrafts] = useState<TransactionDraft[]>([]);
+  const draftCount = drafts.length;
 
   useEffect(() => {
     const handlePopState = () => setRoute(routeFromLocation());
@@ -156,7 +171,7 @@ export function App() {
           </section>
         </section>
 
-        {renderRoute(route, draftCount, setDraftCount, navigate)}
+        {renderRoute(route, drafts, setDrafts, navigate)}
       </section>
     </main>
   );
@@ -194,21 +209,23 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
 
 function renderRoute(
   route: AppRoute,
-  draftCount: number,
-  setDraftCount: Dispatch<SetStateAction<number>>,
+  drafts: TransactionDraft[],
+  setDrafts: (drafts: TransactionDraft[]) => void,
   navigate: (item: NavItem) => void,
 ) {
+  const draftCount = drafts.length;
+
   switch (route) {
     case "overview":
       return <OverviewPage draftCount={draftCount} navigate={navigate} />;
     case "ledger":
-      return <LedgerPage draftCount={draftCount} navigate={navigate} />;
+      return <LedgerPage drafts={drafts} navigate={navigate} />;
     case "capture":
       return (
         <CapturePage
-          draftCount={draftCount}
+          drafts={drafts}
           navigate={navigate}
-          onCreateDraft={() => setDraftCount((count) => count + 1)}
+          onCreateDraft={(draft) => setDrafts([draft, ...drafts])}
         />
       );
     case "settings":
@@ -250,7 +267,8 @@ function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: 
   );
 }
 
-function LedgerPage({ draftCount, navigate }: { draftCount: number; navigate: (item: NavItem) => void }) {
+function LedgerPage({ drafts, navigate }: { drafts: TransactionDraft[]; navigate: (item: NavItem) => void }) {
+  const draftCount = drafts.length;
   const ledgerColumns = [
     "Record ID",
     "Date",
@@ -289,6 +307,33 @@ function LedgerPage({ draftCount, navigate }: { draftCount: number; navigate: (i
           </p>
         </Panel>
       </section>
+      {draftCount > 0 ? (
+        <section className="draft-list" aria-label="Draft records waiting for review">
+          <div className="draft-list-heading">
+            <div>
+              <p className="eyebrow">Review queue</p>
+              <h2>Drafts waiting</h2>
+            </div>
+            <span>{draftCount} local draft{draftCount === 1 ? "" : "s"}</span>
+          </div>
+          {drafts.map((draft) => (
+            <article className="draft-card" key={draft.id}>
+              <div>
+                <strong>{draft.counterparty}</strong>
+                <span>
+                  {draft.date} · {draft.account} · {draft.category}
+                </span>
+              </div>
+              <div className="draft-amount">
+                <strong>
+                  {draft.currency} {draft.amount}
+                </strong>
+                <span>{draft.kind}</span>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
       <section className="table-card" aria-label="Ledger table fields">
         <div className="table-row table-head">
           {ledgerColumns.map((column) => (
@@ -302,14 +347,26 @@ function LedgerPage({ draftCount, navigate }: { draftCount: number; navigate: (i
 }
 
 function CapturePage({
-  draftCount,
+  drafts,
   navigate,
   onCreateDraft,
 }: {
-  draftCount: number;
+  drafts: TransactionDraft[];
   navigate: (item: NavItem) => void;
-  onCreateDraft: () => void;
+  onCreateDraft: (draft: TransactionDraft) => void;
 }) {
+  const [form, setForm] = useState<Omit<TransactionDraft, "id">>({
+    date: new Date().toISOString().slice(0, 10),
+    account: "Cash",
+    kind: "expense",
+    category: "Daily",
+    counterparty: "",
+    amount: "",
+    currency: "TWD",
+    note: "",
+  });
+
+  const draftCount = drafts.length;
   const actions = [
     {
       title: "Record a transaction",
@@ -337,6 +394,26 @@ function CapturePage({
     },
   ];
 
+  const updateForm = (field: keyof Omit<TransactionDraft, "id">, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onCreateDraft({
+      ...form,
+      id: `draft-${Date.now()}`,
+      counterparty: form.counterparty.trim(),
+      note: form.note.trim(),
+    });
+    setForm((current) => ({
+      ...current,
+      counterparty: "",
+      amount: "",
+      note: "",
+    }));
+  };
+
   return (
     <section className="capture-layout">
       <Panel title="Choose how to start" eyebrow="Input sources">
@@ -349,14 +426,14 @@ function CapturePage({
             const Icon = action.icon;
             if (action.available) {
               return (
-                <button className="action-card primary-card" type="button" key={action.title} onClick={onCreateDraft}>
+                <a className="action-card primary-card" href="#manual-draft-form" key={action.title}>
                   <Icon size={22} aria-hidden="true" />
                   <span>
                     <strong>{action.title}</strong>
                     <small>{action.detail}</small>
-                    <em>Creates local draft</em>
+                    <em>Manual draft</em>
                   </span>
-                </button>
+                </a>
               );
             }
 
@@ -372,6 +449,83 @@ function CapturePage({
             );
           })}
         </div>
+      </Panel>
+      <Panel title="Manual transaction draft" eyebrow="Local draft">
+        <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
+          <label>
+            <span>Date</span>
+            <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+          </label>
+          <label>
+            <span>Account</span>
+            <input
+              required
+              value={form.account}
+              onChange={(event) => updateForm("account", event.target.value)}
+              placeholder="Cash"
+            />
+          </label>
+          <label>
+            <span>Type</span>
+            <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value)}>
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+              <option value="transfer">Transfer</option>
+              <option value="refund">Refund</option>
+              <option value="adjustment">Adjustment</option>
+            </select>
+          </label>
+          <label>
+            <span>Category</span>
+            <input
+              required
+              value={form.category}
+              onChange={(event) => updateForm("category", event.target.value)}
+              placeholder="Daily"
+            />
+          </label>
+          <label>
+            <span>Merchant / source</span>
+            <input
+              required
+              value={form.counterparty}
+              onChange={(event) => updateForm("counterparty", event.target.value)}
+              placeholder="7-Eleven"
+            />
+          </label>
+          <label>
+            <span>Amount</span>
+            <input
+              required
+              inputMode="decimal"
+              min="0"
+              step="1"
+              type="number"
+              value={form.amount}
+              onChange={(event) => updateForm("amount", event.target.value)}
+              placeholder="100"
+            />
+          </label>
+          <label>
+            <span>Currency</span>
+            <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
+              <option value="TWD">TWD</option>
+              <option value="JPY">JPY</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+          <label className="full-span">
+            <span>Note</span>
+            <textarea
+              value={form.note}
+              onChange={(event) => updateForm("note", event.target.value)}
+              placeholder="Optional context before review"
+            />
+          </label>
+          <button className="primary-action align-start" type="submit">
+            Create draft
+          </button>
+        </form>
       </Panel>
       {draftCount > 0 ? (
         <Panel title="Draft ready for review" eyebrow="Local draft">

@@ -21,6 +21,11 @@ button {
   font: inherit;
 }
 
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 272px minmax(0, 1fr);
@@ -345,6 +350,52 @@ h2 {
   gap: 16px;
 }
 
+.draft-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.draft-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.draft-form span {
+  color: #4c4740;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.draft-form input,
+.draft-form select,
+.draft-form textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d7cec1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #242321;
+  background: #fffdf8;
+  font: inherit;
+}
+
+.draft-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.draft-form input:focus,
+.draft-form select:focus,
+.draft-form textarea:focus {
+  border-color: #8db9a4;
+  outline: 2px solid #dce9e2;
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
 .planned-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -357,6 +408,54 @@ h2 {
 
 .table-card {
   overflow-x: auto;
+}
+
+.draft-list {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #dcc78b;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.draft-list-heading,
+.draft-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.draft-list-heading > span {
+  color: #75582e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.draft-card {
+  padding: 12px;
+  border: 1px solid #ebe4d8;
+  border-radius: 8px;
+  background: #fcfaf5;
+}
+
+.draft-card div,
+.draft-amount {
+  display: grid;
+  gap: 4px;
+}
+
+.draft-card span,
+.draft-amount span {
+  color: #69645c;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.draft-amount {
+  justify-items: end;
+  text-align: right;
 }
 
 .table-row {
@@ -570,5 +669,20 @@ button.action-card.unavailable {
 
   .planned-actions {
     grid-template-columns: 1fr;
+  }
+
+  .draft-form {
+    grid-template-columns: 1fr;
+  }
+
+  .draft-card,
+  .draft-list-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .draft-amount {
+    justify-items: start;
+    text-align: left;
   }
 }
