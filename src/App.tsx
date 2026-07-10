@@ -282,6 +282,19 @@ function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
 }
 
 function LedgerPage() {
+  const plannedLedgerTools = [
+    {
+      title: "Manual transaction",
+      detail: "Expense, income, transfer, refund, fund addition, and adjustment forms are not wired yet.",
+      icon: Plus,
+    },
+    {
+      title: "Search and filters",
+      detail: "Filtering by date, account, category, merchant, event, and amount will come with real records.",
+      icon: Search,
+    },
+  ];
+
   return (
     <div className="route-stack">
       <section className="content-grid">
@@ -290,16 +303,6 @@ function LedgerPage() {
             Manual expenses, income, transfers, refunds, fund additions, and adjustments will appear
             here after they are confirmed.
           </p>
-          <div className="action-row">
-            <button className="secondary-action" type="button">
-              <Plus size={18} />
-              Add transaction
-            </button>
-            <button className="secondary-action" type="button">
-              <Search size={18} />
-              Filters placeholder
-            </button>
-          </div>
         </Panel>
         <Panel title="No fake balances" eyebrow="Accounting guardrail">
           <p className="panel-copy">
@@ -307,6 +310,21 @@ function LedgerPage() {
             account totals.
           </p>
         </Panel>
+      </section>
+      <section className="planned-actions" aria-label="Planned ledger tools">
+        {plannedLedgerTools.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article className="action-card planned" key={item.title}>
+              <Icon size={22} aria-hidden="true" />
+              <span>
+                <strong>{item.title}</strong>
+                <small>{item.detail}</small>
+                <em>Planned</em>
+              </span>
+            </article>
+          );
+        })}
       </section>
     </div>
   );
@@ -343,7 +361,7 @@ function CapturePage() {
           Start from the thing you have now. Nothing here creates an official ledger record until a
           later confirmation step.
         </p>
-        <div className="capture-actions">
+        <div className="planned-actions">
           {actions.map((action) => {
             const Icon = action.icon;
             return (
@@ -390,7 +408,7 @@ function MealsPage() {
           never be required for ordinary accounting.
         </p>
       </Panel>
-      <section className="capture-actions" aria-label="Planned meal paths">
+      <section className="planned-actions" aria-label="Planned meal paths">
         {plannedMealWorkflows.map((item) => {
           const Icon = item.icon;
           return (
@@ -436,7 +454,7 @@ function ImportsPage() {
           then write official ledger records only after user confirmation.
         </p>
       </Panel>
-      <section className="capture-actions" aria-label="Planned import paths">
+      <section className="planned-actions" aria-label="Planned import paths">
         {plannedImports.map((item) => {
           const Icon = item.icon;
           return (
@@ -456,6 +474,19 @@ function ImportsPage() {
 }
 
 function SettingsPage({ previewControls }: { previewControls: PreviewControls }) {
+  const plannedSettingsLinks = [
+    {
+      title: "Clean ledger export",
+      detail: "CSV and JSON export will stay separate from media bytes.",
+      icon: Download,
+    },
+    {
+      title: "Repository documentation",
+      detail: "Product and implementation references live in docs, not as runtime links yet.",
+      icon: BookOpen,
+    },
+  ];
+
   return (
     <section className="content-grid">
       <Panel title="Account and sync" eyebrow="Settings">
@@ -471,20 +502,25 @@ function SettingsPage({ previewControls }: { previewControls: PreviewControls })
         </dl>
       </Panel>
       <Panel title="Export and documentation" eyebrow="Project links">
-        <div className="action-row">
-          <button className="secondary-action" type="button">
-            <Download size={18} />
-            Export placeholder
-          </button>
-          <button className="secondary-action" type="button">
-            <BookOpen size={18} />
-            Docs placeholder
-          </button>
-        </div>
         <p className="panel-copy">
-          Runtime UI avoids direct local file paths; implementation references remain in repository
-          documentation.
+          These are not interactive settings yet. The shell only records where export and docs
+          affordances will belong once those flows exist.
         </p>
+        <section className="planned-actions compact" aria-label="Planned settings links">
+          {plannedSettingsLinks.map((item) => {
+            const Icon = item.icon;
+            return (
+              <article className="action-card planned" key={item.title}>
+                <Icon size={22} aria-hidden="true" />
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.detail}</small>
+                  <em>Planned</em>
+                </span>
+              </article>
+            );
+          })}
+        </section>
       </Panel>
       <Panel title="Preview controls" eyebrow="Local smoke test">
         <p className="panel-copy">
