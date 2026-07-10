@@ -10,7 +10,7 @@ Expected verification:
 
 ## Task 2: Route Layout
 
-Add routes for Overview, Ledger, Capture, Meals, Imports, and Settings.
+Add routes for Overview, Ledger, Capture, and Settings.
 
 Expected verification:
 
@@ -35,19 +35,21 @@ Expected verification:
 
 ## Task 5: Status Indicators
 
-Add offline, sync, local-only, and review-count UI placeholders.
+Add offline, sync-not-enabled, and draft review count UI.
 
 Expected verification:
 
-- Mock states can be toggled or rendered for smoke testing.
+- Local draft creation updates the review count.
 
-## Task 6: Documentation Links
+## Task 6: Minimal Manual Draft Flow
 
-Add settings links to relevant documentation or make room for them if the runtime should not open local files.
+Add a local manual transaction draft form to Capture.
 
 Expected verification:
 
-- UI does not expose broken local paths in production mode.
+- User can enter date, account, type, category, merchant/source, amount, currency, and optional note.
+- Submitted draft appears in the Ledger review queue.
+- Confirmed ledger records remain empty.
 
 ## Task 7: Final Smoke Test
 
@@ -56,6 +58,10 @@ Run final verification before PR.
 Expected verification:
 
 - `npm run build`
-- app loads at `http://127.0.0.1:5173/`
+- app loads at a local Vite URL
+- signed-out state opens the workspace
+- Overview navigates to Capture
+- Capture creates a local draft
+- Ledger shows the local draft in the review queue
 - console has no errors
 - desktop and mobile layouts have no overlapping text

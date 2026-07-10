@@ -13,8 +13,6 @@ Primary navigation:
 - Overview
 - Ledger
 - Capture
-- Meals
-- Imports
 - Settings
 
 Mobile should use a bottom navigation or compact app rail. Desktop can use a sidebar. The same route names should work in both layouts.
@@ -24,49 +22,50 @@ Suggested route paths:
 - `/` or `/overview`
 - `/ledger`
 - `/capture`
-- `/meals`
-- `/imports`
 - `/settings`
+
+Meals and Imports are later product areas. They remain covered by their own specs and should not appear as primary app-shell navigation until their first usable workflow exists.
 
 ## Page Responsibilities
 
 Overview shows:
 
 - account summary placeholder
-- recent activity placeholder
-- review queue entry
+- confirmed ledger records placeholder
+- draft review count
 - sync/local-only status
 
 Ledger shows:
 
-- ledger list empty state
-- quick entry placeholders
-- filters placeholder
+- confirmed ledger list empty state
+- local drafts waiting for review
+- quick entry path back to Capture
 
 Capture shows:
 
-- manual ledger entry action
+- manual transaction draft form
 - scan receipt or invoice action
 - meal photo action
 - attachment action
-
-Meals shows:
-
-- meal timeline empty state
-- add meal placeholder
-
-Imports shows:
-
-- import history placeholder
-- draft review placeholder
-- CSV import placeholder
 
 Settings shows:
 
 - auth/account placeholder
 - sync status placeholder
-- export placeholder
-- docs link placeholder
+- import/export safeguard copy
+
+## Minimal Manual Draft Flow
+
+The app-shell spec includes one real, local-only path so the shell is not a dead end:
+
+1. The user opens Overview.
+2. The user selects Start a record.
+3. Capture shows a minimal manual transaction draft form.
+4. The user enters date, account, type, category, merchant/source, amount, currency, and optional note.
+5. The submitted record appears as a local draft in the Ledger review queue.
+6. The confirmed ledger table stays empty because confirmation and official ledger writes belong to later specs.
+
+The form is intentionally a draft capture surface, not final accounting CRUD. It does not create accounts or categories, calculate balances, validate transfer pairs, persist to Supabase, or export data.
 
 ## State Model
 
@@ -74,10 +73,9 @@ The shell should work with a small local UI state model before real backend wiri
 
 - `authState`: signed out, signed in, loading
 - `networkState`: online, offline
-- `syncState`: synced, local-only, syncing, failed
-- `reviewCount`
+- `drafts`: local transaction drafts waiting for review
 
-Initial implementation can use mock or static state as long as the component boundaries make future Supabase wiring straightforward.
+Initial implementation can use local component state as long as the component boundaries make future Supabase wiring straightforward. Local drafts must be visibly separate from confirmed ledger records.
 
 ## Accessibility And Responsiveness
 
@@ -93,7 +91,7 @@ Text must fit on mobile and desktop without overlap.
 
 This spec should not define database schema.
 
-This spec should not implement ledger form validation.
+This spec should implement only minimal HTML-required checks for the local draft form. Domain validation belongs to the manual-ledger and schema-core specs.
 
 This spec should not decide AI/OCR provider behavior.
 
