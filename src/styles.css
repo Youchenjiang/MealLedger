@@ -151,6 +151,13 @@ button {
   padding: 28px;
 }
 
+.page-header {
+  display: grid;
+  min-height: 116px;
+  align-content: start;
+  gap: 14px;
+}
+
 .topbar,
 .panel-heading,
 .action-row,
@@ -162,6 +169,13 @@ button {
 
 .topbar {
   justify-content: space-between;
+}
+
+.topbar-title {
+  display: grid;
+  min-height: 58px;
+  align-content: start;
+  gap: 4px;
 }
 
 .eyebrow {
@@ -459,6 +473,14 @@ h2 {
   .workspace,
   .signed-out-shell {
     padding: 16px;
+  }
+
+  .workspace {
+    padding-bottom: 152px;
+  }
+
+  .page-header {
+    min-height: 108px;
   }
 
   .signed-out-panel {

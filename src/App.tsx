@@ -70,6 +70,10 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ left: 0, top: 0 });
+  }, [route]);
+
   const statusItems = useMemo(
     () => [
       {
@@ -141,28 +145,30 @@ export function App() {
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">V1 app shell</p>
-            <h1>{routeTitle(route)}</h1>
-          </div>
-        </header>
+        <section className="page-header" aria-labelledby="page-title">
+          <header className="topbar">
+            <div className="topbar-title">
+              <p className="eyebrow">V1 app shell</p>
+              <h1 id="page-title">{routeTitle(route)}</h1>
+            </div>
+          </header>
 
-        <section className="status-strip" aria-label="Application status">
-          {statusItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                className={`status-item ${item.tone}`}
-                key={item.label}
-                title={item.detail}
-                aria-label={`${item.label}. ${item.detail}`}
-              >
-                <Icon size={16} aria-hidden="true" />
-                <strong>{item.label}</strong>
-              </div>
-            );
-          })}
+          <section className="status-strip" aria-label="Application status">
+            {statusItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  className={`status-item ${item.tone}`}
+                  key={item.label}
+                  title={item.detail}
+                  aria-label={`${item.label}. ${item.detail}`}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <strong>{item.label}</strong>
+                </div>
+              );
+            })}
+          </section>
         </section>
 
         {renderRoute(route, reviewCount, navigate, {
