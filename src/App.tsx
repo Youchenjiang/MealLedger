@@ -157,38 +157,43 @@ export function App() {
           </div>
         </header>
 
-        <section className="status-grid" aria-label="Application status">
+        <section className="status-strip" aria-label="Application status">
           {statusItems.map((item) => {
             const Icon = item.icon;
             return (
-              <article className={`status-item ${item.tone}`} key={item.label}>
-                <Icon size={18} aria-hidden="true" />
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.detail}</span>
-                </div>
-              </article>
+              <div
+                className={`status-item ${item.tone}`}
+                key={item.label}
+                title={item.detail}
+                aria-label={`${item.label}. ${item.detail}`}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <strong>{item.label}</strong>
+              </div>
             );
           })}
         </section>
 
-        <section className="mock-controls" aria-label="Smoke test controls">
-          <button type="button" onClick={() => setIsOnline((value) => !value)}>
-            {isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
-            Toggle network
-          </button>
-          <button
-            type="button"
-            onClick={() => setSyncState((value) => (value === "local-only" ? "synced" : "local-only"))}
-          >
-            <Cloud size={16} />
-            Toggle local-only
-          </button>
-          <button type="button" onClick={() => setReviewCount((value) => (value === 0 ? 3 : value + 1))}>
-            <AlertCircle size={16} />
-            Add review item
-          </button>
-        </section>
+        <details className="mock-controls-panel">
+          <summary>Preview state controls</summary>
+          <section className="mock-controls" aria-label="Smoke test controls">
+            <button type="button" onClick={() => setIsOnline((value) => !value)}>
+              {isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
+              Toggle network
+            </button>
+            <button
+              type="button"
+              onClick={() => setSyncState((value) => (value === "local-only" ? "synced" : "local-only"))}
+            >
+              <Cloud size={16} />
+              Toggle local-only
+            </button>
+            <button type="button" onClick={() => setReviewCount((value) => (value === 0 ? 3 : value + 1))}>
+              <AlertCircle size={16} />
+              Add review item
+            </button>
+          </section>
+        </details>
 
         {renderRoute(route, reviewCount, navigate)}
       </section>

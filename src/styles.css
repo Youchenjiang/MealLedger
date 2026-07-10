@@ -82,7 +82,6 @@ button {
 .eyebrow,
 .summary-card p,
 .summary-card span,
-.status-item span,
 .panel-copy,
 .settings-list dt,
 .settings-list dd {
@@ -95,7 +94,6 @@ button {
 
 .brand-caption,
 .summary-card span,
-.status-item span,
 .settings-list dd {
   color: #69645c;
   font-size: 13px;
@@ -244,26 +242,27 @@ h2 {
   background: #edf4ef;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .status-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 10px;
   border: 1px solid #ddd6ca;
   border-radius: 8px;
   background: #fffdf8;
+  color: #3b3731;
 }
 
 .status-item strong {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1;
 }
 
 .status-item.good {
@@ -280,6 +279,32 @@ h2 {
 
 .mock-controls {
   flex-wrap: wrap;
+}
+
+.mock-controls-panel {
+  justify-self: start;
+}
+
+.mock-controls-panel summary {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #5f594f;
+  cursor: pointer;
+}
+
+.mock-controls-panel summary:hover,
+.mock-controls-panel summary:focus-visible {
+  color: #2f5d50;
+  background: #edf4ef;
+  outline: none;
+}
+
+.mock-controls-panel[open] {
+  display: grid;
+  gap: 10px;
 }
 
 .route-stack {
@@ -415,7 +440,6 @@ h2 {
   .topbar,
   .content-grid,
   .summary-grid,
-  .status-grid,
   .action-grid {
     grid-template-columns: 1fr;
   }
@@ -472,15 +496,13 @@ h2 {
   }
 
   .topbar-actions,
-  .action-row,
-  .mock-controls {
+  .action-row {
     align-items: stretch;
     flex-direction: column;
   }
 
   .topbar-actions > *,
-  .action-row > *,
-  .mock-controls > * {
+  .action-row > * {
     width: 100%;
   }
 }
