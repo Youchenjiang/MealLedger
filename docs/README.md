@@ -64,6 +64,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Import export design](specs/import-export/design.md)
 - [Import export tasks](specs/import-export/tasks.md)
 - [Import export test plan](specs/import-export/test-plan.md)
+- [Localization requirements](specs/localization/requirements.md)
+- [Localization design](specs/localization/design.md)
+- [Localization tasks](specs/localization/tasks.md)
+- [Localization test plan](specs/localization/test-plan.md)
 
 ## Suggested Review Order
 
