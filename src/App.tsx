@@ -68,14 +68,14 @@ export function App() {
   const statusItems = useMemo(() => {
     const items = [
       {
-        label: isOnline ? "Connected" : "Offline",
-        detail: isOnline ? "Ready to sync when backend wiring is added." : "Drafts should stay visible on this device.",
+        label: isOnline ? "Local mode" : "Offline",
+        detail: isOnline ? "Changes stay on this device until sync is enabled." : "Drafts stay visible on this device.",
         icon: isOnline ? Wifi : WifiOff,
-        tone: isOnline ? "good" : "warn",
+        tone: "warn",
       },
       {
         label: "No local drafts",
-        detail: "Nothing is waiting for backup or review in this empty shell.",
+        detail: "No scans, imports, or edits are waiting for review.",
         icon: CheckCircle2,
         tone: "good",
       },
@@ -84,7 +84,7 @@ export function App() {
     if (reviewCount > 0) {
       items.push({
         label: `${reviewCount} drafts need review`,
-        detail: "Imported or scanned drafts should be confirmed before they enter the ledger.",
+        detail: "Imported or scanned drafts need confirmation before they enter the ledger.",
         icon: AlertCircle,
         tone: "warn",
       });
@@ -186,16 +186,16 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
           </div>
         </div>
         <div>
-          <p className="eyebrow">Demo workspace</p>
-          <h1>See the ledger-first workspace before connecting real data.</h1>
+          <p className="eyebrow">Workspace preview</p>
+          <h1>Plan personal records before connecting real data.</h1>
           <p className="lede">
-            This local demo shows the navigation, empty states, and data-safety boundaries before
-            authentication, uploads, imports, or sync are connected.
+            Review the empty states, draft review boundaries, and export promises before adding
+            accounts, uploads, imports, or sync.
           </p>
         </div>
         <button className="primary-action" type="button" onClick={onSignIn}>
           <LogIn size={18} aria-hidden="true" />
-          Enter demo workspace
+          Open workspace
         </button>
       </section>
     </main>
@@ -226,19 +226,18 @@ function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
         <EmptyMetric label="Draft reviews" value="None" detail="Scans and imports will wait for confirmation." />
       </section>
       <section className="content-grid">
-        <Panel title="First workflow to build" eyebrow="Start here">
+        <Panel title="Start with a new record" eyebrow="First step">
           <p className="panel-copy">
-            The first usable path should be account setup, manual transaction entry, and a ledger
-            table that proves balances are calculated from confirmed records.
+            Begin with a transaction draft, then confirm it before it becomes part of the ledger.
           </p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[1])}>
-            Open Ledger
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
+            Go to Capture
           </button>
         </Panel>
-        <Panel title="Data safety promise" eyebrow="Guardrail">
+        <Panel title="Review before it counts" eyebrow="Data safety">
           <p className="panel-copy">
-            Imported rows, scanned receipts, meal photos, and AI suggestions should stay as drafts
-            until the user confirms them.
+            Imported rows, scanned receipts, meal photos, and AI suggestions stay as drafts until
+            you confirm them.
           </p>
         </Panel>
       </section>
@@ -255,22 +254,27 @@ function LedgerPage() {
     "Merchant / Source",
     "Amount",
     "Currency",
+    "Notes",
+    "Tags",
+    "Attachment",
+    "Source",
+    "Balance",
     "Status",
   ];
 
   return (
     <div className="route-stack">
       <section className="content-grid">
-        <Panel title="Ledger table shape" eyebrow="Confirmed records">
+        <Panel title="Ledger records" eyebrow="Confirmed records">
           <p className="panel-copy">
-            Transactions should land in a predictable table before charts or automation are added.
-            This shell shows the fields a migrated spreadsheet user will look for first.
+            Confirmed transactions appear here after review. The table keeps spreadsheet-friendly
+            fields visible from the start.
           </p>
         </Panel>
-        <Panel title="Export matters early" eyebrow="Portability">
+        <Panel title="Clean export" eyebrow="Portability">
           <p className="panel-copy">
-            Clean CSV and JSON exports must remain available without bundling photo bytes into the
-            ledger file.
+            CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain
+            separate files.
           </p>
         </Panel>
       </section>
@@ -312,23 +316,23 @@ function CapturePage() {
 
   return (
     <section className="capture-layout">
-      <Panel title="Capture starts as a draft" eyebrow="Input sources">
+      <Panel title="Choose how to start" eyebrow="Input sources">
         <p className="panel-copy">
-          Manual entries, scans, meal photos, and attachments should all lead to a review step
-          before anything becomes an official ledger record.
+          Manual entries, scans, meal photos, and attachments start as drafts. Confirm a draft when
+          it is ready for the ledger.
         </p>
         <div className="planned-actions">
           {actions.map((action) => {
             const Icon = action.icon;
             return (
-              <article className="action-card planned" key={action.title}>
+              <button className="action-card unavailable" disabled type="button" key={action.title}>
                 <Icon size={22} aria-hidden="true" />
                 <span>
                   <strong>{action.title}</strong>
                   <small>{action.detail}</small>
-                  <em>Next</em>
+                  <em>Coming soon</em>
                 </span>
-              </article>
+              </button>
             );
           })}
         </div>
@@ -351,7 +355,7 @@ function SettingsPage() {
     },
     {
       title: "Statement reconciliation",
-      detail: "Future bank or wallet records should link to confirmed transactions.",
+      detail: "Bank or wallet records can later match confirmed transactions.",
       icon: Database,
     },
   ];
@@ -362,11 +366,11 @@ function SettingsPage() {
         <dl className="settings-list">
           <div>
             <dt>Authentication</dt>
-            <dd>{isSupabaseConfigured ? "Cloud environment is configured" : "Cloud sign-in is not configured locally"}</dd>
+            <dd>{isSupabaseConfigured ? "Cloud sign-in is ready" : "Cloud sign-in is unavailable in this workspace"}</dd>
           </div>
           <div>
             <dt>Storage</dt>
-            <dd>Drafts, uploads, and photo evidence should clearly show whether they are backed up.</dd>
+            <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
           </div>
         </dl>
       </Panel>
@@ -379,12 +383,12 @@ function SettingsPage() {
           {dataTools.map((item) => {
             const Icon = item.icon;
             return (
-              <article className="action-card planned" key={item.title}>
+              <article className="action-card unavailable" key={item.title}>
                 <Icon size={22} aria-hidden="true" />
                 <span>
                   <strong>{item.title}</strong>
                   <small>{item.detail}</small>
-                  <em>Next</em>
+                  <em>Coming soon</em>
                 </span>
               </article>
             );

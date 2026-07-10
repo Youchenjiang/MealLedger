@@ -355,8 +355,10 @@ h2 {
   display: grid;
   grid-template-columns:
     minmax(92px, 0.8fr) minmax(110px, 1fr) minmax(96px, 0.8fr) minmax(110px, 1fr)
-    minmax(150px, 1.2fr) minmax(96px, 0.8fr) minmax(88px, 0.7fr) minmax(96px, 0.8fr);
-  min-width: 860px;
+    minmax(150px, 1.2fr) minmax(96px, 0.8fr) minmax(88px, 0.7fr) minmax(140px, 1fr)
+    minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(110px, 0.8fr)
+    minmax(96px, 0.8fr);
+  min-width: 1420px;
 }
 
 .table-row span,
@@ -379,7 +381,7 @@ h2 {
 }
 
 .table-empty {
-  min-width: 860px;
+  min-width: 1420px;
   border-top: 1px solid #ebe4d8;
   color: #69645c;
 }
@@ -395,8 +397,14 @@ h2 {
   text-align: left;
 }
 
-.action-card.planned {
+.action-card.planned,
+.action-card.unavailable {
   background: #fcfaf5;
+}
+
+button.action-card.unavailable {
+  cursor: not-allowed;
+  opacity: 0.78;
 }
 
 .action-card span {
@@ -498,7 +506,7 @@ h2 {
   }
 
   .nav-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
   }
 
