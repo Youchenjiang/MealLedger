@@ -1,16 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   Banknote,
+  BookOpen,
   Camera,
+  CheckCircle2,
+  Cloud,
+  Database,
+  Download,
   FileDown,
+  FileText,
   Home,
+  ImagePlus,
   LogIn,
   LogOut,
+  Plus,
   ReceiptText,
+  RotateCw,
+  Search,
   Settings,
+  ShieldCheck,
+  Upload,
   Utensils,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
-import type { AppRoute, AuthState, NavItem } from "./types";
+import { isSupabaseConfigured } from "./lib/supabase";
+import type { AppRoute, AuthState, NavItem, SyncState } from "./types";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -34,12 +50,49 @@ function routeFromLocation(): AppRoute {
 export function App() {
   const [route, setRoute] = useState<AppRoute>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncState, setSyncState] = useState<SyncState>("local-only");
+  const [reviewCount, setReviewCount] = useState(3);
 
   useEffect(() => {
     const handlePopState = () => setRoute(routeFromLocation());
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
+
+  const statusItems = useMemo(
+    () => [
+      {
+        label: isOnline ? "Online" : "Offline",
+        detail: isOnline ? "Navigation remains available." : "Local draft mode is visible.",
+        icon: isOnline ? Wifi : WifiOff,
+        tone: isOnline ? "good" : "warn",
+      },
+      {
+        label: syncLabel(syncState),
+        detail: syncDetail(syncState),
+        icon: syncState === "synced" ? CheckCircle2 : Cloud,
+        tone: syncState === "failed" ? "danger" : syncState === "synced" ? "good" : "warn",
+      },
+      {
+        label: `${reviewCount} review items`,
+        detail: "Drafts and conflicts wait here before official ledger writes.",
+        icon: AlertCircle,
+        tone: reviewCount > 0 ? "warn" : "good",
+      },
+    ],
+    [isOnline, reviewCount, syncState],
+  );
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -47,30 +100,7 @@ export function App() {
   };
 
   if (authState !== "signed-in") {
-    return (
-      <main className="signed-out-shell">
-        <section className="signed-out-panel">
-          <div className="brand">
-            <div className="brand-mark">
-              <ReceiptText size={20} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="brand-name">MealLedger</p>
-              <p className="brand-caption">Accounting-first personal records</p>
-            </div>
-          </div>
-          <div>
-            <p className="eyebrow">Signed-out state</p>
-            <h1>V1 app shell</h1>
-            <p className="lede">Supabase Auth will connect later; this preview stays local.</p>
-          </div>
-          <button className="primary-action" type="button" onClick={() => setAuthState("signed-in")}>
-            <LogIn size={18} aria-hidden="true" />
-            Preview signed-in shell
-          </button>
-        </section>
-      </main>
-    );
+    return <SignedOutShell onSignIn={() => setAuthState("signed-in")} />;
   }
 
   return (
@@ -103,6 +133,11 @@ export function App() {
             );
           })}
         </nav>
+
+        <div className="storage-note">
+          <ShieldCheck size={18} aria-hidden="true" />
+          <span>Clean ledger exports stay separate from media bytes.</span>
+        </div>
       </aside>
 
       <section className="workspace">
@@ -111,26 +146,309 @@ export function App() {
             <p className="eyebrow">V1 app shell</p>
             <h1>{routeTitle(route)}</h1>
           </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Show signed-out state"
-            onClick={() => setAuthState("signed-out")}
-          >
-            <LogOut size={18} aria-hidden="true" />
-          </button>
+          <div className="topbar-actions">
+            <button className="secondary-action" type="button" onClick={() => setReviewCount(0)}>
+              <CheckCircle2 size={18} aria-hidden="true" />
+              Clear review mock
+            </button>
+            <button className="icon-button" type="button" aria-label="Show signed-out state" onClick={() => setAuthState("signed-out")}>
+              <LogOut size={18} aria-hidden="true" />
+            </button>
+          </div>
         </header>
 
-        <article className="panel">
-          <p className="eyebrow">Route placeholder</p>
-          <h2>{routeTitle(route)}</h2>
-          <p className="panel-copy">
-            This route is wired into the shell. Feature-specific empty states land separately.
-          </p>
-        </article>
+        <section className="status-grid" aria-label="Application status">
+          {statusItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <article className={`status-item ${item.tone}`} key={item.label}>
+                <Icon size={18} aria-hidden="true" />
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.detail}</span>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="mock-controls" aria-label="Smoke test controls">
+          <button type="button" onClick={() => setIsOnline((value) => !value)}>
+            {isOnline ? <WifiOff size={16} /> : <Wifi size={16} />}
+            Toggle network
+          </button>
+          <button
+            type="button"
+            onClick={() => setSyncState((value) => (value === "local-only" ? "synced" : "local-only"))}
+          >
+            <Cloud size={16} />
+            Toggle local-only
+          </button>
+          <button type="button" onClick={() => setReviewCount((value) => (value === 0 ? 3 : value + 1))}>
+            <AlertCircle size={16} />
+            Add review item
+          </button>
+        </section>
+
+        {renderRoute(route, reviewCount, navigate)}
       </section>
     </main>
   );
+}
+
+function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <main className="signed-out-shell">
+      <section className="signed-out-panel">
+        <div className="brand large">
+          <div className="brand-mark">
+            <ReceiptText size={22} aria-hidden="true" />
+          </div>
+          <div>
+            <p className="brand-name">MealLedger</p>
+            <p className="brand-caption">Accounting-first personal records</p>
+          </div>
+        </div>
+        <div>
+          <p className="eyebrow">Signed-out state</p>
+          <h1>Start with a safe shell before real ledger data exists.</h1>
+          <p className="lede">
+            Supabase Auth will connect later. This preview keeps the shell usable without real
+            credentials, uploads, imports, or official ledger writes.
+          </p>
+        </div>
+        <button className="primary-action" type="button" onClick={onSignIn}>
+          <LogIn size={18} aria-hidden="true" />
+          Preview signed-in shell
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function renderRoute(route: AppRoute, reviewCount: number, navigate: (item: NavItem) => void) {
+  switch (route) {
+    case "overview":
+      return <OverviewPage reviewCount={reviewCount} navigate={navigate} />;
+    case "ledger":
+      return <LedgerPage />;
+    case "capture":
+      return <CapturePage />;
+    case "meals":
+      return <MealsPage />;
+    case "imports":
+      return <ImportsPage reviewCount={reviewCount} />;
+    case "settings":
+      return <SettingsPage />;
+    default:
+      return <NotFoundPage navigate={navigate} />;
+  }
+}
+
+function OverviewPage({ reviewCount, navigate }: { reviewCount: number; navigate: (item: NavItem) => void }) {
+  return (
+    <div className="route-stack">
+      <section className="summary-grid">
+        <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
+        <EmptyMetric label="Recent activity" value="No records" detail="Official records will appear after confirmation." />
+        <EmptyMetric label="Review queue" value={`${reviewCount} waiting`} detail="Drafts never become official automatically." />
+      </section>
+      <section className="content-grid">
+        <Panel title="Review queue entry" eyebrow="Next action">
+          <p className="panel-copy">
+            Scans, import rows, recurring reminders, and sync conflicts will wait here for human
+            confirmation.
+          </p>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[4])}>
+            <ListIcon />
+            Open Imports
+          </button>
+        </Panel>
+        <Panel title="Local-only visibility" eyebrow="Sync safety">
+          <p className="panel-copy">
+            The shell reserves space for local-only warnings so offline drafts are never mistaken
+            for backed-up records.
+          </p>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
+function LedgerPage() {
+  return (
+    <div className="route-stack">
+      <section className="content-grid">
+        <Panel title="Ledger is empty" eyebrow="Official records">
+          <p className="panel-copy">
+            Manual expenses, income, transfers, refunds, fund additions, and adjustments will appear
+            here after they are confirmed.
+          </p>
+          <div className="action-row">
+            <button className="secondary-action" type="button">
+              <Plus size={18} />
+              Add transaction
+            </button>
+            <button className="secondary-action" type="button">
+              <Search size={18} />
+              Filters placeholder
+            </button>
+          </div>
+        </Panel>
+        <Panel title="No fake balances" eyebrow="Accounting guardrail">
+          <p className="panel-copy">
+            This shell avoids sample balances so smoke-test data cannot be confused with real
+            account totals.
+          </p>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
+function CapturePage() {
+  const actions = [
+    { title: "Manual ledger entry", detail: "Expense, income, transfer, refund, or adjustment.", icon: Banknote },
+    { title: "Scan receipt or invoice", detail: "Temporary source file, then user-confirmed draft.", icon: ReceiptText },
+    { title: "Meal photo", detail: "Meal record first; ledger link remains optional.", icon: ImagePlus },
+    { title: "Attachment", detail: "Attach evidence without creating a meal.", icon: Upload },
+  ];
+
+  return (
+    <section className="action-grid">
+      {actions.map((action) => {
+        const Icon = action.icon;
+        return (
+          <button className="action-card" type="button" key={action.title}>
+            <Icon size={22} aria-hidden="true" />
+            <strong>{action.title}</strong>
+            <span>{action.detail}</span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+function MealsPage() {
+  return (
+    <section className="content-grid">
+      <Panel title="Meal timeline is empty" eyebrow="Meals">
+        <p className="panel-copy">
+          Meals can have zero, one, or many photos. They can link to ledger records later, but they
+          do not have to.
+        </p>
+        <button className="secondary-action align-start" type="button">
+          <Utensils size={18} />
+          Add meal placeholder
+        </button>
+      </Panel>
+      <Panel title="Future matching" eyebrow="Optional links">
+        <p className="panel-copy">
+          The matching flow will suggest nearby transactions by time, merchant, amount, and source
+          confidence without writing official records.
+        </p>
+      </Panel>
+    </section>
+  );
+}
+
+function ImportsPage({ reviewCount }: { reviewCount: number }) {
+  return (
+    <section className="content-grid">
+      <Panel title="Import history is empty" eyebrow="CSV and drafts">
+        <p className="panel-copy">
+          Spreadsheet imports, scanned source drafts, and future statement records will show their
+          review status here.
+        </p>
+        <button className="secondary-action align-start" type="button">
+          <FileText size={18} />
+          CSV import placeholder
+        </button>
+      </Panel>
+      <Panel title={`${reviewCount} draft reviews`} eyebrow="Human confirmation">
+        <p className="panel-copy">
+          AI, OCR, recurring records, and import candidates stay as drafts until the user confirms
+          them.
+        </p>
+      </Panel>
+    </section>
+  );
+}
+
+function SettingsPage() {
+  return (
+    <section className="content-grid">
+      <Panel title="Account and sync" eyebrow="Settings">
+        <dl className="settings-list">
+          <div>
+            <dt>Supabase</dt>
+            <dd>{isSupabaseConfigured ? "Environment variables configured" : "Not configured for local smoke test"}</dd>
+          </div>
+          <div>
+            <dt>Storage</dt>
+            <dd>Local-only state and offline warnings are visible before backend wiring.</dd>
+          </div>
+        </dl>
+      </Panel>
+      <Panel title="Export and documentation" eyebrow="Project links">
+        <div className="action-row">
+          <button className="secondary-action" type="button">
+            <Download size={18} />
+            Export placeholder
+          </button>
+          <button className="secondary-action" type="button">
+            <BookOpen size={18} />
+            Docs placeholder
+          </button>
+        </div>
+        <p className="panel-copy">
+          Runtime UI avoids direct local file paths; implementation references remain in repository
+          documentation.
+        </p>
+      </Panel>
+    </section>
+  );
+}
+
+function NotFoundPage({ navigate }: { navigate: (item: NavItem) => void }) {
+  return (
+    <Panel title="Page not found" eyebrow="Safe recovery">
+      <p className="panel-copy">This route is not part of the V1 shell. Return to Overview.</p>
+      <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[0])}>
+        <Home size={18} />
+        Go to Overview
+      </button>
+    </Panel>
+  );
+}
+
+function Panel({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+      </div>
+      {children}
+    </article>
+  );
+}
+
+function EmptyMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <article className="summary-card">
+      <p>{label}</p>
+      <strong>{value}</strong>
+      <span>{detail}</span>
+    </article>
+  );
+}
+
+function ListIcon() {
+  return <RotateCw size={18} aria-hidden="true" />;
 }
 
 function routeTitle(route: AppRoute) {
@@ -149,5 +467,31 @@ function routeTitle(route: AppRoute) {
       return "Settings";
     default:
       return "Unknown route";
+  }
+}
+
+function syncLabel(state: SyncState) {
+  switch (state) {
+    case "synced":
+      return "Synced";
+    case "syncing":
+      return "Syncing";
+    case "failed":
+      return "Sync failed";
+    case "local-only":
+      return "Local-only data";
+  }
+}
+
+function syncDetail(state: SyncState) {
+  switch (state) {
+    case "synced":
+      return "No pending local changes in this mock state.";
+    case "syncing":
+      return "Uploads and drafts would be queued behind this state.";
+    case "failed":
+      return "The user should get retry and manual-entry options.";
+    case "local-only":
+      return "Some data is not backed up to the cloud yet.";
   }
 }

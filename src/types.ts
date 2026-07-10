@@ -11,6 +11,8 @@ export type AppRoute =
 
 export type AuthState = "loading" | "signed-out" | "signed-in";
 
+export type SyncState = "synced" | "syncing" | "local-only" | "failed";
+
 export type NavItem = {
   route: Exclude<AppRoute, "not-found">;
   label: string;
