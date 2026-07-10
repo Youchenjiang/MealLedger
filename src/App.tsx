@@ -52,7 +52,7 @@ export function App() {
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncState, setSyncState] = useState<SyncState>("local-only");
-  const [reviewCount, setReviewCount] = useState(3);
+  const [reviewCount, setReviewCount] = useState(0);
 
   useEffect(() => {
     const handlePopState = () => setRoute(routeFromLocation());
@@ -74,8 +74,8 @@ export function App() {
     window.scrollTo({ left: 0, top: 0 });
   }, [route]);
 
-  const statusItems = useMemo(
-    () => [
+  const statusItems = useMemo(() => {
+    const items = [
       {
         label: isOnline ? "Online" : "Offline",
         detail: isOnline ? "Navigation remains available." : "Local draft mode is visible.",
@@ -88,15 +88,19 @@ export function App() {
         icon: syncState === "synced" ? CheckCircle2 : Cloud,
         tone: syncState === "failed" ? "danger" : syncState === "synced" ? "good" : "warn",
       },
-      {
+    ];
+
+    if (reviewCount > 0) {
+      items.push({
         label: `${reviewCount} review items`,
         detail: "Drafts and conflicts wait here before official ledger writes.",
         icon: AlertCircle,
-        tone: reviewCount > 0 ? "warn" : "good",
-      },
-    ],
-    [isOnline, reviewCount, syncState],
-  );
+        tone: "warn",
+      });
+    }
+
+    return items;
+  }, [isOnline, reviewCount, syncState]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -231,7 +235,7 @@ function renderRoute(
 ) {
   switch (route) {
     case "overview":
-      return <OverviewPage reviewCount={reviewCount} navigate={navigate} />;
+      return <OverviewPage navigate={navigate} />;
     case "ledger":
       return <LedgerPage />;
     case "capture":
@@ -247,23 +251,23 @@ function renderRoute(
   }
 }
 
-function OverviewPage({ reviewCount, navigate }: { reviewCount: number; navigate: (item: NavItem) => void }) {
+function OverviewPage({ navigate }: { navigate: (item: NavItem) => void }) {
   return (
     <div className="route-stack">
       <section className="summary-grid">
         <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
         <EmptyMetric label="Recent activity" value="No records" detail="Official records will appear after confirmation." />
-        <EmptyMetric label="Review queue" value={`${reviewCount} waiting`} detail="Drafts never become official automatically." />
+        <EmptyMetric label="Draft reviews" value="None" detail="Review items appear only after imports, scans, or sync conflicts." />
       </section>
       <section className="content-grid">
-        <Panel title="Review queue entry" eyebrow="Next action">
+        <Panel title="Ledger foundation" eyebrow="Next action">
           <p className="panel-copy">
-            Scans, import rows, recurring reminders, and sync conflicts will wait here for human
-            confirmation.
+            The shell is ready for the first real ledger flow: accounts, categories, and manual
+            transaction entry.
           </p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[4])}>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[1])}>
             <ListIcon />
-            Open Imports
+            Open Ledger
           </button>
         </Panel>
         <Panel title="Local-only visibility" eyebrow="Sync safety">
@@ -343,13 +347,14 @@ function CapturePage() {
           {actions.map((action) => {
             const Icon = action.icon;
             return (
-              <button className="action-card" type="button" key={action.title}>
+              <article className="action-card planned" key={action.title}>
                 <Icon size={22} aria-hidden="true" />
                 <span>
                   <strong>{action.title}</strong>
                   <small>{action.detail}</small>
+                  <em>Planned</em>
                 </span>
-              </button>
+              </article>
             );
           })}
         </div>

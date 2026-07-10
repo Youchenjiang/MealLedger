@@ -359,13 +359,10 @@ h2 {
   padding: 14px;
   color: #2c2925;
   text-align: left;
-  cursor: pointer;
 }
 
-.action-card:hover,
-.action-card:focus-visible {
-  border-color: #2f5d50;
-  outline: none;
+.action-card.planned {
+  background: #fcfaf5;
 }
 
 .action-card span {
@@ -377,6 +374,19 @@ h2 {
   color: #69645c;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.action-card em {
+  justify-self: start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #75582e;
+  background: #f1e6d0;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .settings-list {
