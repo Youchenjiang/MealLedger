@@ -12,6 +12,62 @@ The initial app-shell coverage threshold is 70% lines, 70% functions, 70% statem
 
 Automated tests must cover the minimal signed-out to signed-in navigation path, manual draft creation, transfer draft validation, draft review visibility, draft discard, and the rule that draft creation does not create confirmed ledger records.
 
+## Test Layers
+
+### Unit Tests
+
+Run `npm run test`.
+
+Vitest covers the pure manual-draft helper in `src/appShell/drafts.ts`:
+
+- trim and required-field validation
+- transfer destination validation
+- non-transfer draft kinds without a transfer destination
+- draft-only output shape with no confirmed-record fields
+
+### React Integration Tests
+
+Run `npm run test`.
+
+React Testing Library covers the signed-out entry point, all core navigation, safe unknown-route recovery, offline/online state, zero/non-zero draft counts, Capture availability states, draft kinds, draft creation, and discard behavior.
+
+### Browser Smoke
+
+Run `npm run test:e2e`.
+
+Playwright uses a dedicated local Vite server on `127.0.0.1:4174`, so it does not reuse the regular development server. It covers the signed-out-to-Ledger draft flow, console/page errors, and document-level horizontal overflow at 1440px desktop, 720px compact, and 390px mobile viewports.
+
+Playwright HTML reports and failed-test artifacts remain ignored by git.
+
+### Independent Review
+
+Before closing the spec, use three read-only reviews:
+
+- UX: first-use clarity and whether Capture/Ledger communicate the ledger-first workflow.
+- QA: requirements and test-plan coverage against the implementation.
+- Responsive: mobile and desktop layout stability, overflow, and touch-target concerns.
+
+Blocking review findings must be fixed before the final verification run. Non-blocking findings are documented as later-spec follow-ups.
+
+## Verification Evidence
+
+Final verification is recorded on 2026-07-11:
+
+- `npm run test`: 21 Vitest and React Testing Library tests passed.
+- `npm run test:coverage`: passed. Statements 91.86%, branches 87.05%, functions 85.45%, and lines 92.03% exceed the initial thresholds.
+- `npm run test:e2e`: 4 Playwright tests passed for the signed-out-to-Ledger draft flow, 1440px desktop, 720px compact, and 390px mobile.
+- `npm run build`: passed.
+
+Read-only reviews were performed for UX, QA, and responsive behavior. UX and QA blocking findings were fixed before final verification:
+
+- Copy now makes clear that Spec 1 stops at local draft review; it does not advertise an unavailable confirmation action.
+- Local-only status appears while local drafts exist and disappears after the final draft is discarded.
+- Tests cover native incomplete-form validation, offline navigation, and the active navigation state.
+
+The responsive review found no blocking issue. It confirmed that the Ledger table deliberately scrolls inside its own `.table-card` container; Playwright asserts this containment at mobile width.
+
+Later-spec follow-ups include dynamic field labels by transaction kind, a plain-language explanation of adjustments, localization implementation, and fully actionable import/export tools.
+
 ## Build
 
 Test `npm run build` succeeds.
@@ -95,3 +151,7 @@ Test desktop layout has no obvious overlapping text.
 Test mobile layout has no obvious overlapping text.
 
 Test UI remains readable with longer Traditional Chinese labels.
+
+## Scope Boundary
+
+The browser and integration suites must not claim that a draft can be confirmed in Spec 1. This spec intentionally stops at local draft creation, review visibility, and discard; official ledger writes belong to the later ledger spec.
