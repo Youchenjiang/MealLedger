@@ -25,6 +25,22 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+async function expectHorizontallyWithinViewport(page: Page, selector: string) {
+  const viewport = page.viewportSize();
+  const boxes = await page.locator(selector).evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right };
+    }),
+  );
+
+  expect(viewport).not.toBeNull();
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(viewport!.width);
+  }
+}
+
 test("creates a local draft and keeps the confirmed ledger empty", async ({ page }) => {
   const errors = collectBrowserErrors(page);
 
@@ -63,6 +79,11 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await expect(page.getByRole("heading", { name: "Capture", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Ledger", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
+  await expectHorizontallyWithinViewport(page, "aside[aria-label='MealLedger navigation'] .nav-item");
+  await expectHorizontallyWithinViewport(page, ".table-card");
+  await expect
+    .poll(() => page.locator(".table-card").evaluate((element) => element.scrollWidth > element.clientWidth))
+    .toBe(true);
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
