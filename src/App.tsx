@@ -40,8 +40,15 @@ function localDate(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+let draftSequence = 0;
+
 function draftId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  draftSequence += 1;
+  return `draft-${Date.now()}-${draftSequence}`;
 }
 
 function routeFromLocation(): AppRoute {
