@@ -46,7 +46,8 @@ export type ManualFieldId =
   | "linked-expense"
   | "reason"
   | "time-precision"
-  | "period";
+  | "period-start"
+  | "period-end";
 
 export type ManualField = {
   id: ManualFieldId;
@@ -170,7 +171,8 @@ export const manualRecordConfigs: Record<ManualRecordKind, ManualRecordConfig> =
       currency,
       { id: "time-precision", control: "period", label: "Time precision", required: true },
       { id: "date", control: "date", label: "Date", required: false },
-      { id: "period", control: "period", label: "Period", required: false },
+      { id: "period-start", control: "date", label: "Period start", required: false },
+      { id: "period-end", control: "date", label: "Period end", required: false },
     ],
   },
 };
