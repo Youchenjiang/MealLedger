@@ -29,6 +29,21 @@ const navItems: NavItem[] = [
 
 const routeByPath = new Map(navItems.map((item) => [item.path, item.route]));
 
+function navItemFor(route: AppRoute): NavItem {
+  return navItems.find((item) => item.route === route) ?? navItems[0];
+}
+
+function localDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function draftId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function routeFromLocation(): AppRoute {
   if (window.location.pathname === "/") {
     return "overview";
@@ -256,7 +271,7 @@ function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: 
             Begin with a transaction draft, then review it in Ledger. Confirmation is part of a later
             ledger workflow.
           </p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
+              <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
             Start a record
           </button>
         </Panel>
@@ -307,7 +322,7 @@ function LedgerPage({
             Confirmed transactions will appear here in a later ledger workflow. This app shell keeps
             spreadsheet-friendly fields visible from the start.
           </p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
             Start a record
           </button>
         </Panel>
@@ -372,7 +387,7 @@ function CapturePage({
   onCreateDraft: (draft: TransactionDraft) => void;
 }) {
   const [form, setForm] = useState<DraftForm>({
-    date: new Date().toISOString().slice(0, 10),
+    date: localDate(),
     account: "Cash",
     kind: "expense",
     category: "Daily",
@@ -418,7 +433,7 @@ function CapturePage({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextDraft = createTransactionDraft(form, crypto.randomUUID());
+    const nextDraft = createTransactionDraft(form, draftId());
 
     if (!nextDraft) {
       return;
@@ -538,7 +553,7 @@ function CapturePage({
               required
               inputMode="decimal"
               min="0"
-              step="1"
+              step="any"
               type="number"
               value={form.amount}
               onChange={(event) => updateForm("amount", event.target.value)}
@@ -578,7 +593,7 @@ function CapturePage({
               {latestDraft.kind === "transfer" ? ` to ${latestDraft.transferAccount}` : ""}
             </p>
           ) : null}
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[1])}>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
             Review in Ledger
           </button>
         </Panel>
@@ -641,8 +656,8 @@ function NotFoundPage({ navigate }: { navigate: (item: NavItem) => void }) {
   return (
     <Panel title="Page not found" eyebrow="Safe recovery">
       <p className="panel-copy">This page is not part of the current workspace. Return to Overview.</p>
-      <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[0])}>
-        <Home size={18} />
+      <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("overview"))}>
+        <Home size={18} aria-hidden="true" />
         Go to Overview
       </button>
     </Panel>

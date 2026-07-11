@@ -32,20 +32,22 @@ export function normalizeDraftForm(form: DraftForm): DraftForm {
   };
 }
 
-export function canCreateManualDraft(form: DraftForm): boolean {
-  const normalized = normalizeDraftForm(form);
-
-  if (!normalized.date || !normalized.account || !normalized.category || !normalized.counterparty || !normalized.amount) {
+function canCreateNormalizedDraft(form: DraftForm): boolean {
+  if (!form.date || !form.account || !form.category || !form.counterparty || !form.amount) {
     return false;
   }
 
-  return normalized.kind !== "transfer" || Boolean(normalized.transferAccount);
+  return form.kind !== "transfer" || Boolean(form.transferAccount);
+}
+
+export function canCreateManualDraft(form: DraftForm): boolean {
+  return canCreateNormalizedDraft(normalizeDraftForm(form));
 }
 
 export function createTransactionDraft(form: DraftForm, id: string): TransactionDraft | null {
   const normalized = normalizeDraftForm(form);
 
-  if (!canCreateManualDraft(normalized)) {
+  if (!canCreateNormalizedDraft(normalized)) {
     return null;
   }
 
