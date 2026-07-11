@@ -66,6 +66,7 @@ describe("App shell draft flow", () => {
     for (const route of ["Ledger", "Capture", "Settings", "Overview"]) {
       await user.click(screen.getByRole("button", { name: route }));
       expect(screen.getByRole("heading", { name: route })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: route })).toHaveAttribute("aria-current", "page");
     }
   });
 
@@ -92,6 +93,10 @@ describe("App shell draft flow", () => {
     act(() => window.dispatchEvent(new Event("offline")));
     expect(screen.getByText("Offline")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByText("Offline")).toBeInTheDocument();
+
     act(() => window.dispatchEvent(new Event("online")));
     expect(screen.getByText("Sync not enabled")).toBeInTheDocument();
   });
@@ -107,6 +112,7 @@ describe("App shell draft flow", () => {
     await createExpenseDraft(user);
 
     expect(screen.getByText("1 draft waiting")).toBeInTheDocument();
+    expect(screen.getByText("Local-only data")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.getByText("Draft reviews")).toBeInTheDocument();
@@ -135,6 +141,23 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Latest: 小狗錢包, TWD 1000 to 郵局存款")).toBeInTheDocument();
   });
 
+  test("uses native form validation to block incomplete manual drafts", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+
+    const merchant = screen.getByLabelText("Merchant / source");
+    const amount = screen.getByLabelText("Amount");
+    expect(merchant).toBeInvalid();
+    expect(amount).toBeInvalid();
+
+    await user.click(screen.getByRole("button", { name: "Create draft" }));
+
+    expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+  });
+
   test("discards local drafts from the ledger review queue", async () => {
     const user = userEvent.setup();
     renderWorkspace();
@@ -150,6 +173,7 @@ describe("App shell draft flow", () => {
     expect(screen.queryByLabelText("Draft records waiting for review")).not.toBeInTheDocument();
     expect(screen.getByText("No confirmed ledger records yet.")).toBeInTheDocument();
     expect(screen.getByText("No drafts to review")).toBeInTheDocument();
+    expect(screen.queryByText("Local-only data")).not.toBeInTheDocument();
   });
 
   test("labels unavailable capture paths as unavailable and keeps manual entry available", async () => {

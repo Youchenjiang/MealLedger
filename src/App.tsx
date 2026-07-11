@@ -5,6 +5,7 @@ import {
   Banknote,
   Camera,
   CheckCircle2,
+  CloudOff,
   Home,
   ImagePlus,
   LogIn,
@@ -75,12 +76,21 @@ export function App() {
         label: draftCount > 0 ? `${draftCount} draft${draftCount === 1 ? "" : "s"} waiting` : "No drafts to review",
         detail:
           draftCount > 0
-            ? "Confirm drafts before they become ledger records."
-            : "Nothing is waiting for confirmation.",
+            ? "Review or discard drafts before the later ledger workflow writes records."
+            : "Nothing is waiting for review.",
         icon: draftCount > 0 ? AlertCircle : CheckCircle2,
         tone: draftCount > 0 ? "warn" : "good",
       },
     ];
+
+    if (draftCount > 0) {
+      items.push({
+        label: "Local-only data",
+        detail: "These drafts stay on this device until a future sync workflow is enabled.",
+        icon: CloudOff,
+        tone: "warn",
+      });
+    }
 
     return items;
   }, [isOnline, draftCount]);
@@ -181,8 +191,8 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
           <p className="eyebrow">MealLedger</p>
           <h1>Track spending first, attach meals when useful.</h1>
           <p className="lede">
-            Start with ledger records, keep scans and photos separate, and confirm every draft
-            before it counts.
+            Start with ledger records, keep scans and photos separate, and review every draft before
+            a later ledger workflow writes it.
           </p>
         </div>
         <button className="primary-action" type="button" onClick={onSignIn}>
@@ -237,13 +247,14 @@ function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: 
         <EmptyMetric
           label="Draft reviews"
           value={draftCount > 0 ? `${draftCount} waiting` : "None"}
-          detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for confirmation."}
+          detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for review."}
         />
       </section>
       <section className="content-grid">
         <Panel title="Start with a new record" eyebrow="First step">
           <p className="panel-copy">
-            Begin with a transaction draft, then confirm it before it becomes part of the ledger.
+            Begin with a transaction draft, then review it in Ledger. Confirmation is part of a later
+            ledger workflow.
           </p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
             Start a record
@@ -251,8 +262,8 @@ function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: 
         </Panel>
         <Panel title="Review before it counts" eyebrow="Data safety">
           <p className="panel-copy">
-            Imported rows, scanned receipts, meal photos, and AI suggestions stay as drafts until
-            you confirm them.
+            Imported rows, scanned receipts, meal photos, and AI suggestions stay as drafts until a
+            later ledger workflow confirms them.
           </p>
         </Panel>
       </section>
@@ -293,8 +304,8 @@ function LedgerPage({
       <section className="content-grid">
         <Panel title="Ledger records" eyebrow="Confirmed records">
           <p className="panel-copy">
-            Confirmed transactions appear here after review. The table keeps spreadsheet-friendly
-            fields visible from the start.
+            Confirmed transactions will appear here in a later ledger workflow. This app shell keeps
+            spreadsheet-friendly fields visible from the start.
           </p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[2])}>
             Start a record
@@ -303,7 +314,7 @@ function LedgerPage({
         <Panel title={draftCount > 0 ? "Drafts waiting" : "Clean export"} eyebrow="Portability">
           <p className="panel-copy">
             {draftCount > 0
-              ? `${draftCount} draft${draftCount === 1 ? "" : "s"} must be confirmed before appearing here.`
+              ? `${draftCount} draft${draftCount === 1 ? "" : "s"} can be reviewed here; confirmation arrives later.`
               : "CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain separate files."}
           </p>
         </Panel>
@@ -383,7 +394,7 @@ function CapturePage({
     },
     {
       title: "Scan receipt or invoice",
-      detail: "Create a draft from a source image; confirm before it enters the ledger.",
+      detail: "Create a draft from a source image; ledger confirmation arrives in a later workflow.",
       icon: ReceiptText,
       available: false,
     },
@@ -427,8 +438,8 @@ function CapturePage({
     <section className="capture-layout">
       <Panel title="Choose how to start" eyebrow="Input sources">
         <p className="panel-copy">
-          Manual entries, scans, meal photos, and attachments start as drafts. Confirm a draft when
-          it is ready for the ledger.
+          Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
+          you review or discard them; ledger confirmation arrives later.
         </p>
         <div className="planned-actions">
           {actions.map((action) => {
