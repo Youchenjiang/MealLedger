@@ -643,7 +643,7 @@ button.action-card.unavailable {
 
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .sidebar {
     display: block;
     padding: 8px;

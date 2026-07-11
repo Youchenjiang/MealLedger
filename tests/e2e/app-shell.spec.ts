@@ -66,3 +66,14 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
+
+test("keeps compact navigation stable near its breakpoint", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+  await page.setViewportSize({ width: 720, height: 900 });
+
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  expect(errors).toEqual([]);
+});
