@@ -34,10 +34,13 @@ async function expectHorizontallyWithinViewport(page: Page, selector: string) {
     }),
   );
 
-  expect(viewport).not.toBeNull();
+  if (!viewport) {
+    throw new Error("Playwright viewport size is unavailable.");
+  }
+
   for (const box of boxes) {
     expect(box.left).toBeGreaterThanOrEqual(0);
-    expect(box.right).toBeLessThanOrEqual(viewport!.width);
+    expect(box.right).toBeLessThanOrEqual(viewport.width);
   }
 }
 

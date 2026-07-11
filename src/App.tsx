@@ -15,6 +15,7 @@ import {
   Upload,
   Wifi,
   WifiOff,
+  type LucideIcon,
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppRoute, AuthState, NavItem } from "./types";
@@ -49,6 +50,46 @@ function draftId(): string {
 
   draftSequence += 1;
   return `draft-${Date.now()}-${draftSequence}`;
+}
+
+function PrimaryNav({ route, navigate }: { route: AppRoute; navigate: (item: NavItem) => void }) {
+  return (
+    <nav className="nav-list">
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            className={`nav-item ${route === item.route ? "active" : ""}`}
+            key={item.route}
+            type="button"
+            aria-current={route === item.route ? "page" : undefined}
+            onClick={() => navigate(item)}
+          >
+            <Icon size={18} aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
+
+function StatusStrip({ items }: { items: StatusItem[] }) {
+  return (
+    <section className="status-strip" aria-label="Application status">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <div className={`status-item ${item.tone}`} key={item.label} title={item.detail} aria-label={`${item.label}. ${item.detail}`}>
+            <Icon size={16} aria-hidden="true" />
+            <strong>{item.label}</strong>
+          </div>
+        );
+      })}
+    </section>
+  );
 }
 
 function routeFromLocation(): AppRoute {
@@ -139,23 +180,7 @@ export function App() {
           </div>
         </div>
 
-        <nav className="nav-list">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                className={`nav-item ${route === item.route ? "active" : ""}`}
-                key={item.route}
-                type="button"
-                aria-current={route === item.route ? "page" : undefined}
-                onClick={() => navigate(item)}
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <PrimaryNav route={route} navigate={navigate} />
 
         <div className="storage-note">
           <ShieldCheck size={18} aria-hidden="true" />
@@ -172,22 +197,7 @@ export function App() {
             </div>
           </header>
 
-          <section className="status-strip" aria-label="Application status">
-            {statusItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  className={`status-item ${item.tone}`}
-                  key={item.label}
-                  title={item.detail}
-                  aria-label={`${item.label}. ${item.detail}`}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  <strong>{item.label}</strong>
-                </div>
-              );
-            })}
-          </section>
+          <StatusStrip items={statusItems} />
         </section>
 
         {renderRoute(route, drafts, setDrafts, navigate)}
@@ -384,6 +394,28 @@ function LedgerPage({
   );
 }
 
+type CaptureActionData = { title: string; detail: string; icon: LucideIcon; available: boolean };
+
+function CaptureAction({ action }: { action: CaptureActionData }) {
+  const Icon = action.icon;
+  const content = (
+    <>
+      <Icon size={22} aria-hidden="true" />
+      <span>
+        <strong>{action.title}</strong>
+        <small>{action.detail}</small>
+        <em>{action.available ? "Manual draft" : "Coming soon"}</em>
+      </span>
+    </>
+  );
+
+  return action.available ? (
+    <a className="action-card primary-card" href="#manual-draft-form">{content}</a>
+  ) : (
+    <button className="action-card unavailable" disabled type="button">{content}</button>
+  );
+}
+
 function CapturePage({
   drafts,
   navigate,
@@ -464,32 +496,7 @@ function CapturePage({
           you review or discard them; ledger confirmation arrives later.
         </p>
         <div className="planned-actions">
-          {actions.map((action) => {
-            const Icon = action.icon;
-            if (action.available) {
-              return (
-                <a className="action-card primary-card" href="#manual-draft-form" key={action.title}>
-                  <Icon size={22} aria-hidden="true" />
-                  <span>
-                    <strong>{action.title}</strong>
-                    <small>{action.detail}</small>
-                    <em>Manual draft</em>
-                  </span>
-                </a>
-              );
-            }
-
-            return (
-              <button className="action-card unavailable" disabled type="button" key={action.title}>
-                <Icon size={22} aria-hidden="true" />
-                <span>
-                  <strong>{action.title}</strong>
-                  <small>{action.detail}</small>
-                  <em>Coming soon</em>
-                </span>
-              </button>
-            );
-          })}
+          {actions.map((action) => <CaptureAction action={action} key={action.title} />)}
         </div>
       </Panel>
       <Panel title="Manual transaction draft" eyebrow="Local draft">
@@ -644,18 +651,22 @@ function SettingsPage() {
           Clean exports include confirmed ledger records only. Attachments stay as metadata
           references, not image bytes, and CSV/JSON use the same stable field set.
         </p>
-        <dl className="settings-list" aria-label="Data tool status">
-          {dataTools.map((item) => {
-            return (
-              <div key={item.title}>
-                <dt>{item.title}</dt>
-                <dd>{item.detail}</dd>
-              </div>
-            );
-          })}
-        </dl>
+          <DataToolList items={dataTools} />
       </Panel>
     </section>
+  );
+}
+
+function DataToolList({ items }: { items: Array<{ title: string; detail: string }> }) {
+  return (
+    <dl className="settings-list" aria-label="Data tool status">
+      {items.map((item) => (
+        <div key={item.title}>
+          <dt>{item.title}</dt>
+          <dd>{item.detail}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
