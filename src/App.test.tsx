@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
@@ -54,6 +54,65 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("No confirmed ledger records yet.")).toBeInTheDocument();
   });
 
+  test("opens the workspace and navigates between core routes", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    expect(screen.getByRole("button", { name: /open workspace/i })).toBeInTheDocument();
+    await openWorkspace(user);
+
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+
+    for (const route of ["Ledger", "Capture", "Settings", "Overview"]) {
+      await user.click(screen.getByRole("button", { name: route }));
+      expect(screen.getByRole("heading", { name: route })).toBeInTheDocument();
+    }
+  });
+
+  test("recovers safely from an unknown route", async () => {
+    const user = userEvent.setup();
+    renderWorkspace("/missing");
+
+    await openWorkspace(user);
+
+    expect(screen.getByRole("heading", { name: "Unknown route" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /go to overview/i }));
+
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+  });
+
+  test("updates the status strip for offline and online events", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+
+    act(() => window.dispatchEvent(new Event("offline")));
+    expect(screen.getByText("Offline")).toBeInTheDocument();
+
+    act(() => window.dispatchEvent(new Event("online")));
+    expect(screen.getByText("Sync not enabled")).toBeInTheDocument();
+  });
+
+  test("shows draft counts as drafts are created", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    expect(screen.getByText("No drafts to review")).toBeInTheDocument();
+
+    await goToCapture(user);
+    await createExpenseDraft(user);
+
+    expect(screen.getByText("1 draft waiting")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.getByText("Draft reviews")).toBeInTheDocument();
+    expect(screen.getByText("1 waiting")).toBeInTheDocument();
+  });
+
   test("requires a transfer account before creating transfer drafts", async () => {
     const user = userEvent.setup();
     renderWorkspace();
@@ -91,5 +150,40 @@ describe("App shell draft flow", () => {
     expect(screen.queryByLabelText("Draft records waiting for review")).not.toBeInTheDocument();
     expect(screen.getByText("No confirmed ledger records yet.")).toBeInTheDocument();
     expect(screen.getByText("No drafts to review")).toBeInTheDocument();
+  });
+
+  test("labels unavailable capture paths as unavailable and keeps manual entry available", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+
+    expect(screen.getByRole("link", { name: /record a transaction/i })).toHaveAttribute("href", "#manual-draft-form");
+    expect(screen.getByRole("button", { name: /scan receipt or invoice/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /attach meal photo/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /attachment/i })).toBeDisabled();
+  });
+
+  test("offers every spec-one draft kind", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+
+    const type = screen.getByLabelText("Type") as HTMLSelectElement;
+    expect([...type.options].map((option) => option.value)).toEqual([
+      "expense",
+      "income",
+      "transfer",
+      "refund",
+      "adjustment",
+    ]);
+
+    for (const kind of ["expense", "income", "transfer", "refund", "adjustment"]) {
+      await user.selectOptions(type, kind);
+      expect(type.value).toBe(kind);
+    }
   });
 });
