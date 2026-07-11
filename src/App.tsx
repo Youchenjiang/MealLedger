@@ -17,21 +17,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppRoute, AuthState, NavItem } from "./types";
-
-type DraftKind = "expense" | "income" | "transfer" | "refund" | "adjustment";
-
-type TransactionDraft = {
-  id: string;
-  date: string;
-  account: string;
-  kind: DraftKind;
-  category: string;
-  counterparty: string;
-  transferAccount: string;
-  amount: string;
-  currency: string;
-  note: string;
-};
+import { createTransactionDraft, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -374,7 +360,7 @@ function CapturePage({
   navigate: (item: NavItem) => void;
   onCreateDraft: (draft: TransactionDraft) => void;
 }) {
-  const [form, setForm] = useState<Omit<TransactionDraft, "id">>({
+  const [form, setForm] = useState<DraftForm>({
     date: new Date().toISOString().slice(0, 10),
     account: "Cash",
     kind: "expense",
@@ -415,34 +401,19 @@ function CapturePage({
     },
   ];
 
-  const updateForm = (field: keyof Omit<TransactionDraft, "id">, value: string) => {
+  const updateForm = (field: keyof DraftForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextDraft = {
-      ...form,
-      id: crypto.randomUUID(),
-      account: form.account.trim(),
-      category: form.category.trim(),
-      counterparty: form.counterparty.trim(),
-      transferAccount: form.transferAccount.trim(),
-      amount: form.amount.trim(),
-      note: form.note.trim(),
-    };
+    const nextDraft = createTransactionDraft(form, crypto.randomUUID());
 
-    if (!nextDraft.account || !nextDraft.category || !nextDraft.counterparty || !nextDraft.amount) {
+    if (!nextDraft) {
       return;
     }
 
-    if (nextDraft.kind === "transfer" && !nextDraft.transferAccount) {
-      return;
-    }
-
-    onCreateDraft({
-      ...nextDraft,
-    });
+    onCreateDraft(nextDraft);
     setForm((current) => ({
       ...current,
       counterparty: "",
@@ -507,7 +478,7 @@ function CapturePage({
           </label>
           <label>
             <span>Type</span>
-            <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value)}>
+            <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
               <option value="expense">Expense</option>
               <option value="income">Income</option>
               <option value="transfer">Transfer</option>
