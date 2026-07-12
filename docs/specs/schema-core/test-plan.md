@@ -81,3 +81,10 @@ Test active ledger export excludes soft-deleted rows.
 Test export includes stable ids for linked tags, events, meals, media, and source payloads.
 
 Test export does not include media bytes or base64 data.
+
+## Implemented V1 Coverage
+
+- SQL contract tests assert canonical tables, accounting kinds, minor-unit amounts, transfer/refund boundaries, RLS enablement, idempotency, and cleanup indexes.
+- Migration and schema entrypoints are asserted byte-equivalent.
+- Domain contract tests run through the standard Vitest suite.
+- Live RLS execution is explicitly deferred until Supabase CLI/local services are available.
