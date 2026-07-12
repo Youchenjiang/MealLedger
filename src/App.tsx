@@ -215,7 +215,7 @@ function createEmptyDraftForm(): DraftForm {
     date: localDate(), account: "", kind: "expense", category: "", counterparty: "", counterpartyMissing: false,
     itemName: "", itemNameMissing: false, transferAccount: "", transferMode: "same-currency", amount: "", currency: "TWD",
     destinationAmount: "", destinationCurrency: "JPY", feeEnabled: false, feeAccount: "", feeAmount: "", feeCurrency: "TWD",
-    feeCategory: "", refundReason: "", refundSubtype: "refund", refundLinkedRecordId: "", refundExcessHandling: "unclassified",
+    feeCategory: "", refundReason: "", refundSubtype: "refund", refundLinkedRecordId: "", refundLinkedRecordIds: [], refundExcessHandling: "unclassified",
     recurrenceChoice: "current-cycle-only", recurrenceAmountMode: "fixed", reason: "", timePrecision: "day", periodStart: "",
     periodEnd: "", note: "",
   };
@@ -1274,12 +1274,14 @@ function CapturePage({
   const itemSuggestions = form.itemName.trim()
     ? records.filter((record) => record.recordState !== "voided" && record.itemName && record.itemName.toLocaleLowerCase().includes(form.itemName.trim().toLocaleLowerCase())).slice(0, 5)
     : [];
-  const selectedRefundRecord = refundableRecords.find((record) => record.id === form.refundLinkedRecordId);
+  const selectedRefundIds = form.refundLinkedRecordIds?.length ? form.refundLinkedRecordIds : (form.refundLinkedRecordId ? [form.refundLinkedRecordId] : []);
+  const selectedRefundRecords = refundableRecords.filter((record) => selectedRefundIds.includes(record.id));
+  const linkedRefundAmount = selectedRefundRecords.reduce((total, record) => total + Number(record.amount), 0);
   const refundExceedsLinkedAmount = Boolean(
     form.kind === "refund"
       && form.refundSubtype === "payback"
-      && selectedRefundRecord
-      && Number(form.amount) > Number(selectedRefundRecord.amount),
+      && selectedRefundRecords.length > 0
+      && Number(form.amount) > linkedRefundAmount,
   );
   const supportsRecurrence = form.kind === "expense" || form.kind === "income" || form.kind === "transfer";
   const autoRecordAllowed = canAutoRecordNextCycle(form, accounts);
@@ -1436,6 +1438,7 @@ function CapturePage({
       refundReason: "",
       refundSubtype: "refund",
       refundLinkedRecordId: "",
+      refundLinkedRecordIds: [],
       refundExcessHandling: "unclassified",
       recurrenceChoice: "current-cycle-only",
       recurrenceAmountMode: "fixed",
@@ -1739,9 +1742,19 @@ function CapturePage({
                 </select>
               </label>
               {form.refundSubtype === "payback" ? (
-                <label>
+                <label htmlFor="entry-refund-links">
                   <span>Original expense</span>
-                  <select required value={form.refundLinkedRecordId} onChange={(event) => updateForm("refundLinkedRecordId", event.target.value)}>
+                  <select
+                    id="entry-refund-links"
+                    aria-label="Original expense"
+                    required
+                    multiple
+                    value={selectedRefundIds}
+                    onChange={(event) => {
+                      const ids = [...event.target.selectedOptions].map((option) => option.value).filter(Boolean);
+                      setForm((current) => ({ ...current, refundLinkedRecordId: ids[0] ?? "", refundLinkedRecordIds: ids }));
+                    }}
+                  >
                     <option value="">Select an expense to link</option>
                     {refundableRecords.map((record) => (
                       <option key={record.id} value={record.id}>
@@ -1749,6 +1762,7 @@ function CapturePage({
                       </option>
                     ))}
                   </select>
+                  <small>Select one or more expenses when a payback settles multiple shared expenses.</small>
                 </label>
               ) : null}
             </>

@@ -36,6 +36,7 @@ export type LocalLedgerRecord = {
   refundReason: string;
   refundSubtype: TransactionDraft["refundSubtype"];
   refundLinkedRecordId: string;
+  refundLinkedRecordIds?: string[];
   refundExcessHandling: TransactionDraft["refundExcessHandling"];
   recurrenceChoice: RecurrenceChoice;
   recurrenceAmountMode: TransactionDraft["recurrenceAmountMode"];
@@ -151,6 +152,7 @@ function createRecord(
     refundReason: draft.refundReason,
     refundSubtype: draft.refundSubtype,
     refundLinkedRecordId: draft.refundLinkedRecordId,
+    refundLinkedRecordIds: draft.refundLinkedRecordIds ?? (draft.refundLinkedRecordId ? [draft.refundLinkedRecordId] : []),
     refundExcessHandling: draft.refundExcessHandling,
     recurrenceChoice: draft.recurrenceChoice,
     recurrenceAmountMode: draft.recurrenceAmountMode,

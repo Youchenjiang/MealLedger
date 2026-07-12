@@ -237,6 +237,29 @@ describe("local official ledger records", () => {
     });
   });
 
+  test("preserves multiple linked expenses for a shared payback", () => {
+    const refund: TransactionDraft = {
+      ...expense,
+      id: "draft-multi-refund",
+      kind: "refund",
+      category: "Daily",
+      counterparty: "Friend",
+      itemName: "",
+      amount: "80",
+      refundReason: "Shared payback",
+      refundSubtype: "payback",
+      refundLinkedRecordId: "record-original",
+      refundLinkedRecordIds: ["record-original", "record-second"],
+    };
+
+    const bundle = createOfficialRecordBundle(refund, accounts, options);
+
+    expect(bundle?.records[0]).toMatchObject({
+      refundLinkedRecordId: "record-original",
+      refundLinkedRecordIds: ["record-original", "record-second"],
+    });
+  });
+
   test("rejects a payback without a linked expense", () => {
     const refund: TransactionDraft = {
       ...expense,

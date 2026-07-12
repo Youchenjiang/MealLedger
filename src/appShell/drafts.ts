@@ -35,6 +35,7 @@ export type DraftForm = {
   refundReason: string;
   refundSubtype: RefundSubtype;
   refundLinkedRecordId: string;
+  refundLinkedRecordIds?: string[];
   refundExcessHandling: RefundExcessHandling;
   recurrenceChoice: RecurrenceChoice;
   recurrenceAmountMode: RecurrenceAmountMode;
@@ -212,7 +213,7 @@ export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]):
     case "refund":
       return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty", "refundReason"])
         && isPositiveAmount(normalized.amount)
-        && (normalized.refundSubtype !== "payback" || Boolean(normalized.refundLinkedRecordId));
+        && (normalized.refundSubtype !== "payback" || Boolean(normalized.refundLinkedRecordIds?.length || normalized.refundLinkedRecordId));
     case "fund-addition":
       return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "counterparty"])
         && isPositiveAmount(normalized.amount);
