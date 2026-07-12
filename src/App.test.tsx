@@ -85,6 +85,19 @@ describe("App shell draft flow", () => {
     expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
   });
 
+  test("resolves supported nested routes without losing the shell route", async () => {
+    const user = userEvent.setup();
+    renderWorkspace("/ledger/draft/draft-42");
+
+    await openWorkspace(user);
+    expect(screen.getByRole("heading", { name: "Ledger" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Unknown route" })).not.toBeInTheDocument();
+
+    window.history.pushState(null, "", "/settings/localization");
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+  });
+
   test("updates the status strip for offline and online events", async () => {
     const user = userEvent.setup();
     renderWorkspace();

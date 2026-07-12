@@ -7,6 +7,11 @@ export type AppRoute =
   | "settings"
   | "not-found";
 
+export type AppLocation = {
+  route: AppRoute;
+  params: Readonly<Record<string, string>>;
+};
+
 export type AuthState = "loading" | "signed-out" | "signed-in";
 
 export type NavItem = {

@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
-import type { AppRoute, AuthState, NavItem } from "./types";
+import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { createTransactionDraft, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 
 const navItems: NavItem[] = [
@@ -28,7 +28,20 @@ const navItems: NavItem[] = [
   { route: "settings", label: "Settings", path: "/settings", icon: Settings },
 ];
 
-const routeByPath = new Map(navItems.map((item) => [item.path, item.route]));
+type RouteDefinition = {
+  segments: string[];
+  route: Exclude<AppRoute, "not-found">;
+};
+
+const routeDefinitions: RouteDefinition[] = [
+  { segments: [], route: "overview" },
+  { segments: ["overview"], route: "overview" },
+  { segments: ["ledger"], route: "ledger" },
+  { segments: ["ledger", "draft", ":draftId"], route: "ledger" },
+  { segments: ["capture"], route: "capture" },
+  { segments: ["settings"], route: "settings" },
+  { segments: ["settings", "localization"], route: "settings" },
+];
 
 function navItemFor(route: AppRoute): NavItem {
   return navItems.find((item) => item.route === route) ?? navItems[0];
@@ -153,19 +166,41 @@ function WorkspaceHeader({ route, statusItems }: { route: AppRoute; statusItems:
   );
 }
 
-function routeFromLocation(): AppRoute {
-  if (window.location.pathname === "/") {
-    return "overview";
+function routeFromLocation(): AppLocation {
+  const segments = window.location.pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment));
+
+  for (const definition of routeDefinitions) {
+    if (definition.segments.length !== segments.length) {
+      continue;
+    }
+
+    const params: Record<string, string> = {};
+    const matches = definition.segments.every((segment, index) => {
+      const value = segments[index];
+      if (segment.startsWith(":")) {
+        params[segment.slice(1)] = value;
+        return true;
+      }
+      return segment === value;
+    });
+
+    if (matches) {
+      return { route: definition.route, params };
+    }
   }
 
-  return routeByPath.get(window.location.pathname) ?? "not-found";
+  return { route: "not-found", params: {} };
 }
 
 export function App() {
-  const [route, setRoute] = useState<AppRoute>(routeFromLocation);
+  const [location, setLocation] = useState<AppLocation>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
+  const route = location.route;
   const draftCount = drafts.length;
 
   useEffect(() => {
@@ -177,7 +212,7 @@ export function App() {
   }, [drafts]);
 
   useEffect(() => {
-    const handlePopState = () => setRoute(routeFromLocation());
+    const handlePopState = () => setLocation(routeFromLocation());
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -194,7 +229,7 @@ export function App() {
 
   useEffect(() => {
     window.scrollTo({ left: 0, top: 0 });
-  }, [route]);
+  }, [location]);
 
   const statusItems = useMemo(() => {
     const items = [
@@ -229,7 +264,7 @@ export function App() {
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
-    setRoute(item.route);
+    setLocation({ route: item.route, params: {} });
   };
 
   if (authState !== "signed-in") {
