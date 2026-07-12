@@ -200,6 +200,44 @@ describe("App shell draft flow", () => {
     expect(screen.getByRole("button", { name: "Skip row 2" })).toBeEnabled();
   });
 
+  test("supports keeping a duplicate separate and linking another duplicate", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const file = new File([
+      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+    ], "duplicate-actions.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText("CSV import file"), file);
+
+    await user.click(await screen.findByRole("button", { name: "Keep separate row 2" }));
+    await user.click(screen.getByRole("button", { name: "Link existing row 3" }));
+    expect(screen.getByText("Status: kept-separate")).toBeInTheDocument();
+    expect(screen.getByText("Status: linked")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    expect(screen.getAllByText("全聯")).toHaveLength(2);
+  });
+
+  test("moves a duplicate into the persisted local draft queue", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const file = new File([
+      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+    ], "duplicate-draft.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText("CSV import file"), file);
+
+    await user.click(await screen.findByRole("button", { name: "Merge to draft row 2" }));
+    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    expect(screen.getByText("1 local draft")).toBeInTheDocument();
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));

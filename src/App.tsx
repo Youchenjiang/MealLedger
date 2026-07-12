@@ -48,7 +48,7 @@ type ImportReviewItem = ImportRowValidation & {
   reviewId: string;
   aliasReview: string | null;
   duplicates: ImportDuplicate[];
-  status: "pending" | "confirmed" | "skipped" | "failed";
+  status: "pending" | "confirmed" | "skipped" | "failed" | "kept-separate" | "linked" | "merged";
 };
 
 const routeDefinitions: RouteDefinition[] = [
@@ -617,6 +617,15 @@ function renderRoute(
 
             setRecords((current) => appendIdempotentRecords(current, bundle));
             setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            return true;
+          }}
+          onMergeImportDraft={(row, importId) => {
+            const draft = toImportedTransactionDraft(row, importId);
+            if (!draft) {
+              return false;
+            }
+
+            setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
             return true;
           }}
         />
@@ -2107,11 +2116,12 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
   );
 }
 
-function SettingsPage({ accounts, records, onAddAccount, onImportRecord }: Readonly<{
+function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMergeImportDraft }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onAddAccount: (account: LocalAccount) => void;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
+  onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
@@ -2174,7 +2184,7 @@ function SettingsPage({ accounts, records, onAddAccount, onImportRecord }: Reado
         ) : null}
       </Panel>
       <AccountSyncPanel />
-      <ImportExportPanel dataTools={dataTools} accounts={accounts} records={records} onImportRecord={onImportRecord} />
+      <ImportExportPanel dataTools={dataTools} accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
     </section>
   );
 }
@@ -2196,11 +2206,12 @@ function AccountSyncPanel() {
   );
 }
 
-function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Readonly<{
+function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
   dataTools: Array<{ title: string; detail: string }>;
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
+  onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 }>) {
   const [importMessage, setImportMessage] = useState("No CSV selected. Validation does not write to the ledger.");
   const [importItems, setImportItems] = useState<ImportReviewItem[]>([]);
@@ -2257,6 +2268,36 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Rea
     setImportMessage(imported ? `Imported row ${item.rowNumber} into the local ledger.` : `Row ${item.rowNumber} could not be imported and remains in review.`);
   };
 
+  const keepSeparate = (item: ImportReviewItem) => {
+    if (!item.ok || item.status !== "pending" || item.duplicates.length === 0) {
+      return;
+    }
+
+    const imported = onImportRecord(item.normalized, item.reviewId);
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: imported ? "kept-separate" : "failed" } : candidate));
+    setImportMessage(imported ? `Kept row ${item.rowNumber} as a separate local ledger record.` : `Row ${item.rowNumber} could not be kept and remains in review.`);
+  };
+
+  const linkExisting = (item: ImportReviewItem) => {
+    const candidate = item.duplicates[0];
+    if (!candidate || item.status !== "pending") {
+      return;
+    }
+
+    setImportItems((current) => current.map((reviewItem) => reviewItem.reviewId === item.reviewId ? { ...reviewItem, status: "linked" } : reviewItem));
+    setImportMessage(`Linked row ${item.rowNumber} to ${candidate.candidateType === "existing-record" ? candidate.candidateId : `row ${candidate.candidateRowNumber}`} without changing the ledger.`);
+  };
+
+  const mergeIntoDraft = (item: ImportReviewItem) => {
+    if (!item.ok || item.status !== "pending" || item.duplicates.length === 0) {
+      return;
+    }
+
+    const merged = onMergeImportDraft(item.normalized, item.reviewId);
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: merged ? "merged" : "failed" } : candidate));
+    setImportMessage(merged ? `Moved row ${item.rowNumber} into local review drafts without changing the ledger.` : `Row ${item.rowNumber} could not become a draft and remains in review.`);
+  };
+
   const skipImport = (item: ImportReviewItem) => {
     setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: "skipped" } : candidate));
     setImportMessage(`Skipped row ${item.rowNumber}. It was not written to the ledger.`);
@@ -2292,8 +2333,13 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Rea
                 {item.duplicates.length > 0 ? <span>Duplicate candidate: {item.duplicates.map((duplicate) => `${duplicate.candidateType === "existing-record" ? duplicate.candidateId : `row ${duplicate.candidateRowNumber}`}: ${duplicate.reason}`).join("; ")}</span> : null}
                 {item.status !== "pending" ? <span>Status: {item.status}</span> : null}
               </div>
-              <div className="record-actions">
+                <div className="record-actions">
                 <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.duplicates.length > 0 || item.status !== "pending"} onClick={() => confirmImport(item)}>Confirm import row {item.rowNumber}</button>
+                {item.duplicates.length > 0 ? <>
+                  <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => keepSeparate(item)}>Keep separate row {item.rowNumber}</button>
+                  <button className="text-action" type="button" disabled={item.status !== "pending"} onClick={() => linkExisting(item)}>Link existing row {item.rowNumber}</button>
+                  <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => mergeIntoDraft(item)}>Merge to draft row {item.rowNumber}</button>
+                </> : null}
                 <button className="text-action danger-action" type="button" disabled={item.status !== "pending"} onClick={() => skipImport(item)}>Skip row {item.rowNumber}</button>
               </div>
             </article>
