@@ -49,6 +49,23 @@ a {
   background: #fffdf8;
 }
 
+.auth-form {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.auth-form label {
+  font-weight: 700;
+}
+
+.auth-message {
+  max-width: 420px;
+  margin: 0;
+  color: #5f594f;
+  line-height: 1.5;
+}
+
 .sidebar {
   position: sticky;
   top: 0;

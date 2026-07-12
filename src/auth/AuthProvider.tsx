@@ -1,0 +1,100 @@
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import type { AuthState } from "../types";
+import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
+import { sendMagicLink } from "./authActions";
+
+type AuthContextValue = {
+  state: AuthState;
+  email: string;
+  message: string;
+  signIn: (email?: string) => Promise<void>;
+  signOut: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Authentication failed. Try again.";
+}
+
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
+  const [state, setState] = useState<AuthState>(isLocalDevelopmentMode ? "signed-out" : "loading");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (isLocalDevelopmentMode || !supabase) {
+      return;
+    }
+
+    let mounted = true;
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) {
+        setState("auth-error");
+        setMessage(errorMessage(error));
+        return;
+      }
+      setState(data.session ? "signed-in" : "signed-out");
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setState(session ? "signed-in" : "signed-out");
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  const value = useMemo<AuthContextValue>(() => ({
+    state,
+    email,
+    message,
+    signIn: async (requestedEmail = "") => {
+      const normalizedEmail = requestedEmail.trim();
+      setEmail(normalizedEmail);
+      setMessage("");
+
+      if (isLocalDevelopmentMode || !supabase) {
+        setState("signed-in");
+        return;
+      }
+
+      setState("loading");
+      const result = await sendMagicLink(supabase, normalizedEmail, window.location.origin);
+      if (!result.ok) {
+        setState("auth-error");
+        setMessage(result.message);
+        return;
+      }
+
+      setState("signed-out");
+      setMessage("Magic link sent. Check your email to open the workspace.");
+    },
+    signOut: async () => {
+      if (isLocalDevelopmentMode || !supabase) {
+        setState("signed-out");
+        return;
+      }
+
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        setState("auth-error");
+        setMessage(errorMessage(error));
+        return;
+      }
+      setState("signed-out");
+    },
+  }), [email, message, state]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used inside AuthProvider");
+  return context;
+}

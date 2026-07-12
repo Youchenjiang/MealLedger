@@ -9,6 +9,7 @@ import {
   Home,
   ImagePlus,
   LogIn,
+  LogOut,
   Plus,
   ReceiptText,
   Settings,
@@ -18,7 +19,8 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
-import { isSupabaseConfigured } from "./lib/supabase";
+import { isLocalDevelopmentMode, isSupabaseConfigured } from "./lib/supabase";
+import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
@@ -340,7 +342,7 @@ function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (ite
   );
 }
 
-function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
+function WorkspaceHeader({ route, statusItems, onSignOut }: Readonly<{ route: AppRoute; statusItems: StatusItem[]; onSignOut: () => Promise<void> }>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -348,6 +350,10 @@ function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; sta
           <p className="eyebrow">Personal finance workspace</p>
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
+        <button className="secondary-action" type="button" onClick={() => { void onSignOut(); }}>
+          <LogOut size={18} aria-hidden="true" />
+          Sign out
+        </button>
       </header>
       <StatusStrip items={statusItems} />
     </section>
@@ -384,8 +390,16 @@ function routeFromLocation(): AppLocation {
 }
 
 export function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
+  );
+}
+
+function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const [authState, setAuthState] = useState<AuthState>("signed-out");
+  const { state: authState, message: authMessage, signIn, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
@@ -478,8 +492,12 @@ export function App() {
     setLocation({ route: item.route, params: {} });
   };
 
+  if (authState === "loading" && !authMessage) {
+    return <AuthLoadingShell />;
+  }
+
   if (authState !== "signed-in") {
-    return <SignedOutShell onSignIn={() => setAuthState("signed-in")} />;
+    return <SignedOutShell authState={authState} authMessage={authMessage} onSignIn={signIn} />;
   }
 
   return (
@@ -487,14 +505,28 @@ export function App() {
       <Sidebar route={route} navigate={navigate} />
 
       <section className="workspace">
-        <WorkspaceHeader route={route} statusItems={statusItems} />
+        <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
         {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate)}
       </section>
     </main>
   );
 }
 
-function SignedOutShell({ onSignIn }: Readonly<{ onSignIn: () => void }>) {
+function AuthLoadingShell() {
+  return (
+    <main className="signed-out-shell">
+      <section className="signed-out-panel" aria-live="polite">
+        <Brand caption="Personal finance records" large />
+        <p className="eyebrow">MealLedger</p>
+        <h1>Checking your workspace session...</h1>
+      </section>
+    </main>
+  );
+}
+
+function SignedOutShell({ authState, authMessage, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; onSignIn: (email?: string) => Promise<void> }>) {
+  const [email, setEmail] = useState("");
+
   return (
     <main className="signed-out-shell">
       <section className="signed-out-panel">
@@ -507,10 +539,22 @@ function SignedOutShell({ onSignIn }: Readonly<{ onSignIn: () => void }>) {
             a later ledger workflow writes it.
           </p>
         </div>
-        <button className="primary-action" type="button" onClick={onSignIn}>
-          <LogIn size={18} aria-hidden="true" />
-          Open workspace
-        </button>
+        {isLocalDevelopmentMode ? (
+          <button className="primary-action" type="button" onClick={() => { void onSignIn(); }}>
+            <LogIn size={18} aria-hidden="true" />
+            Open workspace
+          </button>
+        ) : (
+          <form className="auth-form" onSubmit={(event) => { event.preventDefault(); void onSignIn(email); }}>
+            <label htmlFor="auth-email">Email</label>
+            <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+            <button className="primary-action" type="submit" disabled={authState === "loading"}>
+              <LogIn size={18} aria-hidden="true" />
+              {authState === "loading" ? "Sending link..." : "Send magic link"}
+            </button>
+          </form>
+        )}
+        {authMessage ? <p className="auth-message" role={authState === "auth-error" ? "alert" : "status"}>{authMessage}</p> : null}
       </section>
     </main>
   );
