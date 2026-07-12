@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve an audit event, and expose stable idempotency keys. Cloud sync, editing, deletion, and several advanced field workflows remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, and support local edit/void lifecycle actions. Cloud sync, account balances, and several advanced field workflows remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -36,7 +36,7 @@ Expected verification:
 
 ## Task 4: Implement Fund Addition And Adjustment Forms
 
-Status: Partial. The local form and local official-save boundary exist. Report projections remain.
+Status: Partial. The local form, local official-save boundary, and persisted account setup exist. Report projections and balance calculations remain.
 
 Add fund addition and adjustment flows with report-safe labels and required reasons.
 
@@ -76,6 +76,19 @@ Expected verification:
 
 - Day and period unresolved expense cases pass.
 
+## Current Lifecycle Slice
+
+Status: Complete for local persistence and lifecycle behavior.
+
+- Accounts and custom categories persist across reloads.
+- Official records can be edited with an incremented version and `record-updated` audit event.
+- Official records can be voided without hard deletion and with a `record-voided` audit event.
+
+Expected verification:
+
+- App integration tests cover reload persistence, edit, void, and audit history.
+- Record domain tests cover versioning and void state transitions.
+
 ## Task 8: Add History Suggestions
 
 Add suggestion surfaces for merchant and item/name entry.
@@ -95,7 +108,7 @@ Expected verification:
 
 ## Task 10: Offline And Idempotency UI Hook
 
-Status: Partial. Local-only save state, browser persistence, audit events, and idempotency key creation are implemented. Cloud retry transport remains.
+Status: Partial. Local-only save state, browser persistence, audit events, idempotency key creation, and local lifecycle actions are implemented. Cloud retry transport remains.
 
 Expected verification:
 
@@ -115,3 +128,10 @@ Expected verification:
 - accounting acceptance cases documented or automated
 
 Current slice evidence is recorded in the branch commits and must be rerun after the remaining Manual Ledger tasks are implemented.
+
+Latest verification for the local lifecycle slice:
+
+- `npm run test`: 56 tests passed.
+- `npm run test:coverage`: 84.90% statements, 78.09% branches, 80.67% functions, and 84.81% lines.
+- `npm run test:e2e`: 4 browser smoke tests passed.
+- `npm run build`: passed before the documentation-only update.
