@@ -39,6 +39,7 @@ import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/default
 import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
 import { createMealEntry, type MealEntry } from "./captureMedia/meals";
 import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retainTemporaryScan, type TemporaryScan } from "./captureMedia/media";
+import { queueUploadFiles, validateMediaBatch, type UploadQueueItem } from "./captureMedia/upload";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -127,6 +128,7 @@ const tagsStorageKey = "mealledger.taxonomy.tags";
 const aliasesStorageKey = "mealledger.taxonomy.aliases";
 const mealsStorageKey = "mealledger.capture.meals";
 const scansStorageKey = "mealledger.capture.temporary-scans";
+const uploadQueueStorageKey = "mealledger.capture.upload-queue";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -226,6 +228,20 @@ function readStoredScans(): TemporaryScan[] {
 
     const parsed: unknown = JSON.parse(stored);
     return Array.isArray(parsed) ? parsed as TemporaryScan[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredUploadQueue(): UploadQueueItem[] {
+  try {
+    const stored = window.localStorage.getItem(uploadQueueStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed as UploadQueueItem[] : [];
   } catch {
     return [];
   }
@@ -487,6 +503,7 @@ function AuthenticatedApp() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [meals, setMeals] = useState<MealEntry[]>(readStoredMeals);
   const [scans, setScans] = useState<TemporaryScan[]>(() => expireTemporaryScans(readStoredScans()));
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>(readStoredUploadQueue);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
@@ -510,10 +527,11 @@ function AuthenticatedApp() {
       window.localStorage.setItem(onboardingStorageKey, String(onboardingCompleted));
       window.localStorage.setItem(mealsStorageKey, JSON.stringify(meals));
       window.localStorage.setItem(scansStorageKey, JSON.stringify(scans));
+      window.localStorage.setItem(uploadQueueStorageKey, JSON.stringify(uploadQueue));
     } catch {
       // Local persistence is best effort; the ledger remains usable for this session.
     }
-  }, [accounts, auditEvents, meals, onboardingCompleted, records, scans]);
+  }, [accounts, auditEvents, meals, onboardingCompleted, records, scans, uploadQueue]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -635,7 +653,7 @@ function AuthenticatedApp() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)))}
+        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
       </section>
     </main>
   );
@@ -806,6 +824,8 @@ function renderRoute(
   scans: TemporaryScan[],
   onSaveScans: (scans: TemporaryScan[]) => void,
   onUpdateScan: (scan: TemporaryScan) => void,
+  uploadQueue: UploadQueueItem[],
+  onQueueUploads: (items: UploadQueueItem[]) => void,
 ) {
   const draftCount = drafts.length;
   const recordCount = records.length;
@@ -886,6 +906,8 @@ function renderRoute(
           scans={scans}
           onSaveScans={onSaveScans}
           onUpdateScan={onUpdateScan}
+          uploadQueue={uploadQueue}
+          onQueueUploads={onQueueUploads}
         />
       );
     case "settings":
@@ -1490,6 +1512,8 @@ function CapturePage({
   scans,
   onSaveScans,
   onUpdateScan,
+  uploadQueue,
+  onQueueUploads,
 }: Readonly<{
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
@@ -1501,6 +1525,8 @@ function CapturePage({
   scans: TemporaryScan[];
   onSaveScans: (scans: TemporaryScan[]) => void;
   onUpdateScan: (scan: TemporaryScan) => void;
+  uploadQueue: UploadQueueItem[];
+  onQueueUploads: (items: UploadQueueItem[]) => void;
 }>) {
   const [form, setForm] = useState<DraftForm>(createEmptyDraftForm);
   const [cleanForm, setCleanForm] = useState<DraftForm>(createEmptyDraftForm);
@@ -1522,7 +1548,7 @@ function CapturePage({
   const [captureIntent, setCaptureIntent] = useState<CaptureIntent>("manual-ledger");
   const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime);
   const [mealNote, setMealNote] = useState("");
-  const [mealPhotoNames, setMealPhotoNames] = useState<string[]>([]);
+  const [mealPhotoFiles, setMealPhotoFiles] = useState<File[]>([]);
   const [mealError, setMealError] = useState("");
   const [mealSavedMessage, setMealSavedMessage] = useState("");
   const [scanFiles, setScanFiles] = useState<File[]>([]);
@@ -1774,12 +1800,17 @@ function CapturePage({
 
   const handleMealSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const mediaValidation = validateMediaBatch(mealPhotoFiles);
+    if (!mediaValidation.ok) {
+      setMealError(mediaValidation.error ?? "The selected photos exceed the upload limit.");
+      return;
+    }
     setMealError("");
     const mealId = `meal-${crypto.randomUUID()}`;
     const meal = createMealEntry({
       occurredAt: mealOccurredAt,
       note: mealNote,
-      mediaAssetIds: mealPhotoNames.map((name, index) => `local-photo-${index}-${name}`),
+      mediaAssetIds: mealPhotoFiles.map((file, index) => `local-photo-${index}-${file.name}`),
     }, mealId);
 
     if (!meal) {
@@ -1788,9 +1819,10 @@ function CapturePage({
     }
 
     onSaveMeal(meal);
+    onQueueUploads(queueUploadFiles(mealPhotoFiles, mealId));
     setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
     setMealNote("");
-    setMealPhotoNames([]);
+    setMealPhotoFiles([]);
   };
 
   const handleScanSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1799,6 +1831,12 @@ function CapturePage({
     setScanSavedMessage("");
     if (scanFiles.length === 0 || (captureIntent !== "scan-invoice" && captureIntent !== "scan-receipt")) {
       setScanError("Choose at least one scan image before saving.");
+      return;
+    }
+
+    const mediaValidation = validateMediaBatch(scanFiles);
+    if (!mediaValidation.ok) {
+      setScanError(mediaValidation.error ?? "The selected scans exceed the upload limit.");
       return;
     }
 
@@ -1812,6 +1850,7 @@ function CapturePage({
       .filter((scan): scan is TemporaryScan => Boolean(scan));
 
     onSaveScans(nextScans);
+    onQueueUploads(queueUploadFiles(scanFiles, "scan"));
     setScanFiles([]);
     setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
   };
@@ -2357,12 +2396,13 @@ function CapturePage({
             </label>
             <label>
               <span>Meal photos</span>
-              <input accept="image/*" multiple type="file" onChange={(event) => setMealPhotoNames(Array.from(event.target.files ?? []).map((file) => file.name))} />
+              <input accept="image/*" multiple type="file" onChange={(event) => setMealPhotoFiles(Array.from(event.target.files ?? []))} />
             </label>
-            {mealPhotoNames.length > 0 ? <p className="field-help">Selected {mealPhotoNames.length} photo{mealPhotoNames.length === 1 ? "" : "s"}.</p> : null}
+            {mealPhotoFiles.length > 0 ? <p className="field-help">Selected {mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"}.</p> : null}
             <button className="primary-action align-start" type="submit">Save meal</button>
             {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
             {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
+            {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
           </form>
         </Panel>
       ) : captureIntent === "scan-invoice" || captureIntent === "scan-receipt" ? (
@@ -2377,6 +2417,7 @@ function CapturePage({
             <button className="primary-action align-start" type="submit">Save scan drafts</button>
             {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
             {scanSavedMessage ? <p className="auth-message" role="status">{scanSavedMessage}</p> : null}
+            {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
           </form>
           <div className="source-list" aria-label="Temporary scans">
             {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => (
