@@ -10,6 +10,10 @@ function renderWorkspace(path = "/") {
 
 async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /open workspace/i }));
+  const skipSetup = screen.queryByRole("button", { name: "Skip setup" });
+  if (skipSetup) {
+    await user.click(skipSetup);
+  }
 }
 
 async function goToCapture(user: ReturnType<typeof userEvent.setup>) {
@@ -47,6 +51,35 @@ describe("App shell draft flow", () => {
     });
     window.localStorage.clear();
     window.history.pushState(null, "", "/");
+  });
+
+  test("guides a new workspace through first-account setup", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: /open workspace/i }));
+    expect(screen.getByRole("heading", { name: "Set up your first account" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Account name"), "Travel wallet");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByText("1 account")).toBeInTheDocument();
+  });
+
+  test("records an entered starting balance as fund addition", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: /open workspace/i }));
+    await user.type(screen.getByLabelText("Account name"), "Bank account");
+    await user.click(screen.getByRole("radio", { name: "Enter current balance" }));
+    await user.type(screen.getByLabelText("Current balance"), "2500");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(await screen.findByText("1 saved")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "fund-addition", amount: "2500" })]),
+    );
   });
 
   test("creates an official local expense record", async () => {

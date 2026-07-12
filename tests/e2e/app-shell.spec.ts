@@ -16,6 +16,10 @@ function collectBrowserErrors(page: Page) {
 async function openWorkspace(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Open workspace" }).click();
+  const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  if (await skipSetup.isVisible()) {
+    await skipSetup.click();
+  }
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
 }
 

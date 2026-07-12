@@ -34,6 +34,7 @@ import { validateImportRows, type ImportRowValidation, type NormalizedImportRow 
 import { categoryReviewSummary } from "./importExport/aliases";
 import { toImportedTransactionDraft } from "./importExport/recordDraft";
 import { detectImportDuplicates, type ImportDuplicate } from "./importExport/duplicates";
+import { createInitialFundingDraft } from "./onboarding/initialFunding";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -113,6 +114,7 @@ const recordsStorageKey = "mealledger.manual-ledger.records";
 const auditEventsStorageKey = "mealledger.manual-ledger.audit-events";
 const categoriesStorageKey = "mealledger.manual-ledger.custom-categories";
 const sourcesStorageKey = "mealledger.manual-ledger.custom-sources";
+const onboardingStorageKey = "mealledger.onboarding.completed";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -147,6 +149,14 @@ function readStoredAccounts(): LocalAccount[] {
     return Array.isArray(parsed) ? (parsed as LocalAccount[]) : [];
   } catch {
     return [];
+  }
+}
+
+function readOnboardingCompleted(): boolean {
+  try {
+    return window.localStorage.getItem(onboardingStorageKey) === "true";
+  } catch {
+    return false;
   }
 }
 
@@ -402,6 +412,8 @@ function AuthenticatedApp() {
   const { state: authState, message: authMessage, signIn, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
@@ -422,10 +434,11 @@ function AuthenticatedApp() {
       window.localStorage.setItem(accountsStorageKey, JSON.stringify(accounts));
       window.localStorage.setItem(recordsStorageKey, JSON.stringify(records));
       window.localStorage.setItem(auditEventsStorageKey, JSON.stringify(auditEvents));
+      window.localStorage.setItem(onboardingStorageKey, String(onboardingCompleted));
     } catch {
       // Local persistence is best effort; the ledger remains usable for this session.
     }
-  }, [accounts, auditEvents, records]);
+  }, [accounts, auditEvents, onboardingCompleted, records]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -500,13 +513,139 @@ function AuthenticatedApp() {
     return <SignedOutShell authState={authState} authMessage={authMessage} onSignIn={signIn} />;
   }
 
+  if (onboardingOpen || (!onboardingCompleted && accounts.length === 0)) {
+    return (
+      <OnboardingPage
+        onComplete={() => { setOnboardingCompleted(true); setOnboardingOpen(false); }}
+        onAddAccount={(account) => setAccounts((current) => [...current, account])}
+        onSaveInitialFunding={(account, draft) => {
+          const now = new Date().toISOString();
+          const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
+            userId: "local-user",
+            recordId: `record-${draft.id}`,
+            idempotencyKey: `onboarding:${draft.id}`,
+            createdAt: now,
+          });
+
+          if (!bundle) {
+            return false;
+          }
+
+          setRecords((current) => appendIdempotentRecords(current, bundle));
+          setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+          return true;
+        }}
+      />
+    );
+  }
+
   return (
     <main className="app-shell">
       <Sidebar route={route} navigate={navigate} />
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate)}
+        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true))}
+      </section>
+    </main>
+  );
+}
+
+function OnboardingPage({ onComplete, onAddAccount, onSaveInitialFunding }: Readonly<{
+  onComplete: () => void;
+  onAddAccount: (account: LocalAccount) => void;
+  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
+}>) {
+  const [accountName, setAccountName] = useState("");
+  const [accountType, setAccountType] = useState("cash");
+  const [currency, setCurrency] = useState("TWD");
+  const [allowNegativeBalance, setAllowNegativeBalance] = useState(true);
+  const [balanceMode, setBalanceMode] = useState<"zero" | "current">("zero");
+  const [balance, setBalance] = useState("");
+  const [balanceDate, setBalanceDate] = useState(localDate());
+  const [error, setError] = useState("");
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    const account = createLocalAccount(accountName, currency, crypto.randomUUID(), accountType, allowNegativeBalance);
+
+    if (!account) {
+      setError("Enter an account name and currency.");
+      return;
+    }
+
+    if (balanceMode === "current") {
+      const draft = createInitialFundingDraft({ account: account.name, amount: balance, currency: account.currency, date: balanceDate }, `fund-${account.id}`);
+      if (!draft || !onSaveInitialFunding(account, draft)) {
+        setError("Enter a positive current balance and a valid date.");
+        return;
+      }
+    }
+
+    onAddAccount(account);
+    onComplete();
+  };
+
+  return (
+    <main className="signed-out-shell">
+      <section className="signed-out-panel onboarding-panel">
+        <Brand caption="Personal finance records" large />
+        <div>
+          <p className="eyebrow">First setup</p>
+          <h1>Set up your first account</h1>
+          <p className="lede">Your current balance is recorded as initial funds, not income.</p>
+        </div>
+        <form className="onboarding-form" noValidate onSubmit={submit}>
+          <label>
+            <span>Account name</span>
+            <input required value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Daily wallet" />
+          </label>
+          <label>
+            <span>Account type</span>
+            <select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
+              <option value="cash">Cash</option>
+              <option value="bank">Bank account</option>
+              <option value="card">Credit card</option>
+              <option value="wallet">Stored-value wallet</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            <span>Currency</span>
+            <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
+              <option value="TWD">TWD</option>
+              <option value="JPY">JPY</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => setAllowNegativeBalance(event.target.checked)} />
+            <span>Allow negative balance</span>
+          </label>
+          <fieldset>
+            <legend>Starting balance</legend>
+            <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => setBalanceMode("zero")} /> <span>Start from zero</span></label>
+            <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => setBalanceMode("current")} /> <span>Enter current balance</span></label>
+          </fieldset>
+          {balanceMode === "current" ? (
+            <div className="onboarding-balance-fields">
+              <label>
+                <span>Current balance</span>
+                <input required type="number" min="0.01" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="0" />
+              </label>
+              <label>
+                <span>As of date</span>
+                <input required type="date" value={balanceDate} onChange={(event) => setBalanceDate(event.target.value)} />
+              </label>
+            </div>
+          ) : null}
+          <div className="onboarding-actions">
+            <button className="primary-action" type="submit">Create account</button>
+            <button className="quiet-action" type="button" onClick={onComplete}>Skip setup</button>
+          </div>
+          {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
+        </form>
       </section>
     </main>
   );
@@ -570,6 +709,7 @@ function renderRoute(
   accounts: LocalAccount[],
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
+  onReopenOnboarding: () => void,
 ) {
   const draftCount = drafts.length;
   const recordCount = records.length;
@@ -685,6 +825,7 @@ function renderRoute(
             setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
             return true;
           }}
+          onReopenOnboarding={onReopenOnboarding}
         />
       );
     default:
@@ -2213,12 +2354,13 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
   );
 }
 
-function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMergeImportDraft }: Readonly<{
+function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMergeImportDraft, onReopenOnboarding }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onAddAccount: (account: LocalAccount) => void;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
+  onReopenOnboarding: () => void;
 }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
@@ -2253,6 +2395,7 @@ function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMerge
     <section className="content-grid">
       <Panel title="Accounts" eyebrow="Local setup">
         <p className="panel-copy">Create the accounts that manual records may use. This preview keeps them only in the current workspace session.</p>
+        <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
         <form className="draft-form" onSubmit={handleAccountSubmit}>
           <label>
             <span>Account name</span>
