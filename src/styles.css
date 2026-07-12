@@ -123,6 +123,38 @@ a {
   resize: vertical;
 }
 
+.source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.source-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #ebe4d8;
+  border-radius: 8px;
+  background: #fcfaf5;
+}
+
+.source-list-row > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.source-list-row small {
+  color: #69645c;
+}
+
+.source-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (max-width: 560px) {
   .onboarding-balance-fields,
   .onboarding-actions {

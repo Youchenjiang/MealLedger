@@ -38,6 +38,7 @@ import { createInitialFundingDraft } from "./onboarding/initialFunding";
 import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/defaults";
 import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
 import { createMealEntry, type MealEntry } from "./captureMedia/meals";
+import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retainTemporaryScan, type TemporaryScan } from "./captureMedia/media";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -125,6 +126,7 @@ const onboardingStorageKey = "mealledger.onboarding.completed";
 const tagsStorageKey = "mealledger.taxonomy.tags";
 const aliasesStorageKey = "mealledger.taxonomy.aliases";
 const mealsStorageKey = "mealledger.capture.meals";
+const scansStorageKey = "mealledger.capture.temporary-scans";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -210,6 +212,20 @@ function readStoredMeals(): MealEntry[] {
 
     const parsed: unknown = JSON.parse(stored);
     return Array.isArray(parsed) ? parsed as MealEntry[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredScans(): TemporaryScan[] {
+  try {
+    const stored = window.localStorage.getItem(scansStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed as TemporaryScan[] : [];
   } catch {
     return [];
   }
@@ -470,6 +486,7 @@ function AuthenticatedApp() {
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [meals, setMeals] = useState<MealEntry[]>(readStoredMeals);
+  const [scans, setScans] = useState<TemporaryScan[]>(() => expireTemporaryScans(readStoredScans()));
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
@@ -492,10 +509,11 @@ function AuthenticatedApp() {
       window.localStorage.setItem(auditEventsStorageKey, JSON.stringify(auditEvents));
       window.localStorage.setItem(onboardingStorageKey, String(onboardingCompleted));
       window.localStorage.setItem(mealsStorageKey, JSON.stringify(meals));
+      window.localStorage.setItem(scansStorageKey, JSON.stringify(scans));
     } catch {
       // Local persistence is best effort; the ledger remains usable for this session.
     }
-  }, [accounts, auditEvents, meals, onboardingCompleted, records]);
+  }, [accounts, auditEvents, meals, onboardingCompleted, records, scans]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -617,7 +635,7 @@ function AuthenticatedApp() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]))}
+        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)))}
       </section>
     </main>
   );
@@ -785,6 +803,9 @@ function renderRoute(
   navigate: (item: NavItem) => void,
   onReopenOnboarding: () => void,
   onSaveMeal: (meal: MealEntry) => void,
+  scans: TemporaryScan[],
+  onSaveScans: (scans: TemporaryScan[]) => void,
+  onUpdateScan: (scan: TemporaryScan) => void,
 ) {
   const draftCount = drafts.length;
   const recordCount = records.length;
@@ -862,6 +883,9 @@ function renderRoute(
           }}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
           onSaveMeal={onSaveMeal}
+          scans={scans}
+          onSaveScans={onSaveScans}
+          onUpdateScan={onUpdateScan}
         />
       );
     case "settings":
@@ -1463,6 +1487,9 @@ function CapturePage({
   onSaveRecord,
   onSaveDraft,
   onSaveMeal,
+  scans,
+  onSaveScans,
+  onUpdateScan,
 }: Readonly<{
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
@@ -1471,6 +1498,9 @@ function CapturePage({
   onSaveRecord: (draft: TransactionDraft) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
   onSaveMeal: (meal: MealEntry) => void;
+  scans: TemporaryScan[];
+  onSaveScans: (scans: TemporaryScan[]) => void;
+  onUpdateScan: (scan: TemporaryScan) => void;
 }>) {
   const [form, setForm] = useState<DraftForm>(createEmptyDraftForm);
   const [cleanForm, setCleanForm] = useState<DraftForm>(createEmptyDraftForm);
@@ -1495,6 +1525,9 @@ function CapturePage({
   const [mealPhotoNames, setMealPhotoNames] = useState<string[]>([]);
   const [mealError, setMealError] = useState("");
   const [mealSavedMessage, setMealSavedMessage] = useState("");
+  const [scanFiles, setScanFiles] = useState<File[]>([]);
+  const [scanError, setScanError] = useState("");
+  const [scanSavedMessage, setScanSavedMessage] = useState("");
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(cleanForm);
 
   useEffect(() => {
@@ -1758,6 +1791,29 @@ function CapturePage({
     setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
     setMealNote("");
     setMealPhotoNames([]);
+  };
+
+  const handleScanSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setScanError("");
+    setScanSavedMessage("");
+    if (scanFiles.length === 0 || (captureIntent !== "scan-invoice" && captureIntent !== "scan-receipt")) {
+      setScanError("Choose at least one scan image before saving.");
+      return;
+    }
+
+    const nextScans = scanFiles
+      .map((file, index) => createTemporaryScan({
+        intent: captureIntent,
+        fileName: file.name,
+        mimeType: file.type,
+        byteSize: file.size,
+      }, `scan-${crypto.randomUUID()}-${index}`))
+      .filter((scan): scan is TemporaryScan => Boolean(scan));
+
+    onSaveScans(nextScans);
+    setScanFiles([]);
+    setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
   };
 
   const addQuickAccount = () => {
@@ -2308,6 +2364,33 @@ function CapturePage({
             {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
             {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
           </form>
+        </Panel>
+      ) : captureIntent === "scan-invoice" || captureIntent === "scan-receipt" ? (
+        <Panel title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
+          <p className="panel-copy">Scans remain temporary until you explicitly keep or discard them. They do not create official ledger records.</p>
+          <form className="meal-form" onSubmit={handleScanSubmit}>
+            <label>
+              <span>Scan images</span>
+              <input accept="image/*" multiple type="file" onChange={(event) => { setScanFiles(Array.from(event.target.files ?? [])); setScanError(""); }} />
+            </label>
+            {scanFiles.length > 0 ? <p className="field-help">Selected {scanFiles.length} image{scanFiles.length === 1 ? "" : "s"}.</p> : null}
+            <button className="primary-action align-start" type="submit">Save scan drafts</button>
+            {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
+            {scanSavedMessage ? <p className="auth-message" role="status">{scanSavedMessage}</p> : null}
+          </form>
+          <div className="source-list" aria-label="Temporary scans">
+            {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => (
+              <div className="source-list-row" key={scan.id}>
+                <span><strong>{scan.fileName}</strong><small>{scan.state === "temporary" ? "Temporary · expires in 24 hours" : "Retained source"}</small></span>
+                {scan.state === "temporary" ? (
+                  <span className="source-list-actions">
+                    <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>Keep source</button>
+                    <button className="quiet-action" type="button" onClick={() => onUpdateScan(discardTemporaryScan(scan))}>Discard</button>
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </Panel>
       ) : (
         <Panel title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">

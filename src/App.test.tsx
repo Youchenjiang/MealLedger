@@ -142,6 +142,27 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
   });
 
+  test("keeps scanned sources separate from official ledger records", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: /Scan receipt/ }));
+    await user.upload(screen.getByLabelText("Scan images"), new File(["scan"], "receipt.jpg", { type: "image/jpeg" }));
+    await user.click(screen.getByRole("button", { name: "Save scan drafts" }));
+
+    expect(screen.getByText("1 scan draft saved locally for review.")).toBeInTheDocument();
+    expect(screen.getByText("receipt.jpg")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Keep source" }));
+    expect(screen.getByText("Retained source")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.capture.temporary-scans") ?? "[]")).toEqual(
+      [expect.objectContaining({ state: "retained", expiresAt: null })],
+    );
+  });
+
   test("saves explicit fixed labels when expense details are unavailable", async () => {
     const user = userEvent.setup();
     renderWorkspace();
