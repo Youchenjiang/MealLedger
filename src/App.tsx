@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
@@ -650,6 +650,28 @@ function LedgerPage({
                   <span className="record-state-label">Voided</span>
                 ) : (
                   <div className="record-actions">
+                    {record.recurrenceStatus === "active" || record.recurrenceStatus === "paused" ? (
+                      <button
+                        className="text-action"
+                        type="button"
+                        onClick={() => onUpdateRecord(record.id, { recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}
+                      >
+                        {record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}
+                      </button>
+                    ) : null}
+                    {record.recurrenceStatus === "active" || record.recurrenceStatus === "paused" ? (
+                      <button
+                        className="text-action danger-action"
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm("Cancel future recurrence for this record?")) {
+                            onUpdateRecord(record.id, { recurrenceStatus: "cancelled" });
+                          }
+                        }}
+                      >
+                        Cancel recurring
+                      </button>
+                    ) : null}
                     <button className="text-action" type="button" onClick={() => setEditingRecordId(record.id)}>Edit</button>
                     <button
                       className="text-action danger-action"
@@ -967,6 +989,8 @@ function CapturePage({
     refundSubtype: "refund",
     refundLinkedRecordId: "",
     refundExcessHandling: "unclassified",
+    recurrenceChoice: "current-cycle-only",
+    recurrenceAmountMode: "fixed",
     reason: "",
     timePrecision: "day",
     periodStart: "",
@@ -1048,6 +1072,8 @@ function CapturePage({
       && selectedRefundRecord
       && Number(form.amount) > Number(selectedRefundRecord.amount),
   );
+  const supportsRecurrence = form.kind === "expense" || form.kind === "income" || form.kind === "transfer";
+  const autoRecordAllowed = canAutoRecordNextCycle(form, accounts);
 
   const selectSourceAccount = (name: string) => {
     const account = accounts.find((item) => item.name === name);
@@ -1183,6 +1209,8 @@ function CapturePage({
       refundSubtype: "refund",
       refundLinkedRecordId: "",
       refundExcessHandling: "unclassified",
+      recurrenceChoice: "current-cycle-only",
+      recurrenceAmountMode: "fixed",
       reason: "",
       periodStart: "",
       periodEnd: "",
@@ -1627,6 +1655,45 @@ function CapturePage({
             </label>
           ) : null}
           </fieldset>
+          {supportsRecurrence ? (
+            <fieldset className="recurrence-control full-span" aria-label="Recurrence">
+              <legend>Next cycle</legend>
+              <label htmlFor="entry-recurrence-choice">
+                <span>Record behavior</span>
+              </label>
+              <select
+                id="entry-recurrence-choice"
+                disabled={!hasSelectedAccount}
+                value={form.recurrenceChoice}
+                onChange={(event) => updateForm("recurrenceChoice", event.target.value as DraftForm["recurrenceChoice"])}
+              >
+                <option value="current-cycle-only">Current cycle only</option>
+                <option value="prompt-next-cycle">Ask me next cycle</option>
+                <option value="auto-record-next-cycle" disabled={!autoRecordAllowed}>Auto-record next cycle</option>
+              </select>
+              <label className="checkbox-field inline-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.recurrenceAmountMode === "variable"}
+                  disabled={!hasSelectedAccount}
+                  onChange={(event) => {
+                    const variable = event.target.checked;
+                    setFormError(null);
+                    setSavedMessage("");
+                    setForm((current) => ({
+                      ...current,
+                      recurrenceAmountMode: variable ? "variable" : "fixed",
+                      recurrenceChoice: variable && current.recurrenceChoice === "auto-record-next-cycle" ? "prompt-next-cycle" : current.recurrenceChoice,
+                    }));
+                  }}
+                />
+                <span>Amount may vary next cycle</span>
+              </label>
+              {form.recurrenceChoice === "auto-record-next-cycle" && !autoRecordAllowed ? (
+                <p className="field-help">Auto-record needs a complete fixed-amount record.</p>
+              ) : null}
+            </fieldset>
+          ) : null}
           {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
           {savedMessage ? <p className="form-success full-span" role="status">{savedMessage}</p> : null}
           <button className="primary-action align-start" disabled={!hasSelectedAccount} type="submit">

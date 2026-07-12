@@ -1,8 +1,9 @@
 import type { LocalAccount } from "./accounts";
-import { canCreateManualDraft, type DraftAccount, type DraftKind, type TransactionDraft } from "../appShell/drafts";
+import { canCreateManualDraft, type DraftAccount, type DraftKind, type RecurrenceChoice, type TransactionDraft } from "../appShell/drafts";
 
 export type LocalRecordStatus = "local-only" | "synced";
 export type LocalRecordState = "active" | "voided";
+export type LocalRecurrenceStatus = "inactive" | "active" | "paused" | "cancelled";
 
 export type LocalLedgerRecord = {
   id: string;
@@ -36,6 +37,9 @@ export type LocalLedgerRecord = {
   refundSubtype: TransactionDraft["refundSubtype"];
   refundLinkedRecordId: string;
   refundExcessHandling: TransactionDraft["refundExcessHandling"];
+  recurrenceChoice: RecurrenceChoice;
+  recurrenceAmountMode: TransactionDraft["recurrenceAmountMode"];
+  recurrenceStatus: LocalRecurrenceStatus;
   reason: string;
   timePrecision: TransactionDraft["timePrecision"];
   periodStart: string;
@@ -72,7 +76,7 @@ export type OfficialRecordOptions = {
 
 export type EditableRecordFields = Pick<
   LocalLedgerRecord,
-  "amount" | "category" | "counterparty" | "itemName" | "refundReason" | "reason" | "note"
+  "amount" | "category" | "counterparty" | "itemName" | "refundReason" | "reason" | "note" | "recurrenceStatus"
 >;
 
 function accountByName(accounts: LocalAccount[], name: string): LocalAccount | undefined {
@@ -143,6 +147,9 @@ function createRecord(
     refundSubtype: draft.refundSubtype,
     refundLinkedRecordId: draft.refundLinkedRecordId,
     refundExcessHandling: draft.refundExcessHandling,
+    recurrenceChoice: draft.recurrenceChoice,
+    recurrenceAmountMode: draft.recurrenceAmountMode,
+    recurrenceStatus: draft.recurrenceChoice === "current-cycle-only" ? "inactive" : "active",
     reason: draft.reason,
     timePrecision: draft.timePrecision,
     periodStart: draft.periodStart,

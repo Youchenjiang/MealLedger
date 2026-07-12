@@ -25,6 +25,8 @@ const completeExpense: DraftForm = {
   refundSubtype: "refund",
   refundLinkedRecordId: "",
   refundExcessHandling: "unclassified",
+  recurrenceChoice: "current-cycle-only",
+  recurrenceAmountMode: "fixed",
   reason: "",
   timePrecision: "day",
   periodStart: "",
@@ -58,6 +60,13 @@ describe("manual transaction drafts", () => {
     expect(canCreate(missingExpense)).toBe(true);
     expect(canCreate({ ...missingExpense, counterparty: "Unknown merchant" })).toBe(false);
     expect(canCreate({ ...missingExpense, itemName: "Unknown item" })).toBe(false);
+  });
+
+  test("allows auto-record only for complete fixed-amount records", () => {
+    expect(canCreate({ ...completeExpense, recurrenceChoice: "auto-record-next-cycle" })).toBe(true);
+    expect(canCreate({ ...completeExpense, recurrenceChoice: "auto-record-next-cycle", recurrenceAmountMode: "variable" })).toBe(false);
+    expect(canCreate({ ...completeExpense, recurrenceChoice: "auto-record-next-cycle", amount: "" })).toBe(false);
+    expect(canCreate({ ...completeExpense, recurrenceChoice: "prompt-next-cycle", recurrenceAmountMode: "variable" })).toBe(true);
   });
 
   test("uses transfer-specific requirements without merchant or category", () => {

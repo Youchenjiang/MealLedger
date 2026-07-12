@@ -7,6 +7,8 @@ export type TransferMode = "same-currency" | "cross-currency";
 export type TimePrecision = "day" | "month" | "period";
 export type RefundSubtype = "refund" | "payback";
 export type RefundExcessHandling = "unclassified" | "income" | "negative-expense";
+export type RecurrenceChoice = "current-cycle-only" | "prompt-next-cycle" | "auto-record-next-cycle";
+export type RecurrenceAmountMode = "fixed" | "variable";
 export const missingCounterpartyLabel = "Merchant unavailable";
 export const missingItemNameLabel = "Item unavailable";
 
@@ -34,6 +36,8 @@ export type DraftForm = {
   refundSubtype: RefundSubtype;
   refundLinkedRecordId: string;
   refundExcessHandling: RefundExcessHandling;
+  recurrenceChoice: RecurrenceChoice;
+  recurrenceAmountMode: RecurrenceAmountMode;
   reason: string;
   timePrecision: TimePrecision;
   periodStart: string;
@@ -166,6 +170,10 @@ function hasValidFeeAccount(form: DraftForm, accounts: DraftAccount[]): boolean 
 export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]): boolean {
   const normalized = normalizeDraftForm(form);
 
+  if (normalized.recurrenceChoice === "auto-record-next-cycle" && !canAutoRecordNextCycle(normalized, accounts)) {
+    return false;
+  }
+
   if (!hasMatchingAccountCurrency(normalized, accounts)) {
     return false;
   }
@@ -227,6 +235,14 @@ export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]):
       return hasRequiredFields(normalized, ["periodStart", "periodEnd"])
         && normalized.periodStart <= normalized.periodEnd;
   }
+}
+
+export function canAutoRecordNextCycle(form: DraftForm, accounts: DraftAccount[]): boolean {
+  if (form.recurrenceAmountMode !== "fixed" || !form.amount.trim()) {
+    return false;
+  }
+
+  return canCreateManualDraft({ ...form, recurrenceChoice: "current-cycle-only" }, accounts);
 }
 
 export function createTransactionDraft(form: DraftForm, id: string, accounts: DraftAccount[]): TransactionDraft | null {

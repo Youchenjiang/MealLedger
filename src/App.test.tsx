@@ -103,6 +103,35 @@ describe("App shell draft flow", () => {
     );
   });
 
+  test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.type(screen.getByLabelText("Merchant", { exact: true }), "全聯");
+    await user.type(screen.getByLabelText("Item name", { exact: true }), "香蕉");
+    await user.clear(screen.getByLabelText("Amount", { exact: true }));
+    await user.type(screen.getByLabelText("Amount", { exact: true }), "417");
+
+    const recurrence = screen.getByLabelText("Record behavior");
+    expect(within(recurrence).getByRole("option", { name: "Auto-record next cycle" })).toBeEnabled();
+
+    await user.click(screen.getByRole("checkbox", { name: "Amount may vary next cycle" }));
+    expect(within(recurrence).getByRole("option", { name: "Auto-record next cycle" })).toBeDisabled();
+
+    await user.click(screen.getByRole("checkbox", { name: "Amount may vary next cycle" }));
+    await user.selectOptions(recurrence, "auto-record-next-cycle");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
+
+    expect(screen.getByRole("button", { name: "Pause recurring" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel recurring" })).toBeInTheDocument();
+  });
+
   test("opens the workspace and navigates between core routes", async () => {
     const user = userEvent.setup();
     renderWorkspace();

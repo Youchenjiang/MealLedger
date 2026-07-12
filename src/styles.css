@@ -565,6 +565,27 @@ h2 {
   font-weight: 700;
 }
 
+.recurrence-control {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid #e2d9cb;
+}
+
+.recurrence-control legend {
+  padding: 0;
+  color: #4c4740;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recurrence-control > label:not(.checkbox-field) {
+  display: grid;
+  gap: 6px;
+}
+
 .segmented-control label {
   display: inline-flex;
   align-items: center;

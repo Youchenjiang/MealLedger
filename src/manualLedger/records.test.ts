@@ -33,6 +33,8 @@ const expense: TransactionDraft = {
   refundSubtype: "refund",
   refundLinkedRecordId: "",
   refundExcessHandling: "unclassified",
+  recurrenceChoice: "current-cycle-only",
+  recurrenceAmountMode: "fixed",
   reason: "",
   timePrecision: "day",
   periodStart: "",
@@ -84,6 +86,21 @@ describe("local official ledger records", () => {
       counterpartyMissing: true,
       itemName: "Item unavailable",
       itemNameMissing: true,
+    });
+  });
+
+  test("persists recurrence intent with an active lifecycle status", () => {
+    const recurringExpense: TransactionDraft = {
+      ...expense,
+      recurrenceChoice: "auto-record-next-cycle",
+    };
+
+    const bundle = createOfficialRecordBundle(recurringExpense, accounts, options);
+
+    expect(bundle?.records[0]).toMatchObject({
+      recurrenceChoice: "auto-record-next-cycle",
+      recurrenceAmountMode: "fixed",
+      recurrenceStatus: "active",
     });
   });
 
