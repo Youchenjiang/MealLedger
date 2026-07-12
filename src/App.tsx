@@ -23,7 +23,7 @@ import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
-import { appendIdempotentRecords, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
+import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -479,6 +479,21 @@ function renderRoute(
             setRecords((current) => current.map((item) => item.id === id ? result.record : item));
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
+          onConvertUnresolved={(id, fields) => {
+            const record = records.find((item) => item.id === id);
+            if (!record) {
+              return false;
+            }
+
+            const result = convertUnresolvedExpense(record, fields, accounts, new Date().toISOString());
+            if (!result) {
+              return false;
+            }
+
+            setRecords((current) => current.map((item) => item.id === id ? result.record : item));
+            setAuditEvents((current) => [...current, result.auditEvent]);
+            return true;
+          }}
           onVoidRecord={(id) => {
             const record = records.find((item) => item.id === id);
             if (!record || record.recordState === "voided") {
@@ -572,6 +587,7 @@ function LedgerPage({
   navigate,
   onDiscardDraft,
   onUpdateRecord,
+  onConvertUnresolved,
   onVoidRecord,
 }: Readonly<{
   records: LocalLedgerRecord[];
@@ -579,10 +595,12 @@ function LedgerPage({
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
+  onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
   onVoidRecord: (id: string) => void;
 }>) {
   const draftCount = drafts.length;
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
   const ledgerColumns = [
     "Record ID",
     "Date",
@@ -626,7 +644,20 @@ function LedgerPage({
             <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
           </div>
           {records.map((record) => (
-            editingRecordId === record.id && record.recordState !== "voided" ? (
+            editingUnresolvedId === record.id && record.recordState !== "voided" ? (
+              <UnresolvedExpenseEditor
+                key={record.id}
+                record={record}
+                onCancel={() => setEditingUnresolvedId(null)}
+                onConvert={(fields) => {
+                  const converted = onConvertUnresolved(record.id, fields);
+                  if (converted) {
+                    setEditingUnresolvedId(null);
+                  }
+                  return converted;
+                }}
+              />
+            ) : editingRecordId === record.id && record.recordState !== "voided" ? (
               <RecordEditor
                 key={record.id}
                 record={record}
@@ -650,6 +681,9 @@ function LedgerPage({
                   <span className="record-state-label">Voided</span>
                 ) : (
                   <div className="record-actions">
+                    {record.kind === "unresolved-expense" ? (
+                      <button className="text-action" type="button" onClick={() => setEditingUnresolvedId(record.id)}>Complete details</button>
+                    ) : null}
                     {record.recurrenceStatus === "active" || record.recurrenceStatus === "paused" ? (
                       <button
                         className="text-action"
@@ -731,6 +765,83 @@ function LedgerPage({
         {records.length === 0 ? <div className="table-empty">No confirmed ledger records yet.</div> : null}
       </section>
     </div>
+  );
+}
+
+function UnresolvedExpenseEditor({
+  record,
+  onCancel,
+  onConvert,
+}: Readonly<{
+  record: LocalLedgerRecord;
+  onCancel: () => void;
+  onConvert: (fields: UnresolvedExpenseConversion) => boolean;
+}>) {
+  const [localDate, setLocalDate] = useState(record.localDate || record.periodStart);
+  const [category, setCategory] = useState(record.category);
+  const [counterparty, setCounterparty] = useState(record.counterparty);
+  const [counterpartyMissing, setCounterpartyMissing] = useState(record.counterpartyMissing);
+  const [itemName, setItemName] = useState(record.itemName);
+  const [itemNameMissing, setItemNameMissing] = useState(record.itemNameMissing);
+  const [error, setError] = useState("");
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    const converted = onConvert({
+      localDate,
+      category,
+      counterparty,
+      counterpartyMissing,
+      itemName,
+      itemNameMissing,
+    });
+
+    if (!converted) {
+      setError("Add a date, category, and valid merchant/item details before converting.");
+    }
+  };
+
+  return (
+    <form className="record-editor" aria-label={`Complete ${recordDisplayName(record)}`} onSubmit={handleSubmit}>
+      <label>
+        <span>Date</span>
+        <input required type="date" value={localDate} onChange={(event) => setLocalDate(event.target.value)} />
+      </label>
+      <label>
+        <span>Category</span>
+        <input required value={category} onChange={(event) => setCategory(event.target.value)} />
+      </label>
+      <div className="form-field">
+        <label htmlFor={`unresolved-merchant-${record.id}`}>Merchant</label>
+        <input id={`unresolved-merchant-${record.id}`} required pattern=".*\S.*" disabled={counterpartyMissing} value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
+        <label className="checkbox-field inline-checkbox">
+          <input type="checkbox" checked={counterpartyMissing} onChange={(event) => {
+            const missing = event.target.checked;
+            setCounterpartyMissing(missing);
+            setCounterparty(missing ? missingCounterpartyLabel : "");
+          }} />
+          <span>Merchant unavailable</span>
+        </label>
+      </div>
+      <div className="form-field">
+        <label htmlFor={`unresolved-item-${record.id}`}>Item name</label>
+        <input id={`unresolved-item-${record.id}`} required pattern=".*\S.*" disabled={itemNameMissing} value={itemName} onChange={(event) => setItemName(event.target.value)} />
+        <label className="checkbox-field inline-checkbox">
+          <input type="checkbox" checked={itemNameMissing} onChange={(event) => {
+            const missing = event.target.checked;
+            setItemNameMissing(missing);
+            setItemName(missing ? missingItemNameLabel : "");
+          }} />
+          <span>Item unavailable</span>
+        </label>
+      </div>
+      {error ? <p className="form-error full-span" role="alert">{error}</p> : null}
+      <div className="record-editor-actions full-span">
+        <button className="primary-action" type="submit">Convert to expense</button>
+        <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
   );
 }
 

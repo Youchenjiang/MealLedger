@@ -79,6 +79,11 @@ export type EditableRecordFields = Pick<
   "amount" | "category" | "counterparty" | "itemName" | "refundReason" | "reason" | "note" | "recurrenceStatus"
 >;
 
+export type UnresolvedExpenseConversion = Pick<
+  LocalLedgerRecord,
+  "localDate" | "category" | "counterparty" | "counterpartyMissing" | "itemName" | "itemNameMissing"
+>;
+
 function accountByName(accounts: LocalAccount[], name: string): LocalAccount | undefined {
   return accounts.find((account) => account.name === name);
 }
@@ -276,6 +281,73 @@ export function updateOfficialRecord(
   return {
     record: updatedRecord,
     auditEvent: auditEvent(updatedRecord, "record-updated", changedFields, updatedAt),
+  };
+}
+
+export function convertUnresolvedExpense(
+  record: LocalLedgerRecord,
+  fields: UnresolvedExpenseConversion,
+  accounts: LocalAccount[],
+  updatedAt: string,
+): { record: LocalLedgerRecord; auditEvent: LocalAuditEvent } | null {
+  if (record.kind !== "unresolved-expense" || record.recordState === "voided") {
+    return null;
+  }
+
+  const draft: TransactionDraft = {
+    id: record.id,
+    date: fields.localDate.trim(),
+    account: record.accountName,
+    kind: "expense",
+    category: fields.category,
+    counterparty: fields.counterparty,
+    counterpartyMissing: fields.counterpartyMissing,
+    itemName: fields.itemName,
+    itemNameMissing: fields.itemNameMissing,
+    transferAccount: "",
+    transferMode: "same-currency",
+    amount: record.amount,
+    currency: record.currency,
+    destinationAmount: "",
+    destinationCurrency: "",
+    feeEnabled: false,
+    feeAccount: "",
+    feeAmount: "",
+    feeCurrency: "",
+    feeCategory: "",
+    refundReason: "",
+    refundSubtype: "refund",
+    refundLinkedRecordId: "",
+    refundExcessHandling: "unclassified",
+    recurrenceChoice: record.recurrenceChoice,
+    recurrenceAmountMode: record.recurrenceAmountMode,
+    reason: "",
+    timePrecision: "day",
+    periodStart: "",
+    periodEnd: "",
+    note: record.note,
+  };
+
+  if (!canCreateManualDraft(draft, asDraftAccounts(accounts))) {
+    return null;
+  }
+
+  const convertedRecord: LocalLedgerRecord = {
+    ...record,
+    kind: "expense",
+    localDate: draft.date,
+    category: draft.category,
+    counterparty: draft.counterparty,
+    counterpartyMissing: draft.counterpartyMissing,
+    itemName: draft.itemName,
+    itemNameMissing: draft.itemNameMissing,
+    version: record.version + 1,
+    updatedAt,
+  };
+
+  return {
+    record: convertedRecord,
+    auditEvent: auditEvent(convertedRecord, "record-updated", ["kind", "localDate", "category", "counterparty", "itemName"], updatedAt),
   };
 }
 

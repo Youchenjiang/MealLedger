@@ -139,6 +139,36 @@ describe("App shell draft flow", () => {
     expect(screen.queryByRole("button", { name: "Cancel recurring" })).not.toBeInTheDocument();
   });
 
+  test("converts an unresolved expense in place after completing its details", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Type"), "unresolved-expense");
+    await user.click(screen.getByRole("radio", { name: "Day" }));
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.clear(screen.getByLabelText("Date"));
+    await user.type(screen.getByLabelText("Date"), "2026-07-12");
+    await user.clear(screen.getByLabelText("Amount", { exact: true }));
+    await user.type(screen.getByLabelText("Amount", { exact: true }), "80");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
+
+    await user.click(screen.getByRole("button", { name: "Complete details" }));
+    const editor = screen.getByRole("form", { name: "Complete unresolved-expense" });
+    await user.clear(within(editor).getByLabelText("Date"));
+    await user.type(within(editor).getByLabelText("Date"), "2026-07-12");
+    await user.type(within(editor).getByLabelText("Category"), "Daily");
+    await user.type(within(editor).getByLabelText("Merchant"), "Store");
+    await user.type(within(editor).getByLabelText("Item name"), "Tea");
+    await user.click(within(editor).getByRole("button", { name: "Convert to expense" }));
+
+    expect(screen.getByText("Store")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Complete details" })).not.toBeInTheDocument();
+  });
+
   test("opens the workspace and navigates between core routes", async () => {
     const user = userEvent.setup();
     renderWorkspace();

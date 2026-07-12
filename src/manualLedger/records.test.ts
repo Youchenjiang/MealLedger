@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "./accounts";
-import { appendIdempotentRecords, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord } from "./records";
+import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord } from "./records";
 
 const accounts: LocalAccount[] = [
   { id: "cash-id", name: "Cash", currency: "TWD" },
@@ -102,6 +102,63 @@ describe("local official ledger records", () => {
       recurrenceAmountMode: "fixed",
       recurrenceStatus: "active",
     });
+  });
+
+  test("converts an unresolved expense in place and records the audit change", () => {
+    const unresolved: TransactionDraft = {
+      ...expense,
+      kind: "unresolved-expense",
+      date: "",
+      category: "",
+      counterparty: "",
+      itemName: "",
+      timePrecision: "month",
+      periodStart: "2026-07-01",
+      periodEnd: "2026-07-31",
+    };
+    const bundle = createOfficialRecordBundle(unresolved, accounts, options);
+    if (!bundle) {
+      throw new Error("Expected a valid unresolved record.");
+    }
+
+    const result = convertUnresolvedExpense(bundle.records[0], {
+      localDate: "2026-07-12",
+      category: "Daily",
+      counterparty: "Store",
+      counterpartyMissing: false,
+      itemName: "Tea",
+      itemNameMissing: false,
+    }, accounts, "2026-07-12T13:00:00.000Z");
+
+    expect(result?.record).toMatchObject({ id: "record-1", kind: "expense", localDate: "2026-07-12", version: 2 });
+    expect(result?.auditEvent).toMatchObject({ eventType: "record-updated", targetId: "record-1" });
+  });
+
+  test("rejects unresolved conversion without the required details", () => {
+    const unresolved: TransactionDraft = {
+      ...expense,
+      kind: "unresolved-expense",
+      date: "",
+      category: "",
+      counterparty: "",
+      itemName: "",
+      timePrecision: "month",
+      periodStart: "2026-07-01",
+      periodEnd: "2026-07-31",
+    };
+    const bundle = createOfficialRecordBundle(unresolved, accounts, options);
+    if (!bundle) {
+      throw new Error("Expected a valid unresolved record.");
+    }
+
+    expect(convertUnresolvedExpense(bundle.records[0], {
+      localDate: "2026-07-12",
+      category: "",
+      counterparty: "Store",
+      counterpartyMissing: false,
+      itemName: "Tea",
+      itemNameMissing: false,
+    }, accounts, "2026-07-12T13:00:00.000Z")).toBeNull();
   });
 
   test("updates editable fields with a new version and audit event", () => {
