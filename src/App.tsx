@@ -22,7 +22,7 @@ import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { createTransactionDraft, draftKinds, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
-import { appendIdempotentRecords, createOfficialRecordBundle, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
+import { appendIdempotentRecords, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -60,8 +60,10 @@ function localDate(): string {
 let draftSequence = 0;
 
 const draftsStorageKey = "mealledger.app-shell.drafts";
+const accountsStorageKey = "mealledger.manual-ledger.accounts";
 const recordsStorageKey = "mealledger.manual-ledger.records";
 const auditEventsStorageKey = "mealledger.manual-ledger.audit-events";
+const categoriesStorageKey = "mealledger.manual-ledger.custom-categories";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -80,6 +82,34 @@ function readStoredRecords(): LocalLedgerRecord[] {
 
     const parsed: unknown = JSON.parse(stored);
     return Array.isArray(parsed) ? (parsed as LocalLedgerRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredAccounts(): LocalAccount[] {
+  try {
+    const stored = window.localStorage.getItem(accountsStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as LocalAccount[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredCategories(): string[] {
+  try {
+    const stored = window.localStorage.getItem(categoriesStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed as string[] : [];
   } catch {
     return [];
   }
@@ -285,7 +315,7 @@ export function App() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [accounts, setAccounts] = useState<LocalAccount[]>([]);
+  const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
@@ -303,12 +333,13 @@ export function App() {
 
   useEffect(() => {
     try {
+      window.localStorage.setItem(accountsStorageKey, JSON.stringify(accounts));
       window.localStorage.setItem(recordsStorageKey, JSON.stringify(records));
       window.localStorage.setItem(auditEventsStorageKey, JSON.stringify(auditEvents));
     } catch {
       // Local persistence is best effort; the ledger remains usable for this session.
     }
-  }, [auditEvents, records]);
+  }, [accounts, auditEvents, records]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -437,6 +468,26 @@ function renderRoute(
           drafts={drafts}
           navigate={navigate}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          onUpdateRecord={(id, patch) => {
+            const record = records.find((item) => item.id === id);
+            if (!record || record.recordState === "voided") {
+              return;
+            }
+
+            const result = updateOfficialRecord(record, patch, new Date().toISOString());
+            setRecords((current) => current.map((item) => item.id === id ? result.record : item));
+            setAuditEvents((current) => [...current, result.auditEvent]);
+          }}
+          onVoidRecord={(id) => {
+            const record = records.find((item) => item.id === id);
+            if (!record || record.recordState === "voided") {
+              return;
+            }
+
+            const result = voidOfficialRecord(record, new Date().toISOString());
+            setRecords((current) => current.map((item) => item.id === id ? result.record : item));
+            setAuditEvents((current) => [...current, result.auditEvent]);
+          }}
         />
       );
     case "capture":
@@ -510,13 +561,18 @@ function LedgerPage({
   drafts,
   navigate,
   onDiscardDraft,
+  onUpdateRecord,
+  onVoidRecord,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
+  onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
+  onVoidRecord: (id: string) => void;
 }>) {
   const draftCount = drafts.length;
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const ledgerColumns = [
     "Record ID",
     "Date",
@@ -560,16 +616,46 @@ function LedgerPage({
             <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
           </div>
           {records.map((record) => (
-            <article className="draft-card" key={record.id}>
-              <div>
-                <strong>{recordDisplayName(record)}</strong>
-                <span>{record.localDate} · {record.accountName} · {record.category || record.reason || "No category"}</span>
-              </div>
-              <div className="draft-amount">
-                <strong>{record.currency} {record.amount}</strong>
-                <span>{record.kind} · {record.status}</span>
-              </div>
-            </article>
+            editingRecordId === record.id && record.recordState !== "voided" ? (
+              <RecordEditor
+                key={record.id}
+                record={record}
+                onCancel={() => setEditingRecordId(null)}
+                onSave={(patch) => {
+                  onUpdateRecord(record.id, patch);
+                  setEditingRecordId(null);
+                }}
+              />
+            ) : (
+              <article className={`draft-card ${record.recordState === "voided" ? "voided-record" : ""}`} key={record.id}>
+                <div>
+                  <strong>{recordDisplayName(record)}</strong>
+                  <span>{record.localDate} · {record.accountName} · {record.category || record.reason || "No category"}</span>
+                </div>
+                <div className="draft-amount">
+                  <strong>{record.currency} {record.amount}</strong>
+                  <span>{record.kind} · {record.recordState === "voided" ? "voided" : record.status}</span>
+                </div>
+                {record.recordState === "voided" ? (
+                  <span className="record-state-label">Voided</span>
+                ) : (
+                  <div className="record-actions">
+                    <button className="text-action" type="button" onClick={() => setEditingRecordId(record.id)}>Edit</button>
+                    <button
+                      className="text-action danger-action"
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Void this ledger record? It will remain in history and be excluded from active totals.")) {
+                          onVoidRecord(record.id);
+                        }
+                      }}
+                    >
+                      Void
+                    </button>
+                  </div>
+                )}
+              </article>
+            )
           ))}
         </section>
       ) : null}
@@ -613,6 +699,59 @@ function LedgerPage({
         {records.length === 0 ? <div className="table-empty">No confirmed ledger records yet.</div> : null}
       </section>
     </div>
+  );
+}
+
+function RecordEditor({
+  record,
+  onSave,
+  onCancel,
+}: Readonly<{
+  record: LocalLedgerRecord;
+  onSave: (patch: Partial<EditableRecordFields>) => void;
+  onCancel: () => void;
+}>) {
+  const [amount, setAmount] = useState(record.amount);
+  const [category, setCategory] = useState(record.category);
+  const [counterparty, setCounterparty] = useState(record.counterparty);
+  const [itemName, setItemName] = useState(record.itemName);
+  const [reason, setReason] = useState(record.reason);
+  const [note, setNote] = useState(record.note);
+
+  return (
+    <form className="record-editor" aria-label={`Edit ${recordDisplayName(record)}`} onSubmit={(event) => {
+      event.preventDefault();
+      onSave({ amount, category, counterparty, itemName, reason, note });
+    }}>
+      <label>
+        <span>Amount</span>
+        <input required inputMode="decimal" type="number" step="any" value={amount} onChange={(event) => setAmount(event.target.value)} />
+      </label>
+      <label>
+        <span>Category</span>
+        <input value={category} onChange={(event) => setCategory(event.target.value)} />
+      </label>
+      <label>
+        <span>Merchant / source</span>
+        <input value={counterparty} onChange={(event) => setCounterparty(event.target.value)} />
+      </label>
+      <label>
+        <span>Item name</span>
+        <input value={itemName} onChange={(event) => setItemName(event.target.value)} />
+      </label>
+      <label>
+        <span>Reason</span>
+        <input value={reason} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      <label className="full-span">
+        <span>Note</span>
+        <textarea value={note} onChange={(event) => setNote(event.target.value)} />
+      </label>
+      <div className="record-editor-actions full-span">
+        <button className="primary-action" type="submit">Save changes</button>
+        <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
   );
 }
 
@@ -785,11 +924,19 @@ function CapturePage({
   const [quickAccountName, setQuickAccountName] = useState("");
   const [quickAccountCurrency, setQuickAccountCurrency] = useState("TWD");
   const [quickAccountError, setQuickAccountError] = useState("");
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [quickCategoryName, setQuickCategoryName] = useState("");
   const [quickCategoryError, setQuickCategoryError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
+    } catch {
+      // Category persistence is best effort while the account and record stores remain local-first.
+    }
+  }, [customCategories]);
 
   const recordCount = records.length;
   const actions = [

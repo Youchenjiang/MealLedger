@@ -2,6 +2,7 @@ import type { LocalAccount } from "./accounts";
 import { canCreateManualDraft, type DraftAccount, type DraftKind, type TransactionDraft } from "../appShell/drafts";
 
 export type LocalRecordStatus = "local-only" | "synced";
+export type LocalRecordState = "active" | "voided";
 
 export type LocalLedgerRecord = {
   id: string;
@@ -9,6 +10,7 @@ export type LocalLedgerRecord = {
   userId: string;
   kind: DraftKind;
   status: LocalRecordStatus;
+  recordState: LocalRecordState;
   version: number;
   localDate: string;
   accountId: string;
@@ -42,7 +44,7 @@ export type LocalLedgerRecord = {
 export type LocalAuditEvent = {
   id: string;
   userId: string;
-  eventType: "record-created";
+  eventType: "record-created" | "record-updated" | "record-voided";
   targetType: "ledger-record";
   targetId: string;
   summary: string;
@@ -62,6 +64,11 @@ export type OfficialRecordOptions = {
   createdAt: string;
   feeRecordId?: string;
 };
+
+export type EditableRecordFields = Pick<
+  LocalLedgerRecord,
+  "amount" | "category" | "counterparty" | "itemName" | "refundReason" | "reason" | "note"
+>;
 
 function accountByName(accounts: LocalAccount[], name: string): LocalAccount | undefined {
   return accounts.find((account) => account.name === name);
@@ -105,6 +112,7 @@ function createRecord(
     userId: options.userId,
     kind: draft.kind,
     status: "local-only",
+    recordState: "active",
     version: 1,
     localDate: draft.date,
     accountId: account.id,
@@ -213,4 +221,60 @@ export function appendIdempotentRecords(
   }
 
   return [...current, ...next.records];
+}
+
+function auditEvent(
+  record: LocalLedgerRecord,
+  eventType: LocalAuditEvent["eventType"],
+  changedFields: string[],
+  createdAt: string,
+): LocalAuditEvent {
+  return {
+    id: `audit-${record.id}-${record.version}`,
+    userId: record.userId,
+    eventType,
+    targetType: "ledger-record",
+    targetId: record.id,
+    summary: `${eventType === "record-voided" ? "Voided" : "Updated"} ${record.kind} record`,
+    changedFields,
+    createdAt,
+  };
+}
+
+export function updateOfficialRecord(
+  record: LocalLedgerRecord,
+  patch: Partial<EditableRecordFields>,
+  updatedAt: string,
+): { record: LocalLedgerRecord; auditEvent: LocalAuditEvent } {
+  const changedFields = (Object.keys(patch) as Array<keyof EditableRecordFields>).filter(
+    (field) => patch[field] !== undefined && patch[field] !== record[field],
+  );
+  const updatedRecord = {
+    ...record,
+    ...patch,
+    version: record.version + 1,
+    updatedAt,
+  };
+
+  return {
+    record: updatedRecord,
+    auditEvent: auditEvent(updatedRecord, "record-updated", changedFields, updatedAt),
+  };
+}
+
+export function voidOfficialRecord(
+  record: LocalLedgerRecord,
+  updatedAt: string,
+): { record: LocalLedgerRecord; auditEvent: LocalAuditEvent } {
+  const voidedRecord = {
+    ...record,
+    recordState: "voided" as const,
+    version: record.version + 1,
+    updatedAt,
+  };
+
+  return {
+    record: voidedRecord,
+    auditEvent: auditEvent(voidedRecord, "record-voided", ["recordState"], updatedAt),
+  };
 }

@@ -735,6 +735,58 @@ h2 {
   text-align: right;
 }
 
+.record-actions,
+.record-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #8db9a4;
+  border-radius: 8px;
+  background: #f4faf6;
+}
+
+.record-editor label {
+  display: grid;
+  gap: 6px;
+  color: #4c4a45;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.record-editor input,
+.record-editor textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #d8d1c5;
+  border-radius: 6px;
+  background: #fffdf8;
+  color: #282725;
+  font: inherit;
+}
+
+.record-editor textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.voided-record {
+  opacity: 0.62;
+}
+
+.record-state-label,
+.danger-action {
+  color: #a43d2f;
+  font-weight: 700;
+}
+
 .table-row {
   display: grid;
   grid-template-columns:
@@ -973,6 +1025,10 @@ button.action-card.unavailable {
   }
 
   .draft-form {
+    grid-template-columns: 1fr;
+  }
+
+  .record-editor {
     grid-template-columns: 1fr;
   }
 

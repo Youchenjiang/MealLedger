@@ -455,6 +455,44 @@ describe("App shell draft flow", () => {
     expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("全聯");
   });
 
+  test("keeps accounts available after a reload", async () => {
+    const user = userEvent.setup();
+    const view = renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+
+    view.unmount();
+    renderWorkspace("/capture");
+    await openWorkspace(user);
+
+    expect(screen.getByRole("option", { name: "Daily wallet (TWD)" })).toBeInTheDocument();
+  });
+
+  test("edits and voids a local official record while retaining audit history", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "500");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(screen.getByText("TWD 500")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Void" }));
+    expect(screen.getByText("Voided")).toBeInTheDocument();
+
+    const storedRecords = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]") as Array<{ recordState: string; version: number }>;
+    const storedAuditEvents = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.audit-events") ?? "[]") as Array<{ eventType: string }>;
+    expect(storedRecords[0]).toMatchObject({ recordState: "voided", version: 3 });
+    expect(storedAuditEvents.map((event) => event.eventType)).toEqual(["record-created", "record-updated", "record-voided"]);
+  });
+
   test("does not place official records in the draft review queue", async () => {
     const user = userEvent.setup();
     renderWorkspace();
