@@ -183,6 +183,23 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("TWD 417")).toBeInTheDocument();
   });
 
+  test("blocks a CSV row that duplicates an existing active ledger record", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const file = new File([
+      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+    ], "duplicate.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText("CSV import file"), file);
+
+    expect(await screen.findByText(/Duplicate candidate: record-/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm import row 2" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Skip row 2" })).toBeEnabled();
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));

@@ -30,6 +30,7 @@ import { mapImportHeaders, mapImportRow } from "./importExport/mapping";
 import { validateImportRows, type ImportRowValidation, type NormalizedImportRow } from "./importExport/rowValidation";
 import { categoryReviewSummary } from "./importExport/aliases";
 import { toImportedTransactionDraft } from "./importExport/recordDraft";
+import { detectImportDuplicates, type ImportDuplicate } from "./importExport/duplicates";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -46,6 +47,7 @@ type RouteDefinition = {
 type ImportReviewItem = ImportRowValidation & {
   reviewId: string;
   aliasReview: string | null;
+  duplicates: ImportDuplicate[];
   status: "pending" | "confirmed" | "skipped" | "failed";
 };
 
@@ -2221,6 +2223,7 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Rea
     const unmapped = headerMapping.unmappedHeaders.length > 0 ? ` Unmapped: ${headerMapping.unmappedHeaders.join(", ")}.` : "";
     const conflicts = headerMapping.conflicts.length > 0 ? ` Conflicts: ${headerMapping.conflicts.join(" ")}` : "";
     const rowResults = validateImportRows(result.rows.map((row) => mapImportRow(result.headers, row, headerMapping)), accounts);
+    const duplicateReviews = detectImportDuplicates(rowResults.map((row) => ({ rowNumber: row.rowNumber, normalized: row.normalized })), records);
     const aliasReviews = rowResults.flatMap((row) => {
       if (!(["expense", "income", "refund"] as string[]).includes(row.normalized.kind ?? "")) {
         return [];
@@ -2230,19 +2233,22 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Rea
     });
     const reviewRows = rowResults.filter((row) => !row.ok).map((row) => row.rowNumber);
     const reviewedRowNumbers = new Set([...reviewRows, ...aliasReviews.map((item) => item.rowNumber)]);
+    duplicateReviews.forEach((_, rowNumber) => reviewedRowNumbers.add(rowNumber));
     const reviewCount = reviewedRowNumbers.size;
     const aliasMessage = aliasReviews.length > 0 ? ` Category review: ${aliasReviews.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ")}` : "";
+    const duplicateMessage = duplicateReviews.size > 0 ? ` Duplicate review: ${[...duplicateReviews.keys()].map((rowNumber) => `Row ${rowNumber}`).join(", ")}.` : "";
     setImportItems(rowResults.map((row) => ({
       ...row,
       reviewId: `import-row-${Date.now()}-${row.rowNumber}`,
       aliasReview: aliasReviews.find((item) => item.rowNumber === row.rowNumber)?.summary ?? null,
+      duplicates: duplicateReviews.get(row.rowNumber) ?? [],
       status: "pending",
     })));
-    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts}${aliasMessage} No records were created.`);
+    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts}${aliasMessage}${duplicateMessage} No records were created.`);
   };
 
   const confirmImport = (item: ImportReviewItem) => {
-    if (!item.ok || item.aliasReview || item.status !== "pending") {
+    if (!item.ok || item.aliasReview || item.duplicates.length > 0 || item.status !== "pending") {
       return;
     }
 
@@ -2283,10 +2289,11 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Rea
                 <span>{item.normalized.date || item.normalized.period_start || "No date"} · {item.normalized.account || "No account"} · {item.normalized.amount || "No amount"}</span>
                 {item.errors.length > 0 ? <span>{item.errors.join(" ")}</span> : null}
                 {item.aliasReview ? <span>{item.aliasReview}</span> : null}
+                {item.duplicates.length > 0 ? <span>Duplicate candidate: {item.duplicates.map((duplicate) => `${duplicate.candidateType === "existing-record" ? duplicate.candidateId : `row ${duplicate.candidateRowNumber}`}: ${duplicate.reason}`).join("; ")}</span> : null}
                 {item.status !== "pending" ? <span>Status: {item.status}</span> : null}
               </div>
               <div className="record-actions">
-                <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => confirmImport(item)}>Confirm import row {item.rowNumber}</button>
+                <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.duplicates.length > 0 || item.status !== "pending"} onClick={() => confirmImport(item)}>Confirm import row {item.rowNumber}</button>
                 <button className="text-action danger-action" type="button" disabled={item.status !== "pending"} onClick={() => skipImport(item)}>Skip row {item.rowNumber}</button>
               </div>
             </article>
