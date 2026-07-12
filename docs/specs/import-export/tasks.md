@@ -15,11 +15,16 @@ Expected verification:
 
 ## Task 2: Implement Field Mapping
 
+Status: Complete for normalized and legacy header preview. Mapping is local-only and does not create draft or official records.
+
 Map normalized headers and legacy spreadsheet headers.
 
 Expected verification:
 
-- Old spreadsheet headers map to normalized fields.
+- Old spreadsheet headers map to normalized fields, including `日期`, `店家`, `名稱`, `種類`, `金額`, and `帳戶`.
+- `種類` maps to `category`; transaction kind uses `kind` or `類型`.
+- Transfer `原帳戶` and `後帳戶` map to `account` and `target_account` respectively.
+- Duplicate canonical mappings and unmapped headers are visible before review.
 
 ## Task 3: Implement Row Validation
 
