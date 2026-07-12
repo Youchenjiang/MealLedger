@@ -36,6 +36,7 @@ import { toImportedTransactionDraft } from "./importExport/recordDraft";
 import { detectImportDuplicates, type ImportDuplicate } from "./importExport/duplicates";
 import { createInitialFundingDraft } from "./onboarding/initialFunding";
 import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/defaults";
+import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -1462,6 +1463,7 @@ function CapturePage({
   const [quickSourceName, setQuickSourceName] = useState("");
   const [quickSourceError, setQuickSourceError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
+  const [captureIntent, setCaptureIntent] = useState<CaptureIntent>("manual-ledger");
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(cleanForm);
 
   useEffect(() => {
@@ -1481,32 +1483,13 @@ function CapturePage({
   }, [customSources]);
 
   const recordCount = records.length;
-  const actions = [
-    {
-      title: "Record a transaction",
-      detail: "Save expenses, income, transfers, refunds, and adjustments to the local ledger.",
-      icon: Banknote,
-      available: true,
-    },
-    {
-      title: "Scan receipt or invoice",
-      detail: "Create a draft from a source image; ledger confirmation arrives in a later workflow.",
-      icon: ReceiptText,
-      available: false,
-    },
-    {
-      title: "Attach meal photo",
-      detail: "Meal notes can support a transaction, but ordinary accounting never requires them.",
-      icon: ImagePlus,
-      available: false,
-    },
-    {
-      title: "Attachment",
-      detail: "Keep supporting evidence separate from clean ledger exports.",
-      icon: Upload,
-      available: false,
-    },
-  ];
+  const actionIcons = {
+    "manual-ledger": Banknote,
+    "scan-invoice": ReceiptText,
+    "scan-receipt": ReceiptText,
+    "record-meal": ImagePlus,
+    "attach-photo": Upload,
+  } satisfies Record<CaptureIntent, LucideIcon>;
 
   const updateForm = (field: keyof DraftForm, value: string) => {
     setFormError(null);
@@ -1783,38 +1766,32 @@ function CapturePage({
       <Panel title="Choose how to start" eyebrow="Input sources">
         <p className="panel-copy">
           Manual entries are saved as official local ledger records. Scans, meal photos, and attachments
-          remain unavailable until their own workflows are implemented.
+          stay in their own source workflow and never silently become ledger records.
         </p>
-        <div className="planned-actions">
-          {actions.map((action) => {
-            const Icon = action.icon;
-            if (action.available) {
-              return (
-                <a className="action-card primary-card" href="#manual-draft-form" key={action.title}>
-                  <Icon size={22} aria-hidden="true" />
-                  <span>
-                    <strong>{action.title}</strong>
-                    <small>{action.detail}</small>
-                    <em>Manual record</em>
-                  </span>
-                </a>
-              );
-            }
-
+        <div className="planned-actions" role="list" aria-label="Capture intent">
+          {captureIntents.map((action) => {
+            const Icon = actionIcons[action.id];
+            const selected = captureIntent === action.id;
             return (
-              <button className="action-card unavailable" disabled type="button" key={action.title}>
+              <button
+                aria-pressed={selected}
+                className={`action-card ${selected ? "primary-card" : ""}`}
+                type="button"
+                key={action.id}
+                onClick={() => setCaptureIntent(action.id)}
+              >
                 <Icon size={22} aria-hidden="true" />
                 <span>
-                  <strong>{action.title}</strong>
+                  <strong>{action.label}</strong>
                   <small>{action.detail}</small>
-                  <em>Coming soon</em>
+                  <em>{selected ? "Selected" : "Choose"}</em>
                 </span>
               </button>
             );
           })}
         </div>
       </Panel>
-      <Panel title="Manual ledger record" eyebrow="Official local record">
+      {captureIntent === "manual-ledger" ? <Panel title="Manual ledger record" eyebrow="Official local record">
         <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
           {!isUnresolvedExpense ? (
             <label>
@@ -2258,7 +2235,12 @@ function CapturePage({
             </button>
           </div>
         </form>
-      </Panel>
+      </Panel> : (
+        <Panel title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
+          <p className="panel-copy">This source is kept separate from the official ledger. The workflow will ask for confirmation before any ledger record is created.</p>
+          <p className="field-help">Select Manual ledger when you want to record an official transaction now.</p>
+        </Panel>
+      )}
       {recordCount > 0 ? (
         <Panel title="Record saved" eyebrow="Local ledger">
           <p className="panel-copy">{recordCount} official local record{recordCount === 1 ? "" : "s"} stored on this device.</p>

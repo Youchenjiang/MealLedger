@@ -107,6 +107,21 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Daily wallet: TWD -417")).toBeInTheDocument();
   });
 
+  test("switches between all capture intents without creating a ledger record", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: /Scan invoice/ }));
+    expect(screen.getByRole("heading", { name: "Scan invoice" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save record" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Record meal/ }));
+    expect(screen.getByRole("heading", { name: "Record meal" })).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+  });
+
   test("saves explicit fixed labels when expense details are unavailable", async () => {
     const user = userEvent.setup();
     renderWorkspace();
@@ -890,17 +905,18 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("No drafts to review")).toBeInTheDocument();
   });
 
-  test("labels unavailable capture paths as unavailable and keeps manual entry available", async () => {
+  test("offers separate capture intents and keeps manual entry selected by default", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
     await openWorkspace(user);
     await goToCapture(user);
 
-    expect(screen.getByRole("link", { name: /record a transaction/i })).toHaveAttribute("href", "#manual-draft-form");
-    expect(screen.getByRole("button", { name: /scan receipt or invoice/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /attach meal photo/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /attachment/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Manual ledger/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Scan invoice/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Scan receipt/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Record meal/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Attach photo/ })).toBeEnabled();
   });
 
   test("offers every spec-one draft kind", async () => {
