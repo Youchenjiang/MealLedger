@@ -2,12 +2,16 @@
 
 ## Task 1: Implement CSV File Validation
 
+Status: Complete for local pre-review validation. The current boundary accepts UTF-8/UTF-8 with BOM CSV files up to 10 MB and 5,000 data rows.
+
 Validate encoding, delimiter, headers, size, and row count.
 
 Expected verification:
 
 - UTF-8 and UTF-8 with BOM files are accepted.
-- Over-limit files are rejected before partial processing.
+- Normalized and legacy Traditional Chinese ledger headers are recognized.
+- Malformed rows, unsupported headers, invalid UTF-8, and over-limit batches are rejected before ledger writes.
+- Valid selections report row and column counts as review-ready; no official records are created.
 
 ## Task 2: Implement Field Mapping
 

@@ -91,6 +91,8 @@ Duplicate handling options are skip, keep separate, merge into draft, or link to
 
 V1 CSV import should allow up to 5,000 rows per batch.
 
+V1 CSV files should be limited to 10 MB. File encoding, header shape, row width, and limits must be validated before any draft or official ledger record is created.
+
 V1 scan or media batch import should allow up to 20 files, 10 MB per file, and 100 MB per batch.
 
 When a batch exceeds the limit, the UI should ask the user to split the file or import in smaller batches. The system should fail before partial processing when the batch is clearly over limit.
