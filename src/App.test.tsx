@@ -151,6 +151,19 @@ describe("App shell draft flow", () => {
     Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectURL });
   });
 
+  test("validates a CSV selection without writing ledger records", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const file = new File(["date,account,amount\n2026-07-13,Cash,417\n"], "ledger.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText("CSV import file"), file);
+
+    expect(await screen.findByText("CSV ready for review: 1 rows and 3 columns. No records were created.")).toBeInTheDocument();
+    expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));

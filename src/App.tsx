@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Dispatch, FormEvent, SetStateAction } from "react";
+import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from "react";
 import {
   AlertCircle,
   Banknote,
@@ -25,6 +25,7 @@ import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
+import { validateCsvBytes } from "./importExport/csv";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -2076,7 +2077,7 @@ function SettingsPage({ accounts, records, onAddAccount }: Readonly<{ accounts: 
     },
     {
       title: "Clean ledger export",
-      detail: "Export CSV and JSON without bundling receipt or meal photo bytes.",
+      detail: "Export CSV, JSON, or spreadsheet-style ZIP without bundling receipt or meal photo bytes.",
     },
     {
       title: "Statement reconciliation",
@@ -2151,12 +2152,31 @@ function AccountSyncPanel() {
 }
 
 function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTools: Array<{ title: string; detail: string }>; accounts: LocalAccount[]; records: LocalLedgerRecord[] }>) {
+  const [importMessage, setImportMessage] = useState("No CSV selected. Validation does not write to the ledger.");
+
+  const handleCsvSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const result = validateCsvBytes(new Uint8Array(await file.arrayBuffer()));
+    setImportMessage(result.ok
+      ? `CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. No records were created.`
+      : `CSV rejected: ${result.errors.join(" ")}`);
+  };
+
   return (
     <Panel title="Import and export safeguards" eyebrow="Data portability">
       <p className="panel-copy">
         Clean exports include confirmed ledger records only. Attachments stay as metadata
         references, not image bytes, and CSV/JSON use the same stable field set.
       </p>
+      <label>
+        <span>Validate CSV import</span>
+        <input aria-label="CSV import file" accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
+      </label>
+      <p className="panel-copy" aria-live="polite">{importMessage}</p>
       <div className="quick-account-actions">
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
