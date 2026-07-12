@@ -27,8 +27,9 @@ import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecord
 import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 import { validateCsvBytes } from "./importExport/csv";
 import { mapImportHeaders, mapImportRow } from "./importExport/mapping";
-import { validateImportRows } from "./importExport/rowValidation";
+import { validateImportRows, type ImportRowValidation, type NormalizedImportRow } from "./importExport/rowValidation";
 import { categoryReviewSummary } from "./importExport/aliases";
+import { toImportedTransactionDraft } from "./importExport/recordDraft";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -40,6 +41,12 @@ const navItems: NavItem[] = [
 type RouteDefinition = {
   segments: string[];
   route: Exclude<AppRoute, "not-found">;
+};
+
+type ImportReviewItem = ImportRowValidation & {
+  reviewId: string;
+  aliasReview: string | null;
+  status: "pending" | "confirmed" | "skipped" | "failed";
 };
 
 const routeDefinitions: RouteDefinition[] = [
@@ -583,7 +590,35 @@ function renderRoute(
         />
       );
     case "settings":
-      return <SettingsPage accounts={accounts} records={records} onAddAccount={(account) => setAccounts((current) => [...current, account])} />;
+      return (
+        <SettingsPage
+          accounts={accounts}
+          records={records}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onImportRecord={(row, importId) => {
+            const draft = toImportedTransactionDraft(row, importId);
+            if (!draft) {
+              return false;
+            }
+
+            const now = new Date().toISOString();
+            const bundle = createOfficialRecordBundle(draft, accounts, {
+              userId: "local-user",
+              recordId: `record-${importId}`,
+              idempotencyKey: `import:${importId}`,
+              createdAt: now,
+              feeRecordId: `record-${importId}-fee`,
+            });
+            if (!bundle) {
+              return false;
+            }
+
+            setRecords((current) => appendIdempotentRecords(current, bundle));
+            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            return true;
+          }}
+        />
+      );
     default:
       return <NotFoundPage navigate={navigate} />;
   }
@@ -2070,7 +2105,12 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
   );
 }
 
-function SettingsPage({ accounts, records, onAddAccount }: Readonly<{ accounts: LocalAccount[]; records: LocalLedgerRecord[]; onAddAccount: (account: LocalAccount) => void }>) {
+function SettingsPage({ accounts, records, onAddAccount, onImportRecord }: Readonly<{
+  accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
+  onAddAccount: (account: LocalAccount) => void;
+  onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
+}>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
   const dataTools = [
@@ -2132,7 +2172,7 @@ function SettingsPage({ accounts, records, onAddAccount }: Readonly<{ accounts: 
         ) : null}
       </Panel>
       <AccountSyncPanel />
-      <ImportExportPanel dataTools={dataTools} accounts={accounts} records={records} />
+      <ImportExportPanel dataTools={dataTools} accounts={accounts} records={records} onImportRecord={onImportRecord} />
     </section>
   );
 }
@@ -2154,8 +2194,14 @@ function AccountSyncPanel() {
   );
 }
 
-function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTools: Array<{ title: string; detail: string }>; accounts: LocalAccount[]; records: LocalLedgerRecord[] }>) {
+function ImportExportPanel({ dataTools, accounts, records, onImportRecord }: Readonly<{
+  dataTools: Array<{ title: string; detail: string }>;
+  accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
+  onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
+}>) {
   const [importMessage, setImportMessage] = useState("No CSV selected. Validation does not write to the ledger.");
+  const [importItems, setImportItems] = useState<ImportReviewItem[]>([]);
 
   const handleCsvSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2166,6 +2212,7 @@ function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTool
     const result = validateCsvBytes(new Uint8Array(await file.arrayBuffer()));
     if (!result.ok) {
       setImportMessage(`CSV rejected: ${result.errors.join(" ")}`);
+      setImportItems([]);
       return;
     }
 
@@ -2179,13 +2226,34 @@ function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTool
         return [];
       }
       const summary = categoryReviewSummary(row.normalized.category ?? "");
-      return summary ? [`Row ${row.rowNumber}: ${summary}`] : [];
+      return summary ? [{ rowNumber: row.rowNumber, summary }] : [];
     });
     const reviewRows = rowResults.filter((row) => !row.ok).map((row) => row.rowNumber);
-    const reviewedRowNumbers = new Set([...reviewRows, ...aliasReviews.map((summary) => Number(summary.match(/^Row (\d+)/)?.[1]))]);
+    const reviewedRowNumbers = new Set([...reviewRows, ...aliasReviews.map((item) => item.rowNumber)]);
     const reviewCount = reviewedRowNumbers.size;
-    const aliasMessage = aliasReviews.length > 0 ? ` Category review: ${aliasReviews.join(" ")}` : "";
+    const aliasMessage = aliasReviews.length > 0 ? ` Category review: ${aliasReviews.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ")}` : "";
+    setImportItems(rowResults.map((row) => ({
+      ...row,
+      reviewId: `import-row-${Date.now()}-${row.rowNumber}`,
+      aliasReview: aliasReviews.find((item) => item.rowNumber === row.rowNumber)?.summary ?? null,
+      status: "pending",
+    })));
     setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts}${aliasMessage} No records were created.`);
+  };
+
+  const confirmImport = (item: ImportReviewItem) => {
+    if (!item.ok || item.aliasReview || item.status !== "pending") {
+      return;
+    }
+
+    const imported = onImportRecord(item.normalized, item.reviewId);
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: imported ? "confirmed" : "failed" } : candidate));
+    setImportMessage(imported ? `Imported row ${item.rowNumber} into the local ledger.` : `Row ${item.rowNumber} could not be imported and remains in review.`);
+  };
+
+  const skipImport = (item: ImportReviewItem) => {
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: "skipped" } : candidate));
+    setImportMessage(`Skipped row ${item.rowNumber}. It was not written to the ledger.`);
   };
 
   return (
@@ -2196,9 +2264,35 @@ function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTool
       </p>
       <label>
         <span>Validate CSV import</span>
-        <input aria-label="CSV import file" accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
+      <input aria-label="CSV import file" accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
       </label>
       <p className="panel-copy" aria-live="polite">{importMessage}</p>
+      {importItems.length > 0 ? (
+        <section className="draft-list" aria-label="CSV import review">
+          <div className="draft-list-heading">
+            <div>
+              <p className="eyebrow">Import review</p>
+              <h3>Rows waiting</h3>
+            </div>
+            <span>{importItems.filter((item) => item.status === "pending").length} pending</span>
+          </div>
+          {importItems.map((item) => (
+            <article className="draft-card" key={item.reviewId}>
+              <div>
+                <strong>Row {item.rowNumber} · {item.normalized.kind || "Unknown kind"}</strong>
+                <span>{item.normalized.date || item.normalized.period_start || "No date"} · {item.normalized.account || "No account"} · {item.normalized.amount || "No amount"}</span>
+                {item.errors.length > 0 ? <span>{item.errors.join(" ")}</span> : null}
+                {item.aliasReview ? <span>{item.aliasReview}</span> : null}
+                {item.status !== "pending" ? <span>Status: {item.status}</span> : null}
+              </div>
+              <div className="record-actions">
+                <button className="text-action" type="button" disabled={!item.ok || Boolean(item.aliasReview) || item.status !== "pending"} onClick={() => confirmImport(item)}>Confirm import row {item.rowNumber}</button>
+                <button className="text-action danger-action" type="button" disabled={item.status !== "pending"} onClick={() => skipImport(item)}>Skip row {item.rowNumber}</button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
       <div className="quick-account-actions">
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>

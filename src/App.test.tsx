@@ -164,6 +164,25 @@ describe("App shell draft flow", () => {
     expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
   });
 
+  test("confirms a valid CSV row into the local ledger through review", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    const file = new File([
+      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+    ], "ledger.csv", { type: "text/csv" });
+    await user.upload(screen.getByLabelText("CSV import file"), file);
+
+    await user.click(await screen.findByRole("button", { name: "Confirm import row 2" }));
+    expect(screen.getByText("Imported row 2 into the local ledger.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ledger" }));
+
+    expect(screen.getByText("全聯")).toBeInTheDocument();
+    expect(screen.getByText("TWD 417")).toBeInTheDocument();
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));
