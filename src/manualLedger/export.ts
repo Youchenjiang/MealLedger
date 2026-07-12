@@ -26,6 +26,7 @@ export const cleanExportColumns = [
   "refund_reason",
   "refund_subtype",
   "refund_linked_record_id",
+  "refund_linked_record_ids",
   "refund_excess_handling",
   "reason",
   "note",
@@ -82,6 +83,8 @@ export type MultiTableExportBundle = {
   zip: Uint8Array;
 };
 
+export type ExportProgress = (percentage: number, stage: "preparing" | "building" | "complete") => void;
+
 function activeRecords(records: LocalLedgerRecord[]): LocalLedgerRecord[] {
   return records.filter((record) => record.recordState === "active");
 }
@@ -111,6 +114,7 @@ export function toCleanExportRow(record: LocalLedgerRecord): CleanLedgerExportRo
     refund_reason: record.refundReason,
     refund_subtype: record.refundSubtype,
     refund_linked_record_id: record.refundLinkedRecordId,
+    refund_linked_record_ids: (record.refundLinkedRecordIds?.length ? record.refundLinkedRecordIds : [record.refundLinkedRecordId]).filter(Boolean).join("|"),
     refund_excess_handling: record.refundExcessHandling,
     reason: record.reason,
     note: record.note,
@@ -337,4 +341,24 @@ export function createMultiTableExport(
   }
 
   return { files, manifest, zip: createStoredZip(files) };
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+export async function createMultiTableExportWithProgress(
+  accounts: LocalAccount[],
+  records: LocalLedgerRecord[],
+  onProgress: ExportProgress,
+  exportedAt = new Date().toISOString(),
+): Promise<MultiTableExportBundle> {
+  onProgress(0, "preparing");
+  await yieldToBrowser();
+  onProgress(records.length > 0 ? 25 : 40, "preparing");
+  await yieldToBrowser();
+  onProgress(60, "building");
+  const bundle = createMultiTableExport(accounts, records, exportedAt);
+  onProgress(100, "complete");
+  return bundle;
 }

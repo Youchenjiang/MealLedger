@@ -32,4 +32,24 @@ describe("imported record draft conversion", () => {
     expect(draft).toMatchObject({ transferMode: "cross-currency", destinationAmount: "45000", destinationCurrency: "JPY" });
     expect(toImportedTransactionDraft({ kind: "expense", account: "Cash" }, "invalid")).toBeNull();
   });
+
+  test("restores multiple refund links from the portable delimiter", () => {
+    const draft = toImportedTransactionDraft({
+      kind: "refund",
+      date: "2026-07-13",
+      account: "Cash",
+      amount: "80",
+      currency: "TWD",
+      category: "Shared",
+      merchant: "Friend",
+      refund_reason: "Shared payback",
+      refund_subtype: "payback",
+      refund_linked_record_ids: "expense-1|expense-2",
+    }, "import-refund-3");
+
+    expect(draft).toMatchObject({
+      refundLinkedRecordId: "",
+      refundLinkedRecordIds: ["expense-1", "expense-2"],
+    });
+  });
 });

@@ -60,8 +60,10 @@ function matchesRecord(row: NormalizedImportRow, record: LocalLedgerRecord): str
         && sameAmount([row.target_amount || row.amount, record.destinationAmount || record.amount])
         ? "same source, target, date, and transfer amounts" : null;
     case "refund":
+      const rowLinkedIds = row.refund_linked_record_ids || row.refund_linked_record_id;
+      const recordLinkedIds = record.refundLinkedRecordIds?.join("|") || record.refundLinkedRecordId;
       return anySame([[row.merchant, record.counterparty]])
-        && same([row.refund_subtype, record.refundSubtype], [row.refund_linked_record_id, record.refundLinkedRecordId])
+        && same([row.refund_subtype, record.refundSubtype], [rowLinkedIds, recordLinkedIds])
         ? "same date, account, amount, source, and refund details" : null;
     case "adjustment":
       return same([row.reason, record.reason]) ? "same date, account, amount, and reason" : null;

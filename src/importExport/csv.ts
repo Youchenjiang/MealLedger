@@ -23,6 +23,7 @@ const supportedHeaders = new Set([
   "refund_reason",
   "refund_subtype",
   "refund_linked_record_id",
+  "refund_linked_record_ids",
   "reason",
   "time_precision",
   "period_start",

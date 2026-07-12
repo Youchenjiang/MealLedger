@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createMultiTableExport, serializeCleanCsv, serializeCleanJson, toCleanExportRow } from "./export";
+import { createMultiTableExport, createMultiTableExportWithProgress, serializeCleanCsv, serializeCleanJson, toCleanExportRow } from "./export";
 import type { LocalAccount } from "./accounts";
 import type { LocalLedgerRecord } from "./records";
 
@@ -59,6 +59,18 @@ describe("clean ledger export", () => {
     expect(row).not.toHaveProperty("base64");
   });
 
+  test("preserves multiple refund links as a portable delimited field", () => {
+    const row = toCleanExportRow({
+      ...record,
+      kind: "refund",
+      refundLinkedRecordId: "expense-1",
+      refundLinkedRecordIds: ["expense-1", "expense-2"],
+    });
+
+    expect(row.refund_linked_record_id).toBe("expense-1");
+    expect(row.refund_linked_record_ids).toBe("expense-1|expense-2");
+  });
+
   test("serializes CSV with BOM, escaping, and ISO date", () => {
     const csv = serializeCleanCsv([record]);
 
@@ -109,5 +121,13 @@ describe("clean ledger export", () => {
     expect(bundle.zip[0]).toBe(0x50);
     expect(bundle.zip[1]).toBe(0x4b);
     expect(new TextDecoder().decode(bundle.zip)).toContain("ledger/transactions.csv");
+  });
+
+  test("reports progress while building a large export", async () => {
+    const progress: number[] = [];
+    const bundle = await createMultiTableExportWithProgress([account], [record], (percentage) => progress.push(percentage), "2026-07-13T00:00:00.000Z");
+
+    expect(progress).toEqual([0, 25, 60, 100]);
+    expect(bundle.manifest.export_mode).toBe("multi-table");
   });
 });

@@ -25,7 +25,7 @@ import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
-import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
+import { createMultiTableExportWithProgress, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 import { validateCsvBytes } from "./importExport/csv";
 import { mapImportHeaders, mapImportRow } from "./importExport/mapping";
 import { validateImportRows, type ImportRowValidation, type NormalizedImportRow } from "./importExport/rowValidation";
@@ -2268,6 +2268,9 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
 }>) {
   const [importMessage, setImportMessage] = useState("No CSV selected. Validation does not write to the ledger.");
   const [importItems, setImportItems] = useState<ImportReviewItem[]>([]);
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const handleCsvSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2356,6 +2359,25 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
     setImportMessage(`Skipped row ${item.rowNumber}. It was not written to the ledger.`);
   };
 
+  const exportZip = async () => {
+    if (exporting) {
+      return;
+    }
+
+    setExporting(true);
+    setExportProgress(0);
+    setExportMessage("Preparing ZIP export...");
+    try {
+      const bundle = await createMultiTableExportWithProgress(accounts, records, (percentage, stage) => {
+        setExportProgress(percentage);
+        setExportMessage(stage === "complete" ? "ZIP export ready." : stage === "building" ? "Building ZIP export..." : "Preparing ZIP export...");
+      });
+      downloadBinaryFile(bundle.zip, "mealledger-export.zip", "application/zip");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Panel title="Import and export safeguards" eyebrow="Data portability">
       <p className="panel-copy">
@@ -2402,8 +2424,9 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
       <div className="quick-account-actions">
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
-        <button className="secondary-action" type="button" onClick={() => downloadBinaryFile(createMultiTableExport(accounts, records).zip, "mealledger-export.zip", "application/zip")}>Export ZIP</button>
+        <button className="secondary-action" type="button" disabled={exporting} onClick={() => { void exportZip(); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
       </div>
+      {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
       <DataToolList items={dataTools} />
     </Panel>
   );

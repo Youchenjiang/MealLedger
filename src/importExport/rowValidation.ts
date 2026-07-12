@@ -160,7 +160,7 @@ export function validateImportRows(rows: NormalizedImportRow[], accounts: Import
       required(normalized, "category", "Category", errors);
       required(normalized, "merchant", "Merchant or source", errors);
       required(normalized, "refund_reason", "Refund reason", errors);
-      if (text(normalized, "refund_subtype") === "payback" && !text(normalized, "refund_linked_record_id")) {
+      if (text(normalized, "refund_subtype") === "payback" && !text(normalized, "refund_linked_record_ids") && !text(normalized, "refund_linked_record_id")) {
         errors.push("Payback requires a linked expense.");
       }
     } else if (kind === "transfer") {
