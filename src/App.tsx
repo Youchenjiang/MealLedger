@@ -23,6 +23,7 @@ import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
+import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 import { validateCsvBytes } from "./importExport/csv";
@@ -531,7 +532,7 @@ function renderRoute(
 
   switch (route) {
     case "overview":
-      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} navigate={navigate} />;
+      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} navigate={navigate} />;
     case "ledger":
       return (
         <LedgerPage
@@ -647,10 +648,11 @@ function renderRoute(
   }
 }
 
-function OverviewPage({ draftCount, recordCount, accountBalances, navigate }: Readonly<{
+function OverviewPage({ draftCount, recordCount, accountBalances, accountReports, navigate }: Readonly<{
   draftCount: number;
   recordCount: number;
   accountBalances: ReturnType<typeof calculateAccountBalances>;
+  accountReports: AccountReport[];
   navigate: (item: NavItem) => void;
 }>) {
   const accountDetail = accountBalances.length === 0
@@ -668,6 +670,27 @@ function OverviewPage({ draftCount, recordCount, accountBalances, navigate }: Re
           detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for review."}
         />
       </section>
+      <Panel title="Account report" eyebrow="Accounting view">
+        {accountReports.length === 0 ? (
+          <p className="panel-copy">Add an account to see income, spending, refunds, transfers, and adjustments separately.</p>
+        ) : (
+          <div className="report-list" aria-label="Account report">
+            {accountReports.map((report) => (
+              <div className="report-row" key={report.id}>
+                <div>
+                  <strong>{report.name}</strong>
+                  <span>{report.currency} · {report.recordCount} record{report.recordCount === 1 ? "" : "s"}</span>
+                </div>
+                <dl>
+                  <div><dt>Balance</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
+                  <div><dt>Net spending</dt><dd>{formatAccountBalance(report.netSpendingTotal, report.currency)}</dd></div>
+                  <div><dt>Cash flow</dt><dd>{formatAccountBalance(report.cashFlowTotal, report.currency)}</dd></div>
+                </dl>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
       <section className="content-grid">
         <Panel title="Start with a new record" eyebrow="First step">
           <p className="panel-copy">
