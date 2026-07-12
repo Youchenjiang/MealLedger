@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account balances, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, provide selectable inline-created income/funding sources, validate CSV files, preview legacy header mappings, classify rows and ambiguous category aliases for review, confirm valid CSV rows through the shared official-record boundary, and offer clean CSV/JSON plus multi-table ZIP exports without media bytes. Cloud sync, review-row editing/merge/link, scheduled next-cycle generation, large-export performance handling, and several advanced field workflows remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account reports, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, provide selectable inline-created income/funding sources, validate CSV files, preview legacy header mappings, classify rows and ambiguous category aliases for review, confirm valid CSV rows through the shared official-record boundary, and offer clean CSV/JSON plus multi-table ZIP exports without media bytes. Cloud sync, scheduled next-cycle generation, durable cross-device review state, media workflows, and advanced debt tracking remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -37,7 +37,7 @@ Expected verification:
 
 ## Task 4: Implement Fund Addition And Adjustment Forms
 
-Status: Partial. The local form, local official-save boundary, persisted account setup, and balance projection exist. Full report projections remain.
+Status: Complete for the current local report boundary. The local form, local official-save boundary, persisted account setup, and per-account report projection exist.
 
 Add fund addition and adjustment flows with report-safe labels and required reasons.
 
@@ -48,7 +48,7 @@ Expected verification:
 
 ## Task 5: Implement Transfer Form
 
-Status: Partial. The local form supports source/destination selection, same/cross-currency amounts, and fee input. The domain boundary creates a linked fee expense; report projections remain.
+Status: Complete for the current local report boundary. The local form supports source/destination selection, same/cross-currency amounts, and fee input. The domain boundary creates a linked fee expense and reports transfer legs separately.
 
 Add same-currency and cross-currency transfer input, including optional fee entry.
 
@@ -59,7 +59,7 @@ Expected verification:
 
 ## Task 6: Implement Refund And Payback Form
 
-Status: Partial. Refund fields save locally as official records, including payback subtype, one linked expense, and an excess-classification guard. Multiple linked expenses and full refund settlement views remain.
+Status: Complete for the current local settlement boundary. Refund fields save locally as official records, including payback subtype, multiple linked expenses, combined excess classification, different refund accounts, and report treatment as negative spending plus cash inflow. Full debt tracking and reminders remain outside this slice.
 
 Add refund flow, payback subtype, linked expense selection placeholder, and excess refund warning.
 
@@ -116,7 +116,7 @@ Expected verification:
 
 ## Task 10: Offline And Idempotency UI Hook
 
-Status: Partial. Local-only save state, browser persistence, audit events, idempotency key creation, and local lifecycle actions are implemented. Cloud retry transport remains.
+Status: Partial. Local-only save state, browser persistence, audit events, idempotency key creation, and local lifecycle actions are implemented. Cloud retry transport and cross-device conflict resolution remain outside this slice.
 
 Expected verification:
 
@@ -124,7 +124,7 @@ Expected verification:
 
 ## Task 11: Final Verification
 
-Status: Complete for the current local-record and clean-export slice. Remaining partial tasks are tracked separately above and are not hidden by this verification.
+Status: Complete for the current local-record and clean-export slice. Remaining partial tasks are explicitly cloud/media/advanced-workflow boundaries above and are not hidden by this verification.
 
 Expected verification:
 
@@ -139,9 +139,9 @@ Current slice evidence is recorded in the branch commits and must be rerun after
 
 Latest verification for the local ledger slice:
 
-- `npm run test`: 101 tests passed.
-- `npm run test:coverage`: 86.66% statements, 78.75% branches, 84.84% functions, and 86.77% lines.
+- `npm run test`: 116 tests passed.
+- `npm run test:coverage`: 88.06% statements, 79.69% branches, 86.8% functions, and 88.18% lines.
 - `npm run test:e2e`: 4 browser smoke tests passed.
 - `npm run build`: passed.
 
-The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, selectable inline-created income sources, recurrence safety and lifecycle controls, unresolved-expense conversion, CSV validation, legacy header mapping, kind-specific row review, ambiguous category alias suggestions, confirmed CSV row writes through the official-record boundary, and clean CSV/JSON/multi-table ZIP export of active records while excluding voided records and media bytes/base64. The ZIP manifest and account summary keep local-only opening balances explicit. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.
+The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, selectable inline-created income sources, recurrence safety and lifecycle controls, unresolved-expense conversion, CSV validation, legacy header mapping, kind-specific row review, ambiguous category alias suggestions, duplicate review actions, confirmed CSV row writes through the official-record boundary, multiple refund links, per-account multi-currency report projections, and clean CSV/JSON/multi-table ZIP export of active records while excluding voided records and media bytes/base64. ZIP export reports staged progress, and the ZIP manifest and account summary keep local-only opening balances explicit. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.

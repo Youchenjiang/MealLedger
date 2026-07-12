@@ -49,6 +49,10 @@ The normalized import template supports:
 - `fee_amount`
 - `fee_currency`
 - `fee_category`
+- `refund_reason`
+- `refund_subtype`
+- `refund_linked_record_id`
+- `refund_linked_record_ids` (`|` separated)
 - `tags`
 - `event`
 - `source_label`
@@ -87,6 +91,8 @@ reports/account_summary.csv
 `manifest.json` includes schema version, export time, date range, file list, and record counts.
 
 `account_summary.csv` includes account balances and totals by income, expense, refund, transfers, adjustments, and closing balance.
+
+Large ZIP exports expose staged progress in the local UI. The current browser-local implementation yields between preparation and ZIP-building stages; worker-backed generation remains a future optimization.
 
 ## Boundaries
 

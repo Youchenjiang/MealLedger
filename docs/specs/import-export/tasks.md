@@ -28,7 +28,7 @@ Expected verification:
 
 ## Task 3: Implement Row Validation
 
-Status: Complete for normalized local validation and review classification. Confirmed import writes remain a later task.
+Status: Complete for normalized local validation and review classification. Confirmed import writes use the shared official-record boundary.
 
 Validate date, kind, account, amount, currency precision, and kind-specific required fields.
 
@@ -42,7 +42,7 @@ Expected verification:
 
 ## Task 4: Implement Alias Mapping
 
-Status: Complete for local alias classification and review suggestions. Alias acceptance and official import writes remain review-gated.
+Status: Complete for local alias classification and review suggestions. Alias acceptance remains review-gated before official import writes.
 
 Apply default taxonomy aliases and review rules.
 
@@ -55,6 +55,8 @@ Expected verification:
 
 ## Task 5: Implement Duplicate Detection
 
+Status: Complete for local kind-specific heuristics against active records and within-batch rows.
+
 Add kind-specific duplicate heuristics.
 
 Expected verification:
@@ -63,7 +65,7 @@ Expected verification:
 
 ## Task 6: Implement Import Review Actions
 
-Status: Partial. Local review queue supports confirm for structurally valid, non-ambiguous rows and skip; row editing, merge, link, and durable review persistence remain.
+Status: Complete for the current local review boundary. The queue supports confirm, skip, keep separate, merge to draft, and link to an existing candidate. Row editing, durable cross-device review state, and server-side review persistence remain outside this slice.
 
 Support skip, keep separate, merge into draft, and link to existing.
 
@@ -76,7 +78,7 @@ Expected verification:
 
 ## Task 7: Implement Clean Export
 
-Status: Complete for normalized local CSV and JSON export. Multi-table ZIP export remains Task 8.
+Status: Complete for normalized local CSV and JSON export, including the plural refund-link field without media bytes.
 
 Generate normalized CSV and JSON without media bytes.
 
@@ -89,7 +91,7 @@ Expected verification:
 
 ## Task 8: Implement Multi-Table ZIP Export
 
-Status: Complete for small synchronous local exports. Large-export progress or async handling remains Task 9.
+Status: Complete for local multi-table ZIP exports. The manifest, ledger tables, account summary, active-record filtering, and staged progress path are covered.
 
 Generate manifest, ledger tables, and account summary.
 
@@ -101,6 +103,8 @@ Expected verification:
 - ZIP rows exclude voided records and media bytes/base64.
 
 ## Task 9: Add Performance Path
+
+Status: Complete for the current browser-local export boundary. ZIP generation yields between preparation/build stages and exposes progress to the UI; a worker-backed or server-side export remains a future optimization for substantially larger datasets.
 
 Add progress or large-export path for exports above 10,000 records.
 
