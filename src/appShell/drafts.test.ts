@@ -7,7 +7,9 @@ const completeExpense: DraftForm = {
   kind: "expense",
   category: "Daily",
   counterparty: "7-Eleven",
+  counterpartyMissing: false,
   itemName: "Tea egg",
+  itemNameMissing: false,
   transferAccount: "",
   transferMode: "same-currency",
   amount: "100",
@@ -42,6 +44,20 @@ const createDraft = (form: DraftForm, id: string) => createTransactionDraft(form
 describe("manual transaction drafts", () => {
   test.each(["account", "category", "counterparty", "itemName", "amount"] as const)("rejects blank expense %s after trimming", (field) => {
     expect(canCreate({ ...completeExpense, [field]: "   " })).toBe(false);
+  });
+
+  test("accepts fixed missing-value labels but rejects arbitrary replacements", () => {
+    const missingExpense = {
+      ...completeExpense,
+      counterparty: "Merchant unavailable",
+      counterpartyMissing: true,
+      itemName: "Item unavailable",
+      itemNameMissing: true,
+    };
+
+    expect(canCreate(missingExpense)).toBe(true);
+    expect(canCreate({ ...missingExpense, counterparty: "Unknown merchant" })).toBe(false);
+    expect(canCreate({ ...missingExpense, itemName: "Unknown item" })).toBe(false);
   });
 
   test("uses transfer-specific requirements without merchant or category", () => {

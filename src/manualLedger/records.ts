@@ -19,7 +19,9 @@ export type LocalLedgerRecord = {
   currency: string;
   category: string;
   counterparty: string;
+  counterpartyMissing: boolean;
   itemName: string;
+  itemNameMissing: boolean;
   transferAccountId: string;
   transferAccountName: string;
   transferMode: TransactionDraft["transferMode"];
@@ -124,7 +126,9 @@ function createRecord(
     currency: draft.currency,
     category: draft.category,
     counterparty: draft.counterparty,
+    counterpartyMissing: draft.counterpartyMissing,
     itemName: draft.itemName,
+    itemNameMissing: draft.itemNameMissing,
     transferAccountId: transferAccount?.id ?? "",
     transferAccountName: transferAccount?.name ?? "",
     transferMode: draft.transferMode,

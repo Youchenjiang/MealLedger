@@ -15,7 +15,9 @@ const expense: TransactionDraft = {
   kind: "expense",
   category: "Daily",
   counterparty: "Store",
+  counterpartyMissing: false,
   itemName: "Tea",
+  itemNameMissing: false,
   transferAccount: "",
   transferMode: "same-currency",
   amount: "100",
@@ -63,6 +65,25 @@ describe("local official ledger records", () => {
     expect(bundle?.auditEvents[0]).toMatchObject({
       targetId: "record-1",
       eventType: "record-created",
+    });
+  });
+
+  test("preserves explicit missing expense fields in the official record", () => {
+    const missingExpense: TransactionDraft = {
+      ...expense,
+      counterparty: "Merchant unavailable",
+      counterpartyMissing: true,
+      itemName: "Item unavailable",
+      itemNameMissing: true,
+    };
+
+    const bundle = createOfficialRecordBundle(missingExpense, accounts, options);
+
+    expect(bundle?.records[0]).toMatchObject({
+      counterparty: "Merchant unavailable",
+      counterpartyMissing: true,
+      itemName: "Item unavailable",
+      itemNameMissing: true,
     });
   });
 

@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { createTransactionDraft, draftKinds, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
@@ -949,7 +949,9 @@ function CapturePage({
     kind: "expense",
     category: "",
     counterparty: "",
+    counterpartyMissing: false,
     itemName: "",
+    itemNameMissing: false,
     transferAccount: "",
     transferMode: "same-currency",
     amount: "",
@@ -1132,6 +1134,17 @@ function CapturePage({
     updateForm(field, value);
   };
 
+  const setMissingExpenseField = (field: "counterparty" | "itemName", missing: boolean) => {
+    setFormError(null);
+    setSavedMessage("");
+    setForm((current) => ({
+      ...current,
+      ...(field === "counterparty"
+        ? { counterpartyMissing: missing, counterparty: missing ? missingCounterpartyLabel : "" }
+        : { itemNameMissing: missing, itemName: missing ? missingItemNameLabel : "" }),
+    }));
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
@@ -1156,7 +1169,9 @@ function CapturePage({
     setForm((current) => ({
       ...current,
       counterparty: "",
+      counterpartyMissing: false,
       itemName: "",
+      itemNameMissing: false,
       transferAccount: "",
       amount: "",
       destinationAmount: "",
@@ -1400,9 +1415,16 @@ function CapturePage({
                 pattern=".*\S.*"
                 title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`}
                 value={form.counterparty}
+                disabled={form.kind === "expense" && form.counterpartyMissing}
                 onChange={(event) => updateForm("counterparty", event.target.value)}
               />
-              {merchantSuggestions.length > 0 ? (
+              {form.kind === "expense" ? (
+                <label className="checkbox-field inline-checkbox">
+                  <input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} />
+                  <span>Merchant unavailable</span>
+                </label>
+              ) : null}
+              {merchantSuggestions.length > 0 && !form.counterpartyMissing ? (
                 <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} />
               ) : null}
             </div>
@@ -1436,8 +1458,12 @@ function CapturePage({
               <label htmlFor="entry-item-name">
                 <span>Item name</span>
               </label>
-              <input id="entry-item-name" required pattern=".*\S.*" value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
-              {itemSuggestions.length > 0 ? (
+              <input id="entry-item-name" required pattern=".*\S.*" disabled={form.itemNameMissing} value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
+              <label className="checkbox-field inline-checkbox">
+                <input type="checkbox" checked={form.itemNameMissing} onChange={(event) => setMissingExpenseField("itemName", event.target.checked)} />
+                <span>Item unavailable</span>
+              </label>
+              {itemSuggestions.length > 0 && !form.itemNameMissing ? (
                 <HistorySuggestions records={itemSuggestions} source="item" onApply={applySuggestion} />
               ) : null}
             </div>

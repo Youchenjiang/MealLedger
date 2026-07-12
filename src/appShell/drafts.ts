@@ -7,6 +7,8 @@ export type TransferMode = "same-currency" | "cross-currency";
 export type TimePrecision = "day" | "month" | "period";
 export type RefundSubtype = "refund" | "payback";
 export type RefundExcessHandling = "unclassified" | "income" | "negative-expense";
+export const missingCounterpartyLabel = "Merchant unavailable";
+export const missingItemNameLabel = "Item unavailable";
 
 export type DraftForm = {
   date: string;
@@ -14,7 +16,9 @@ export type DraftForm = {
   kind: DraftKind;
   category: string;
   counterparty: string;
+  counterpartyMissing: boolean;
   itemName: string;
+  itemNameMissing: boolean;
   transferAccount: string;
   transferMode: TransferMode;
   amount: string;
@@ -169,7 +173,9 @@ export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]):
   switch (normalized.kind) {
     case "expense":
       return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty", "itemName"])
-        && isPositiveAmount(normalized.amount);
+        && isPositiveAmount(normalized.amount)
+        && (!normalized.counterpartyMissing || normalized.counterparty === missingCounterpartyLabel)
+        && (!normalized.itemNameMissing || normalized.itemName === missingItemNameLabel);
     case "income":
       return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty"])
         && isPositiveAmount(normalized.amount);

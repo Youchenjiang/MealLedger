@@ -72,6 +72,37 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Daily wallet: TWD -417")).toBeInTheDocument();
   });
 
+  test("saves explicit fixed labels when expense details are unavailable", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.click(screen.getByRole("checkbox", { name: "Merchant unavailable" }));
+    await user.click(screen.getByRole("checkbox", { name: "Item unavailable" }));
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "80");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
+
+    expect(screen.getByText("Merchant unavailable")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          counterparty: "Merchant unavailable",
+          counterpartyMissing: true,
+          itemName: "Item unavailable",
+          itemNameMissing: true,
+        }),
+      ]),
+    );
+  });
+
   test("opens the workspace and navigates between core routes", async () => {
     const user = userEvent.setup();
     renderWorkspace();
