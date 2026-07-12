@@ -59,3 +59,11 @@ Test skipped onboarding can be reopened from Settings.
 Test onboarding does not create fake sample records.
 
 Test mobile layout has no overlapping text.
+
+## Implemented V1 Coverage
+
+- Local development mode is explicit and does not claim cloud sync when Supabase is not configured.
+- New users see first-account setup; setup can be skipped and reopened from Settings.
+- Current balance is posted as `fund-addition`, never `income`.
+- Default categories, income labels, tags, and aliases are merged case-insensitively and idempotently.
+- Magic Link request behavior is covered by `src/auth/authActions.test.ts`; configured Supabase session integration remains environment-dependent.
