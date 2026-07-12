@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, and support local edit/void lifecycle actions. Cloud sync, account balances, and several advanced field workflows remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, and project per-account balances. Cloud sync and several advanced field workflows remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -36,7 +36,7 @@ Expected verification:
 
 ## Task 4: Implement Fund Addition And Adjustment Forms
 
-Status: Partial. The local form, local official-save boundary, and persisted account setup exist. Report projections and balance calculations remain.
+Status: Partial. The local form, local official-save boundary, persisted account setup, and balance projection exist. Full report projections remain.
 
 Add fund addition and adjustment flows with report-safe labels and required reasons.
 
@@ -58,7 +58,7 @@ Expected verification:
 
 ## Task 6: Implement Refund And Payback Form
 
-Status: Partial. Refund fields save locally as official records. Payback subtype, linking, and excess handling remain.
+Status: Partial. Refund fields save locally as official records, including payback subtype, one linked expense, and an excess-classification guard. Multiple linked expenses and full refund settlement views remain.
 
 Add refund flow, payback subtype, linked expense selection placeholder, and excess refund warning.
 
@@ -83,6 +83,7 @@ Status: Complete for local persistence and lifecycle behavior.
 - Accounts and custom categories persist across reloads.
 - Official records can be edited with an incremented version and `record-updated` audit event.
 - Official records can be voided without hard deletion and with a `record-voided` audit event.
+- Overview projects active records into per-account balances without combining currencies.
 
 Expected verification:
 
@@ -131,7 +132,7 @@ Current slice evidence is recorded in the branch commits and must be rerun after
 
 Latest verification for the local lifecycle slice:
 
-- `npm run test`: 56 tests passed.
-- `npm run test:coverage`: 84.90% statements, 78.09% branches, 80.67% functions, and 84.81% lines.
+- `npm run test`: 63 tests passed.
+- `npm run test:coverage`: 85.89% statements, 79.09% branches, 82.14% functions, and 85.81% lines.
 - `npm run test:e2e`: 4 browser smoke tests passed.
-- `npm run build`: passed before the documentation-only update.
+- `npm run build`: passed.
