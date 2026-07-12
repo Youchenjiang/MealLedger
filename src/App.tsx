@@ -71,6 +71,35 @@ function draftDisplayName(draft: TransactionDraft): string {
   return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
 }
 
+function draftCountLabel(draftCount: number): string {
+  if (draftCount === 0) {
+    return "No drafts to review";
+  }
+
+  const noun = draftCount === 1 ? "draft" : "drafts";
+  return `${draftCount} ${noun} waiting`;
+}
+
+function draftReviewCopy(draftCount: number): string {
+  if (draftCount === 0) {
+    return "CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain separate files.";
+  }
+
+  const noun = draftCount === 1 ? "draft" : "drafts";
+  return `${draftCount} ${noun} can be reviewed here; confirmation arrives later.`;
+}
+
+function counterpartyLabel(kind: DraftForm["kind"]): string {
+  switch (kind) {
+    case "income":
+      return "Source";
+    case "adjustment":
+      return "Reason";
+    default:
+      return "Merchant";
+  }
+}
+
 function readStoredDrafts(): TransactionDraft[] {
   try {
     const stored = window.localStorage.getItem(draftsStorageKey);
@@ -85,7 +114,7 @@ function readStoredDrafts(): TransactionDraft[] {
   }
 }
 
-function PrimaryNav({ route, navigate }: { route: AppRoute; navigate: (item: NavItem) => void }) {
+function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
   return (
     <nav className="nav-list">
       {navItems.map((item) => {
@@ -109,7 +138,7 @@ function PrimaryNav({ route, navigate }: { route: AppRoute; navigate: (item: Nav
 
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
 
-function StatusStrip({ items }: { items: StatusItem[] }) {
+function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
   return (
     <section className="status-strip" aria-label="Application status">
       {items.map((item) => {
@@ -125,7 +154,7 @@ function StatusStrip({ items }: { items: StatusItem[] }) {
   );
 }
 
-function Brand({ caption, large = false }: { caption: string; large?: boolean }) {
+function Brand({ caption, large = false }: Readonly<{ caption: string; large?: boolean }>) {
   return (
     <div className={`brand ${large ? "large" : ""}`}>
       <div className="brand-mark">
@@ -139,7 +168,7 @@ function Brand({ caption, large = false }: { caption: string; large?: boolean })
   );
 }
 
-function Sidebar({ route, navigate }: { route: AppRoute; navigate: (item: NavItem) => void }) {
+function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
   return (
     <aside className="sidebar" aria-label="MealLedger navigation">
       <Brand caption="Personal ledger with optional meal notes" />
@@ -152,7 +181,7 @@ function Sidebar({ route, navigate }: { route: AppRoute; navigate: (item: NavIte
   );
 }
 
-function WorkspaceHeader({ route, statusItems }: { route: AppRoute; statusItems: StatusItem[] }) {
+function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -240,7 +269,7 @@ export function App() {
         tone: "neutral",
       },
       {
-        label: draftCount > 0 ? `${draftCount} draft${draftCount === 1 ? "" : "s"} waiting` : "No drafts to review",
+        label: draftCountLabel(draftCount),
         detail:
           draftCount > 0
             ? "Review or discard drafts before the later ledger workflow writes records."
@@ -283,7 +312,7 @@ export function App() {
   );
 }
 
-function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
+function SignedOutShell({ onSignIn }: Readonly<{ onSignIn: () => void }>) {
   return (
     <main className="signed-out-shell">
       <section className="signed-out-panel">
@@ -339,7 +368,7 @@ function renderRoute(
   }
 }
 
-function OverviewPage({ draftCount, navigate }: { draftCount: number; navigate: (item: NavItem) => void }) {
+function OverviewPage({ draftCount, navigate }: Readonly<{ draftCount: number; navigate: (item: NavItem) => void }>) {
   return (
     <div className="route-stack">
       <section className="summary-grid">
@@ -376,11 +405,11 @@ function LedgerPage({
   drafts,
   navigate,
   onDiscardDraft,
-}: {
+}: Readonly<{
   drafts: TransactionDraft[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
-}) {
+}>) {
   const draftCount = drafts.length;
   const ledgerColumns = [
     "Record ID",
@@ -414,9 +443,7 @@ function LedgerPage({
         </Panel>
         <Panel title={draftCount > 0 ? "Drafts waiting" : "Clean export"} eyebrow="Portability">
           <p className="panel-copy">
-            {draftCount > 0
-              ? `${draftCount} draft${draftCount === 1 ? "" : "s"} can be reviewed here; confirmation arrives later.`
-              : "CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain separate files."}
+            {draftReviewCopy(draftCount)}
           </p>
         </Panel>
       </section>
@@ -465,7 +492,7 @@ function LedgerPage({
 
 type CaptureActionData = { title: string; detail: string; icon: LucideIcon; available: boolean };
 
-function CaptureAction({ action }: { action: CaptureActionData }) {
+function CaptureAction({ action }: Readonly<{ action: CaptureActionData }>) {
   const Icon = action.icon;
   const content = (
     <>
@@ -489,11 +516,11 @@ function CapturePage({
   drafts,
   navigate,
   onCreateDraft,
-}: {
+}: Readonly<{
   drafts: TransactionDraft[];
   navigate: (item: NavItem) => void;
   onCreateDraft: (draft: TransactionDraft) => void;
-}) {
+}>) {
   const [form, setForm] = useState<DraftForm>({
     date: localDate(),
     account: "Cash",
@@ -585,7 +612,7 @@ function CapturePage({
   );
 }
 
-function CaptureSourcesPanel({ actions }: { actions: CaptureActionData[] }) {
+function CaptureSourcesPanel({ actions }: Readonly<{ actions: CaptureActionData[] }>) {
   return (
     <Panel title="Choose how to start" eyebrow="Input sources">
       <p className="panel-copy">
@@ -604,12 +631,12 @@ function ManualDraftPanel({
   updateForm,
   onSubmit,
   formError,
-}: {
+}: Readonly<{
   form: DraftForm;
   updateForm: (field: keyof DraftForm, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   formError: string | null;
-}) {
+}>) {
   return (
     <article className="panel">
       <div className="panel-heading">
@@ -628,12 +655,12 @@ function ManualDraftForm({
   updateForm,
   onSubmit,
   formError,
-}: {
+}: Readonly<{
   form: DraftForm;
   updateForm: (field: keyof DraftForm, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   formError: string | null;
-}) {
+}>) {
   return (
     <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
       <label>
@@ -677,7 +704,7 @@ function ManualDraftForm({
   );
 }
 
-function DraftKindFields({ form, updateForm }: { form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }) {
+function DraftKindFields({ form, updateForm }: Readonly<{ form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }>) {
   if (form.kind === "transfer") {
     return (
       <label>
@@ -694,7 +721,7 @@ function DraftKindFields({ form, updateForm }: { form: DraftForm; updateForm: (f
         <input required pattern=".*\S.*" title="Enter a category." value={form.category} onChange={(event) => updateForm("category", event.target.value)} placeholder="Daily" />
       </label>
       <label>
-        <span>{form.kind === "income" ? "Source" : form.kind === "adjustment" ? "Reason" : "Merchant"}</span>
+        <span>{counterpartyLabel(form.kind)}</span>
         <input required pattern=".*\S.*" title="Enter the source, merchant, or reason." value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)} placeholder={form.kind === "income" ? "Salary" : "7-Eleven"} />
       </label>
     </>
@@ -742,7 +769,7 @@ function AccountSyncPanel() {
   );
 }
 
-function ImportExportPanel({ dataTools }: { dataTools: Array<{ title: string; detail: string }> }) {
+function ImportExportPanel({ dataTools }: Readonly<{ dataTools: Array<{ title: string; detail: string }> }>) {
   return (
     <Panel title="Import and export safeguards" eyebrow="Data portability">
       <p className="panel-copy">
@@ -754,7 +781,7 @@ function ImportExportPanel({ dataTools }: { dataTools: Array<{ title: string; de
   );
 }
 
-function DataToolList({ items }: { items: Array<{ title: string; detail: string }> }) {
+function DataToolList({ items }: Readonly<{ items: Array<{ title: string; detail: string }> }>) {
   return (
     <dl className="settings-list" aria-label="Data tool status">
       {items.map((item) => (
@@ -767,7 +794,7 @@ function DataToolList({ items }: { items: Array<{ title: string; detail: string 
   );
 }
 
-function NotFoundPage({ navigate }: { navigate: (item: NavItem) => void }) {
+function NotFoundPage({ navigate }: Readonly<{ navigate: (item: NavItem) => void }>) {
   return (
     <Panel title="Page not found" eyebrow="Safe recovery">
       <p className="panel-copy">This page is not part of the current workspace. Return to Overview.</p>
@@ -779,7 +806,7 @@ function NotFoundPage({ navigate }: { navigate: (item: NavItem) => void }) {
   );
 }
 
-function Panel({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
+function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow: string; children: React.ReactNode }>) {
   return (
     <article className="panel">
       <div className="panel-heading">
@@ -793,7 +820,7 @@ function Panel({ title, eyebrow, children }: { title: string; eyebrow: string; c
   );
 }
 
-function EmptyMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function EmptyMetric({ label, value, detail }: Readonly<{ label: string; value: string; detail: string }>) {
   return (
     <article className="summary-card">
       <p>{label}</p>
