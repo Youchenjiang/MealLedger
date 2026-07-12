@@ -1218,6 +1218,7 @@ function CapturePage({
             </label>
           ) : null}
           </fieldset>
+          {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
           <button className="primary-action align-start" disabled={!hasSelectedAccount} type="submit">
             {hasSelectedAccount ? "Create draft" : "Add an account first"}
           </button>
