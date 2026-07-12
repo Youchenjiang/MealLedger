@@ -65,6 +65,7 @@ const accountsStorageKey = "mealledger.manual-ledger.accounts";
 const recordsStorageKey = "mealledger.manual-ledger.records";
 const auditEventsStorageKey = "mealledger.manual-ledger.audit-events";
 const categoriesStorageKey = "mealledger.manual-ledger.custom-categories";
+const sourcesStorageKey = "mealledger.manual-ledger.custom-sources";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -105,6 +106,20 @@ function readStoredAccounts(): LocalAccount[] {
 function readStoredCategories(): string[] {
   try {
     const stored = window.localStorage.getItem(categoriesStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredSources(): string[] {
+  try {
+    const stored = window.localStorage.getItem(sourcesStorageKey);
     if (!stored) {
       return [];
     }
@@ -1117,6 +1132,10 @@ function CapturePage({
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [quickCategoryName, setQuickCategoryName] = useState("");
   const [quickCategoryError, setQuickCategoryError] = useState("");
+  const [customSources, setCustomSources] = useState<string[]>(readStoredSources);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [quickSourceName, setQuickSourceName] = useState("");
+  const [quickSourceError, setQuickSourceError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
 
   useEffect(() => {
@@ -1126,6 +1145,14 @@ function CapturePage({
       // Category persistence is best effort while the account and record stores remain local-first.
     }
   }, [customCategories]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(sourcesStorageKey, JSON.stringify(customSources));
+    } catch {
+      // Source persistence is best effort while the account and record stores remain local-first.
+    }
+  }, [customSources]);
 
   const recordCount = records.length;
   const actions = [
@@ -1169,6 +1196,10 @@ function CapturePage({
   const isUnresolvedExpense = form.kind === "unresolved-expense";
   const hasSelectedAccount = accounts.some((account) => account.name === form.account);
   const categoryOptions = (form.kind === "income" ? incomeCategories : expenseCategories).concat(customCategories);
+  const sourceOptions = useMemo(
+    () => [...new Set([...customSources, ...records.filter((record) => record.kind === "income" || record.kind === "fund-addition").map((record) => record.counterparty).filter(Boolean)])],
+    [customSources, records],
+  );
   const refundableRecords = records.filter((record) => record.kind === "expense" && record.recordState !== "voided");
   const merchantSuggestions = form.counterparty.trim()
     ? records.filter((record) => record.recordState !== "voided" && record.counterparty.toLocaleLowerCase().includes(form.counterparty.trim().toLocaleLowerCase())).slice(0, 5)
@@ -1260,6 +1291,26 @@ function CapturePage({
     setQuickCategoryName("");
     setQuickCategoryError("");
     setIsAddingCategory(false);
+  };
+
+  const addQuickSource = () => {
+    const source = quickSourceName.trim();
+
+    if (!source) {
+      setQuickSourceError("Enter a source before adding it.");
+      return;
+    }
+
+    if (sourceOptions.some((item) => item.toLocaleLowerCase() === source.toLocaleLowerCase())) {
+      setQuickSourceError("This source already exists.");
+      return;
+    }
+
+    setCustomSources((current) => [...current, source]);
+    setForm((current) => ({ ...current, counterparty: source }));
+    setQuickSourceName("");
+    setQuickSourceError("");
+    setIsAddingSource(false);
   };
 
   const applySuggestion = (field: "counterparty" | "itemName" | "amount" | "account" | "category" | "currency", value: string) => {
@@ -1544,29 +1595,55 @@ function CapturePage({
             </div>
           ) : null}
           {needsCounterparty ? (
-            <div className="form-field">
-              <label htmlFor="entry-counterparty">
-                <span>{counterpartyLabel}</span>
-              </label>
-              <input
-                id="entry-counterparty"
-                required
-                pattern=".*\S.*"
-                title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`}
-                value={form.counterparty}
-                disabled={form.kind === "expense" && form.counterpartyMissing}
-                onChange={(event) => updateForm("counterparty", event.target.value)}
-              />
-              {form.kind === "expense" ? (
-                <label className="checkbox-field inline-checkbox">
-                  <input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} />
-                  <span>Merchant unavailable</span>
+            form.kind === "income" || form.kind === "fund-addition" ? (
+              <div className="form-field">
+                <label htmlFor="entry-source">Source</label>
+                <div className="field-control-row">
+                  <select id="entry-source" required value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)}>
+                    <option value="">Select a source</option>
+                    {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+                  </select>
+                  <button className="icon-button" type="button" aria-label="Add source" title="Add source" onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
+                    <Plus size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                {isAddingSource ? (
+                  <section className="quick-category" aria-label="Quick source setup">
+                    <label htmlFor="quick-source-name">New source</label>
+                    <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder="Parent" />
+                    <div className="quick-account-actions">
+                      <button className="primary-action" type="button" onClick={addQuickSource}>Add and select</button>
+                      <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>Cancel</button>
+                    </div>
+                    {quickSourceError ? <p className="quick-account-error" role="alert">{quickSourceError}</p> : null}
+                  </section>
+                ) : null}
+              </div>
+            ) : (
+              <div className="form-field">
+                <label htmlFor="entry-counterparty">
+                  <span>{counterpartyLabel}</span>
                 </label>
-              ) : null}
-              {merchantSuggestions.length > 0 && !form.counterpartyMissing ? (
-                <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} />
-              ) : null}
-            </div>
+                <input
+                  id="entry-counterparty"
+                  required
+                  pattern=".*\S.*"
+                  title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`}
+                  value={form.counterparty}
+                  disabled={form.kind === "expense" && form.counterpartyMissing}
+                  onChange={(event) => updateForm("counterparty", event.target.value)}
+                />
+                {form.kind === "expense" ? (
+                  <label className="checkbox-field inline-checkbox">
+                    <input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} />
+                    <span>Merchant unavailable</span>
+                  </label>
+                ) : null}
+                {form.kind === "expense" && merchantSuggestions.length > 0 && !form.counterpartyMissing ? (
+                  <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} />
+                ) : null}
+              </div>
+            )
           ) : null}
           {form.kind === "refund" ? (
             <>

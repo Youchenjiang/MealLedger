@@ -103,6 +103,28 @@ describe("App shell draft flow", () => {
     );
   });
 
+  test("lets income sources be selected or added inline", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Type"), "income");
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.selectOptions(screen.getByLabelText("Category"), "Allowance");
+    await user.click(screen.getByRole("button", { name: "Add source" }));
+    await user.type(screen.getByLabelText("New source"), "Parent");
+    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await user.clear(screen.getByLabelText("Amount", { exact: true }));
+    await user.type(screen.getByLabelText("Amount", { exact: true }), "500");
+    expect(screen.getByLabelText("Source")).toHaveValue("Parent");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
+
+    expect(screen.getByText("Parent")).toBeInTheDocument();
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));
