@@ -125,6 +125,31 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Parent")).toBeInTheDocument();
   });
 
+  test("exposes clean CSV and JSON exports from Settings", async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => "blob:mealledger");
+    const revokeObjectURL = vi.fn();
+    const originalCreateObjectURL = window.URL.createObjectURL;
+    const originalRevokeObjectURL = window.URL.revokeObjectURL;
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+    await user.click(screen.getByRole("button", { name: "Export JSON" }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(2);
+    expect(revokeObjectURL).toHaveBeenCalledTimes(2);
+    expect(anchorClick).toHaveBeenCalledTimes(2);
+    anchorClick.mockRestore();
+    Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: originalCreateObjectURL });
+    Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectURL });
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));

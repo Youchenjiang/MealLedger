@@ -24,6 +24,7 @@ import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCoun
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
+import { serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -56,6 +57,20 @@ function localDate(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function downloadTextFile(content: string, fileName: string, mimeType: string): void {
+  const urlApi = window.URL;
+  if (!urlApi.createObjectURL) {
+    return;
+  }
+
+  const url = urlApi.createObjectURL(new Blob([content], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  urlApi.revokeObjectURL(url);
 }
 
 let draftSequence = 0;
@@ -548,7 +563,7 @@ function renderRoute(
         />
       );
     case "settings":
-      return <SettingsPage accounts={accounts} onAddAccount={(account) => setAccounts((current) => [...current, account])} />;
+      return <SettingsPage accounts={accounts} records={records} onAddAccount={(account) => setAccounts((current) => [...current, account])} />;
     default:
       return <NotFoundPage navigate={navigate} />;
   }
@@ -2035,7 +2050,7 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
   );
 }
 
-function SettingsPage({ accounts, onAddAccount }: Readonly<{ accounts: LocalAccount[]; onAddAccount: (account: LocalAccount) => void }>) {
+function SettingsPage({ accounts, records, onAddAccount }: Readonly<{ accounts: LocalAccount[]; records: LocalLedgerRecord[]; onAddAccount: (account: LocalAccount) => void }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
   const dataTools = [
@@ -2097,7 +2112,7 @@ function SettingsPage({ accounts, onAddAccount }: Readonly<{ accounts: LocalAcco
         ) : null}
       </Panel>
       <AccountSyncPanel />
-      <ImportExportPanel dataTools={dataTools} />
+      <ImportExportPanel dataTools={dataTools} records={records} />
     </section>
   );
 }
@@ -2119,13 +2134,17 @@ function AccountSyncPanel() {
   );
 }
 
-function ImportExportPanel({ dataTools }: Readonly<{ dataTools: Array<{ title: string; detail: string }> }>) {
+function ImportExportPanel({ dataTools, records }: Readonly<{ dataTools: Array<{ title: string; detail: string }>; records: LocalLedgerRecord[] }>) {
   return (
     <Panel title="Import and export safeguards" eyebrow="Data portability">
       <p className="panel-copy">
         Clean exports include confirmed ledger records only. Attachments stay as metadata
         references, not image bytes, and CSV/JSON use the same stable field set.
       </p>
+      <div className="quick-account-actions">
+        <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
+        <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
+      </div>
       <DataToolList items={dataTools} />
     </Panel>
   );
