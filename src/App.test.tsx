@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
@@ -156,6 +156,24 @@ describe("App shell draft flow", () => {
 
     await user.click(screen.getByRole("button", { name: "Create draft" }));
 
+    expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+  });
+
+  test("shows a fallback error when draft validation rejects submission", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+
+    const form = document.querySelector("form");
+    if (!form) {
+      throw new Error("Manual draft form was not rendered");
+    }
+
+    fireEvent.submit(form);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Please fill in all required fields");
     expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
   });
 

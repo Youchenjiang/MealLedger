@@ -470,6 +470,7 @@ function CapturePage({
     currency: "TWD",
     note: "",
   });
+  const [formError, setFormError] = useState<string | null>(null);
 
   const draftCount = drafts.length;
   const latestDraft = drafts[0];
@@ -501,14 +502,17 @@ function CapturePage({
   ];
 
   const updateForm = (field: keyof DraftForm, value: string) => {
+    setFormError(null);
     setForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError(null);
     const nextDraft = createTransactionDraft(form, draftId());
 
     if (!nextDraft) {
+      setFormError("Please fill in all required fields before creating a draft.");
       return;
     }
 
@@ -525,7 +529,7 @@ function CapturePage({
   return (
     <section className="capture-layout">
       <CaptureSourcesPanel actions={actions} />
-      <ManualDraftPanel form={form} updateForm={updateForm} onSubmit={handleSubmit} />
+       <ManualDraftPanel form={form} updateForm={updateForm} onSubmit={handleSubmit} formError={formError} />
       {draftCount > 0 ? (
         <Panel title="Draft ready for review" eyebrow="Local draft">
           <p className="panel-copy">
@@ -564,14 +568,16 @@ function ManualDraftPanel({
   form,
   updateForm,
   onSubmit,
+  formError,
 }: {
   form: DraftForm;
   updateForm: (field: keyof DraftForm, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  formError: string | null;
 }) {
   return (
     <Panel title="Manual transaction draft" eyebrow="Local draft">
-      <ManualDraftForm form={form} updateForm={updateForm} onSubmit={onSubmit} />
+      <ManualDraftForm form={form} updateForm={updateForm} onSubmit={onSubmit} formError={formError} />
     </Panel>
   );
 }
@@ -580,10 +586,12 @@ function ManualDraftForm({
   form,
   updateForm,
   onSubmit,
+  formError,
 }: {
   form: DraftForm;
   updateForm: (field: keyof DraftForm, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  formError: string | null;
 }) {
   return (
     <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
@@ -622,6 +630,7 @@ function ManualDraftForm({
         <span>Note</span>
         <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Optional context before review" />
       </label>
+      {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
       <button className="primary-action align-start" type="submit">Create draft</button>
     </form>
   );
