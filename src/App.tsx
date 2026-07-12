@@ -22,6 +22,7 @@ import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { createTransactionDraft, draftKinds, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
+import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
 
 const navItems: NavItem[] = [
@@ -460,7 +461,7 @@ function renderRoute(
 
   switch (route) {
     case "overview":
-      return <OverviewPage draftCount={draftCount} recordCount={recordCount} navigate={navigate} />;
+      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} navigate={navigate} />;
     case "ledger":
       return (
         <LedgerPage
@@ -523,11 +524,20 @@ function renderRoute(
   }
 }
 
-function OverviewPage({ draftCount, recordCount, navigate }: Readonly<{ draftCount: number; recordCount: number; navigate: (item: NavItem) => void }>) {
+function OverviewPage({ draftCount, recordCount, accountBalances, navigate }: Readonly<{
+  draftCount: number;
+  recordCount: number;
+  accountBalances: ReturnType<typeof calculateAccountBalances>;
+  navigate: (item: NavItem) => void;
+}>) {
+  const accountDetail = accountBalances.length === 0
+    ? "Add accounts before recording transactions."
+    : accountBalances.slice(0, 3).map((account) => `${account.name}: ${formatAccountBalance(account.balance, account.currency)}`).join(" · ");
+
   return (
     <div className="route-stack">
       <section className="summary-grid">
-        <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
+        <EmptyMetric label="Account summary" value={accountBalances.length > 0 ? `${accountBalances.length} account${accountBalances.length === 1 ? "" : "s"}` : "No balances yet"} detail={accountDetail} />
         <EmptyMetric label="Ledger records" value={recordCount > 0 ? `${recordCount} saved` : "No records"} detail={recordCount > 0 ? "Official local records are ready in Ledger." : "Your confirmed transactions will appear here."} />
         <EmptyMetric
           label="Draft reviews"

@@ -66,6 +66,10 @@ describe("App shell draft flow", () => {
     expect(within(recordList).getByText("全聯")).toBeInTheDocument();
     expect(within(recordList).getByText("TWD 417")).toBeInTheDocument();
     expect(screen.queryByText("No confirmed ledger records yet.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.getByText("1 account")).toBeInTheDocument();
+    expect(screen.getByText("Daily wallet: TWD -417")).toBeInTheDocument();
   });
 
   test("opens the workspace and navigates between core routes", async () => {
