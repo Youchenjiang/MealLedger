@@ -20,6 +20,7 @@ import {
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { createTransactionDraft, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -228,6 +229,7 @@ export function App() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [accounts, setAccounts] = useState<LocalAccount[]>([]);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const route = location.route;
   const draftCount = drafts.length;
@@ -306,7 +308,7 @@ export function App() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} />
-        {renderRoute(route, drafts, setDrafts, navigate)}
+        {renderRoute(route, drafts, setDrafts, accounts, setAccounts, navigate)}
       </section>
     </main>
   );
@@ -338,6 +340,8 @@ function renderRoute(
   route: AppRoute,
   drafts: TransactionDraft[],
   setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>,
+  accounts: LocalAccount[],
+  setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
 ) {
   const draftCount = drafts.length;
@@ -357,12 +361,13 @@ function renderRoute(
       return (
         <CapturePage
           drafts={drafts}
+          accounts={accounts}
           navigate={navigate}
           onCreateDraft={(draft) => setDrafts((current) => [draft, ...current])}
         />
       );
     case "settings":
-      return <SettingsPage />;
+      return <SettingsPage accounts={accounts} onAddAccount={(account) => setAccounts((current) => [...current, account])} />;
     default:
       return <NotFoundPage navigate={navigate} />;
   }
@@ -514,16 +519,18 @@ function CaptureAction({ action }: Readonly<{ action: CaptureActionData }>) {
 
 function CapturePage({
   drafts,
+  accounts,
   navigate,
   onCreateDraft,
 }: Readonly<{
   drafts: TransactionDraft[];
+  accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onCreateDraft: (draft: TransactionDraft) => void;
 }>) {
   const [form, setForm] = useState<DraftForm>({
     date: localDate(),
-    account: "Cash",
+    account: "",
     kind: "expense",
     category: "Daily",
     counterparty: "",
@@ -591,7 +598,7 @@ function CapturePage({
   return (
     <section className="capture-layout">
       <CaptureSourcesPanel actions={actions} />
-       <ManualDraftPanel form={form} updateForm={updateForm} onSubmit={handleSubmit} formError={formError} />
+      <ManualDraftPanel accounts={accounts} form={form} updateForm={updateForm} onSubmit={handleSubmit} formError={formError} />
       {draftCount > 0 ? (
         <Panel title="Draft ready for review" eyebrow="Local draft">
           <p className="panel-copy">
@@ -627,11 +634,13 @@ function CaptureSourcesPanel({ actions }: Readonly<{ actions: CaptureActionData[
 }
 
 function ManualDraftPanel({
+  accounts,
   form,
   updateForm,
   onSubmit,
   formError,
 }: Readonly<{
+  accounts: LocalAccount[];
   form: DraftForm;
   updateForm: (field: keyof DraftForm, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -645,17 +654,19 @@ function ManualDraftPanel({
           <h2>Manual transaction draft</h2>
         </div>
       </div>
-      <ManualDraftForm form={form} updateForm={updateForm} onSubmit={onSubmit} formError={formError} />
+      <ManualDraftForm accounts={accounts} form={form} updateForm={updateForm} onSubmit={onSubmit} formError={formError} />
     </article>
   );
 }
 
 function ManualDraftForm({
+  accounts,
   form,
   updateForm,
   onSubmit,
   formError,
 }: Readonly<{
+  accounts: LocalAccount[];
   form: DraftForm;
   updateForm: (field: keyof DraftForm, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -669,7 +680,14 @@ function ManualDraftForm({
       </label>
       <label>
         <span>Account</span>
-        <input required pattern=".*\S.*" title="Enter an account name." value={form.account} onChange={(event) => updateForm("account", event.target.value)} placeholder="Cash" />
+        <select required disabled={accounts.length === 0} value={form.account} onChange={(event) => updateForm("account", event.target.value)}>
+          <option value="">{accounts.length === 0 ? "Create an account in Settings first" : "Select an account"}</option>
+          {accounts.map((account) => (
+            <option key={account.id} value={account.name}>
+              {account.name} ({account.currency})
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         <span>Type</span>
@@ -681,7 +699,7 @@ function ManualDraftForm({
           <option value="adjustment">Adjustment</option>
         </select>
       </label>
-      <DraftKindFields form={form} updateForm={updateForm} />
+      <DraftKindFields accounts={accounts} form={form} updateForm={updateForm} />
       <label>
         <span>Amount</span>
         <input required inputMode="decimal" min="0" step="any" type="number" value={form.amount} onChange={(event) => updateForm("amount", event.target.value)} placeholder="100" />
@@ -704,12 +722,19 @@ function ManualDraftForm({
   );
 }
 
-function DraftKindFields({ form, updateForm }: Readonly<{ form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }>) {
+function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: LocalAccount[]; form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }>) {
   if (form.kind === "transfer") {
     return (
       <label>
         <span>Transfer account</span>
-        <input required pattern=".*\S.*" title="Enter the destination account." value={form.transferAccount} onChange={(event) => updateForm("transferAccount", event.target.value)} placeholder="Post office savings" />
+        <select required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => updateForm("transferAccount", event.target.value)}>
+          <option value="">{accounts.length < 2 ? "Create another account in Settings first" : "Select destination account"}</option>
+          {accounts.filter((account) => account.name !== form.account).map((account) => (
+            <option key={account.id} value={account.name}>
+              {account.name} ({account.currency})
+            </option>
+          ))}
+        </select>
       </label>
     );
   }
@@ -728,7 +753,9 @@ function DraftKindFields({ form, updateForm }: Readonly<{ form: DraftForm; updat
   );
 }
 
-function SettingsPage() {
+function SettingsPage({ accounts, onAddAccount }: Readonly<{ accounts: LocalAccount[]; onAddAccount: (account: LocalAccount) => void }>) {
+  const [accountName, setAccountName] = useState("");
+  const [accountCurrency, setAccountCurrency] = useState("TWD");
   const dataTools = [
     {
       title: "CSV import review",
@@ -744,8 +771,49 @@ function SettingsPage() {
     },
   ];
 
+  const handleAccountSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const account = createLocalAccount(accountName, accountCurrency, draftId());
+
+    if (!account || accounts.some((item) => item.name.toLocaleLowerCase() === account.name.toLocaleLowerCase())) {
+      return;
+    }
+
+    onAddAccount(account);
+    setAccountName("");
+  };
+
   return (
     <section className="content-grid">
+      <Panel title="Accounts" eyebrow="Local setup">
+        <p className="panel-copy">Create the accounts that manual records may use. This preview keeps them only in the current workspace session.</p>
+        <form className="draft-form" onSubmit={handleAccountSubmit}>
+          <label>
+            <span>Account name</span>
+            <input required pattern=".*\S.*" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Daily wallet" />
+          </label>
+          <label>
+            <span>Currency</span>
+            <select value={accountCurrency} onChange={(event) => setAccountCurrency(event.target.value)}>
+              <option value="TWD">TWD</option>
+              <option value="JPY">JPY</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+          <button className="primary-action align-start" type="submit">Add account</button>
+        </form>
+        {accounts.length === 0 ? <p className="panel-copy">No accounts yet. Add one before creating a manual record.</p> : null}
+        {accounts.length > 0 ? (
+          <ul className="account-list" aria-label="Available accounts">
+            {accounts.map((account) => (
+              <li key={account.id}>
+                <strong>{account.name}</strong>
+                <span>{account.currency}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Panel>
       <AccountSyncPanel />
       <ImportExportPanel dataTools={dataTools} />
     </section>

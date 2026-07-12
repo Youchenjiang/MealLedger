@@ -19,6 +19,13 @@ async function openWorkspace(page: Page) {
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
 }
 
+async function addAccount(page: Page, name: string) {
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Account name").fill(name);
+  await page.getByRole("button", { name: "Add account" }).click();
+  await expect(page.getByLabel("Available accounts")).toContainText(name);
+}
+
 async function expectNoHorizontalOverflow(page: Page) {
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
@@ -48,7 +55,9 @@ test("creates a local draft and keeps the confirmed ledger empty", async ({ page
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
+  await addAccount(page, "Daily wallet");
   await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByLabel("Account").selectOption("Daily wallet");
   await page.getByLabel("Merchant").fill("全聯");
   await page.getByLabel("Amount").fill("417");
   await page.getByRole("button", { name: "Create draft" }).click();

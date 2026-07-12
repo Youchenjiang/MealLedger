@@ -16,7 +16,16 @@ async function goToCapture(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Capture" }));
 }
 
+async function addAccount(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(screen.getByRole("button", { name: "Settings" }));
+  await user.type(screen.getByLabelText("Account name"), name);
+  await user.click(screen.getByRole("button", { name: "Add account" }));
+}
+
 async function createExpenseDraft(user: ReturnType<typeof userEvent.setup>) {
+  await addAccount(user, "Daily wallet");
+  await goToCapture(user);
+  await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
   await user.clear(screen.getByLabelText("Merchant"));
   await user.type(screen.getByLabelText("Merchant"), "全聯");
   await user.clear(screen.getByLabelText("Amount"));
@@ -138,8 +147,11 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await addAccount(user, "Savings");
     await goToCapture(user);
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
 
@@ -149,10 +161,10 @@ describe("App shell draft flow", () => {
 
     expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Transfer account"), "郵局存款");
+    await user.selectOptions(screen.getByLabelText("Transfer account"), "Savings");
     await user.click(screen.getByRole("button", { name: "Create draft" }));
 
-    expect(screen.getByText("Latest: Cash to 郵局存款, TWD 1000")).toBeInTheDocument();
+    expect(screen.getByText("Latest: Daily wallet to Savings, TWD 1000")).toBeInTheDocument();
   });
 
   test("uses native form validation to block incomplete manual drafts", async () => {

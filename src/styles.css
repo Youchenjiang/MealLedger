@@ -597,6 +597,30 @@ button.action-card.unavailable {
   gap: 4px;
 }
 
+.account-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #ebe4d8;
+  border-radius: 8px;
+  background: #fcfaf5;
+}
+
+.account-list span {
+  color: #69645c;
+  font-size: 13px;
+}
+
 .settings-list dt {
   font-weight: 700;
 }
