@@ -26,7 +26,7 @@ Expected verification:
 
 ## Task 3: Implement Expense And Income Forms
 
-Status: Partial. Expense and income records save locally as official records. Explicit missing-value controls and history suggestions remain.
+Status: Partial. Expense and income records save locally as official records, and history suggestions are available. Explicit missing-value controls remain.
 
 Add expense and income validation, missing merchant/item controls, and inline category/source creation placeholders.
 
@@ -92,11 +92,13 @@ Expected verification:
 
 ## Task 8: Add History Suggestions
 
+Status: Complete for local merchant/item suggestions.
+
 Add suggestion surfaces for merchant and item/name entry.
 
 Expected verification:
 
-- Suggestions can be accepted field by field and cleared field by field.
+- Suggestions can be accepted field by field and cleared field by field. Covered by App integration tests.
 
 ## Task 9: Add Recurrence Intent Control
 
@@ -132,7 +134,7 @@ Current slice evidence is recorded in the branch commits and must be rerun after
 
 Latest verification for the local lifecycle slice:
 
-- `npm run test`: 63 tests passed.
-- `npm run test:coverage`: 85.89% statements, 79.09% branches, 82.14% functions, and 85.81% lines.
+- `npm run test`: 64 tests passed.
+- `npm run test:coverage`: 85.97% statements, 79.96% branches, 82.19% functions, and 85.90% lines.
 - `npm run test:e2e`: 4 browser smoke tests passed.
 - `npm run build`: passed.
