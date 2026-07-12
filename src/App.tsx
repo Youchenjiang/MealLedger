@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { createTransactionDraft, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { createTransactionDraft, draftKinds, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 
 const navItems: NavItem[] = [
@@ -534,9 +534,22 @@ function CapturePage({
     kind: "expense",
     category: "Daily",
     counterparty: "",
+    itemName: "",
     transferAccount: "",
+    transferMode: "same-currency",
     amount: "",
     currency: "TWD",
+    destinationAmount: "",
+    destinationCurrency: "JPY",
+    feeEnabled: false,
+    feeAccount: "",
+    feeAmount: "",
+    feeCurrency: "TWD",
+    feeCategory: "",
+    refundReason: "",
+    reason: "",
+    timePrecision: "day",
+    period: "",
     note: "",
   });
   const [formError, setFormError] = useState<string | null>(null);
@@ -575,6 +588,13 @@ function CapturePage({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const isTransfer = form.kind === "transfer";
+  const needsCategory = form.kind === "expense" || form.kind === "income" || form.kind === "refund";
+  const counterpartyLabel =
+    form.kind === "expense" ? "Merchant" : form.kind === "income" || form.kind === "fund-addition" ? "Source" : "Merchant or source";
+  const needsCounterparty = form.kind === "expense" || form.kind === "income" || form.kind === "refund" || form.kind === "fund-addition";
+  const shouldShowDate = form.kind !== "unresolved-expense" || form.timePrecision === "day";
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
@@ -589,16 +609,269 @@ function CapturePage({
     setForm((current) => ({
       ...current,
       counterparty: "",
+      itemName: "",
       transferAccount: "",
       amount: "",
+      destinationAmount: "",
+      feeEnabled: false,
+      feeAccount: "",
+      feeAmount: "",
+      feeCategory: "",
+      refundReason: "",
+      reason: "",
+      period: "",
       note: "",
     }));
   };
 
   return (
     <section className="capture-layout">
-      <CaptureSourcesPanel actions={actions} />
-      <ManualDraftPanel accounts={accounts} form={form} updateForm={updateForm} onSubmit={handleSubmit} formError={formError} />
+      <Panel title="Choose how to start" eyebrow="Input sources">
+        <p className="panel-copy">
+          Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
+          you review or discard them; ledger confirmation arrives later.
+        </p>
+        <div className="planned-actions">
+          {actions.map((action) => {
+            const Icon = action.icon;
+            if (action.available) {
+              return (
+                <a className="action-card primary-card" href="#manual-draft-form" key={action.title}>
+                  <Icon size={22} aria-hidden="true" />
+                  <span>
+                    <strong>{action.title}</strong>
+                    <small>{action.detail}</small>
+                    <em>Manual draft</em>
+                  </span>
+                </a>
+              );
+            }
+
+            return (
+              <button className="action-card unavailable" disabled type="button" key={action.title}>
+                <Icon size={22} aria-hidden="true" />
+                <span>
+                  <strong>{action.title}</strong>
+                  <small>{action.detail}</small>
+                  <em>Coming soon</em>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Panel>
+      <Panel title="Manual transaction draft" eyebrow="Local draft">
+        <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
+          {shouldShowDate ? (
+            <label>
+              <span>Date</span>
+              <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+            </label>
+          ) : null}
+          <label>
+            <span>{isTransfer ? "Source account" : "Account"}</span>
+            <select
+              required
+              disabled={accounts.length === 0}
+              value={form.account}
+              onChange={(event) => updateForm("account", event.target.value)}
+            >
+              <option value="">{accounts.length === 0 ? "Create an account in Settings first" : "Select an account"}</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.name}>
+                  {account.name} ({account.currency})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Type</span>
+            <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
+              {draftKinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {kindLabel(kind)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {needsCategory ? (
+            <label>
+              <span>Category</span>
+              <input
+                required
+                pattern=".*\S.*"
+                title="Enter a category."
+                value={form.category}
+                onChange={(event) => updateForm("category", event.target.value)}
+                placeholder="Daily"
+              />
+            </label>
+          ) : null}
+          {needsCounterparty ? (
+            <label>
+              <span>{counterpartyLabel}</span>
+              <input
+                required
+                pattern=".*\S.*"
+                title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`}
+                value={form.counterparty}
+                onChange={(event) => updateForm("counterparty", event.target.value)}
+              />
+            </label>
+          ) : null}
+          {form.kind === "expense" ? (
+            <label>
+              <span>Item name</span>
+              <input required pattern=".*\S.*" value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
+            </label>
+          ) : null}
+          {isTransfer ? (
+            <>
+              <label>
+                <span>Transfer type</span>
+                <select value={form.transferMode} onChange={(event) => updateForm("transferMode", event.target.value as DraftForm["transferMode"])}>
+                  <option value="same-currency">Same currency</option>
+                  <option value="cross-currency">Cross currency</option>
+                </select>
+              </label>
+              <label>
+                <span>Destination account</span>
+              <select
+                required
+                disabled={accounts.length < 2}
+                value={form.transferAccount}
+                onChange={(event) => updateForm("transferAccount", event.target.value)}
+              >
+                <option value="">{accounts.length < 2 ? "Create another account in Settings first" : "Select destination account"}</option>
+                {accounts
+                  .filter((account) => account.name !== form.account)
+                  .map((account) => (
+                    <option key={account.id} value={account.name}>
+                      {account.name} ({account.currency})
+                    </option>
+                  ))}
+              </select>
+              </label>
+            </>
+          ) : null}
+          <label>
+            <span>{isTransfer && form.transferMode === "cross-currency" ? "Source amount" : "Amount"}</span>
+            <input
+              required
+              inputMode="decimal"
+              min="0"
+              step="1"
+              type="number"
+              value={form.amount}
+              onChange={(event) => updateForm("amount", event.target.value)}
+              placeholder="100"
+            />
+          </label>
+          <label>
+            <span>{isTransfer && form.transferMode === "cross-currency" ? "Source currency" : "Currency"}</span>
+            <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
+              <option value="TWD">TWD</option>
+              <option value="JPY">JPY</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+          {isTransfer && form.transferMode === "cross-currency" ? (
+            <>
+              <label>
+                <span>Destination amount</span>
+                <input required inputMode="decimal" min="0" step="1" type="number" value={form.destinationAmount} onChange={(event) => updateForm("destinationAmount", event.target.value)} />
+              </label>
+              <label>
+                <span>Destination currency</span>
+                <select value={form.destinationCurrency} onChange={(event) => updateForm("destinationCurrency", event.target.value)}>
+                  <option value="TWD">TWD</option>
+                  <option value="JPY">JPY</option>
+                  <option value="USD">USD</option>
+                </select>
+              </label>
+            </>
+          ) : null}
+          {isTransfer ? (
+            <label className="full-span checkbox-field">
+              <input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} />
+              <span>Add transfer fee</span>
+            </label>
+          ) : null}
+          {isTransfer && form.feeEnabled ? (
+            <>
+              <label>
+                <span>Fee account</span>
+                <select value={form.feeAccount} onChange={(event) => updateForm("feeAccount", event.target.value)}>
+                  <option value="">Select fee account</option>
+                  {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Fee amount</span>
+                <input inputMode="decimal" min="0" step="1" type="number" value={form.feeAmount} onChange={(event) => updateForm("feeAmount", event.target.value)} />
+              </label>
+              <label>
+                <span>Fee currency</span>
+                <select value={form.feeCurrency} onChange={(event) => updateForm("feeCurrency", event.target.value)}>
+                  <option value="TWD">TWD</option>
+                  <option value="JPY">JPY</option>
+                  <option value="USD">USD</option>
+                </select>
+              </label>
+              <label>
+                <span>Fee category</span>
+                <input value={form.feeCategory} onChange={(event) => updateForm("feeCategory", event.target.value)} placeholder="Fees" />
+              </label>
+            </>
+          ) : null}
+          {form.kind === "refund" ? (
+            <label className="full-span">
+              <span>Refund reason</span>
+              <textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} />
+            </label>
+          ) : null}
+          {form.kind === "adjustment" ? (
+            <label className="full-span">
+              <span>Adjustment reason</span>
+              <textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} />
+            </label>
+          ) : null}
+          {form.kind === "unresolved-expense" ? (
+            <>
+              <label>
+                <span>Time precision</span>
+                <select value={form.timePrecision} onChange={(event) => updateForm("timePrecision", event.target.value as DraftForm["timePrecision"])}>
+                  <option value="day">Day</option>
+                  <option value="month">Month</option>
+                  <option value="period">Period</option>
+                </select>
+              </label>
+              {form.timePrecision !== "day" ? (
+                <label>
+                  <span>{form.timePrecision === "month" ? "Month" : "Period"}</span>
+                  <input required value={form.period} onChange={(event) => updateForm("period", event.target.value)} placeholder={form.timePrecision === "month" ? "2026-07" : "2026-07-01 to 2026-07-31"} />
+                </label>
+              ) : null}
+            </>
+          ) : null}
+          <label className="full-span">
+            <span>Note</span>
+            <textarea
+              value={form.note}
+              onChange={(event) => updateForm("note", event.target.value)}
+              placeholder="Optional context before review"
+            />
+          </label>
+          <button className="primary-action align-start" type="submit">
+            Create draft
+          </button>
+        </form>
+        {accounts.length === 0 ? (
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[3])}>
+            Set up accounts
+          </button>
+        ) : null}
+      </Panel>
       {draftCount > 0 ? (
         <Panel title="Draft ready for review" eyebrow="Local draft">
           <p className="panel-copy">
@@ -607,7 +880,7 @@ function CapturePage({
           </p>
           {latestDraft ? (
             <p className="draft-summary">
-              Latest: {draftDisplayName(latestDraft)}, {latestDraft.currency} {latestDraft.amount}
+              Latest: {draftSummary(latestDraft)}
             </p>
           ) : null}
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
@@ -896,6 +1169,42 @@ function EmptyMetric({ label, value, detail }: Readonly<{ label: string; value: 
       <span>{detail}</span>
     </article>
   );
+}
+
+function kindLabel(kind: DraftForm["kind"]) {
+  switch (kind) {
+    case "expense":
+      return "Expense";
+    case "income":
+      return "Income";
+    case "transfer":
+      return "Transfer";
+    case "refund":
+      return "Refund";
+    case "fund-addition":
+      return "Initial funding";
+    case "adjustment":
+      return "Balance adjustment";
+    case "unresolved-expense":
+      return "Unresolved expense";
+  }
+}
+
+function draftSummary(draft: TransactionDraft) {
+  if (draft.kind === "transfer") {
+    const destination = draft.transferMode === "cross-currency" ? `${draft.destinationAmount} ${draft.destinationCurrency}` : draft.currency;
+    return `${draft.account} ${draft.amount} ${draft.currency} to ${draft.transferAccount} ${destination}`;
+  }
+
+  if (draft.kind === "adjustment") {
+    return `${draft.reason}, ${draft.currency} ${draft.amount}`;
+  }
+
+  if (draft.kind === "unresolved-expense") {
+    return `Unresolved expense, ${draft.currency} ${draft.amount}`;
+  }
+
+  return `${draft.counterparty}, ${draft.currency} ${draft.amount}`;
 }
 
 function routeTitle(route: AppRoute) {

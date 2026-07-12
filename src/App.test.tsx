@@ -28,6 +28,8 @@ async function createExpenseDraft(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
   await user.clear(screen.getByLabelText("Merchant"));
   await user.type(screen.getByLabelText("Merchant"), "全聯");
+  await user.clear(screen.getByLabelText("Item name"));
+  await user.type(screen.getByLabelText("Item name"), "香蕉");
   await user.clear(screen.getByLabelText("Amount"));
   await user.type(screen.getByLabelText("Amount"), "417");
   await user.click(screen.getByRole("button", { name: "Create draft" }));
@@ -151,20 +153,67 @@ describe("App shell draft flow", () => {
     await addAccount(user, "Savings");
     await goToCapture(user);
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
-    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
-    expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
-
+    await user.selectOptions(screen.getByLabelText("Source account"), "Daily wallet");
     await user.clear(screen.getByLabelText("Amount"));
     await user.type(screen.getByLabelText("Amount"), "1000");
     await user.click(screen.getByRole("button", { name: "Create draft" }));
 
     expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Source")).not.toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Transfer account"), "Savings");
+    await user.selectOptions(screen.getByLabelText("Destination account"), "Savings");
     await user.click(screen.getByRole("button", { name: "Create draft" }));
 
-    expect(screen.getByText("Latest: Daily wallet to Savings, TWD 1000")).toBeInTheDocument();
+    expect(screen.getByText("Latest: Daily wallet 1000 TWD to Savings TWD")).toBeInTheDocument();
+  });
+
+  test("shows cross-currency and fee fields only for transfers", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await addAccount(user, "Japan cash");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Type"), "transfer");
+    await user.selectOptions(screen.getByLabelText("Transfer type"), "cross-currency");
+
+    expect(screen.getByLabelText("Source account")).toBeInTheDocument();
+    expect(screen.getByLabelText("Destination account")).toBeInTheDocument();
+    expect(screen.getByLabelText("Source amount")).toBeInTheDocument();
+    expect(screen.getByLabelText("Source currency")).toBeInTheDocument();
+    expect(screen.getByLabelText("Destination amount")).toBeInTheDocument();
+    expect(screen.getByLabelText("Destination currency")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Fee account")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: "Add transfer fee" }));
+
+    expect(screen.getByLabelText("Fee account")).toBeInTheDocument();
+    expect(screen.getByLabelText("Fee amount")).toBeInTheDocument();
+    expect(screen.getByLabelText("Fee currency")).toBeInTheDocument();
+    expect(screen.getByLabelText("Fee category")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
+  });
+
+  test("requires local account setup before a capture account can be selected", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+
+    expect(screen.getByLabelText("Account")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Set up accounts" }));
+    expect(screen.getByRole("heading", { name: "Accounts" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Account name"), "Travel cash");
+    await user.click(screen.getByRole("button", { name: "Add account" }));
+    expect(screen.getByLabelText("Available accounts")).toHaveTextContent("Travel cash");
+
+    await goToCapture(user);
+    expect(screen.getByLabelText("Account")).not.toBeDisabled();
+    expect(screen.getByRole("option", { name: "Travel cash (TWD)" })).toBeInTheDocument();
   });
 
   test("uses native form validation to block incomplete manual drafts", async () => {
@@ -175,8 +224,10 @@ describe("App shell draft flow", () => {
     await goToCapture(user);
 
     const merchant = screen.getByLabelText("Merchant");
+    const itemName = screen.getByLabelText("Item name");
     const amount = screen.getByLabelText("Amount");
     expect(merchant).toBeInvalid();
+    expect(itemName).toBeInvalid();
     expect(amount).toBeInvalid();
 
     await user.click(screen.getByRole("button", { name: "Create draft" }));
@@ -261,12 +312,45 @@ describe("App shell draft flow", () => {
       "income",
       "transfer",
       "refund",
+      "fund-addition",
       "adjustment",
+      "unresolved-expense",
     ]);
 
-    for (const kind of ["expense", "income", "transfer", "refund", "adjustment"]) {
+    for (const kind of ["expense", "income", "transfer", "refund", "fund-addition", "adjustment", "unresolved-expense"]) {
       await user.selectOptions(type, kind);
       expect(type.value).toBe(kind);
     }
+  });
+
+  test("switches to the required field language for each manual record kind", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    const type = screen.getByLabelText("Type");
+
+    await user.selectOptions(type, "income");
+    expect(screen.getByLabelText("Source")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Item name")).not.toBeInTheDocument();
+
+    await user.selectOptions(type, "refund");
+    expect(screen.getByLabelText("Merchant or source")).toBeInTheDocument();
+    expect(screen.getByLabelText("Refund reason")).toBeInTheDocument();
+
+    await user.selectOptions(type, "fund-addition");
+    expect(screen.getByLabelText("Source")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+
+    await user.selectOptions(type, "adjustment");
+    expect(screen.getByLabelText("Adjustment reason")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
+
+    await user.selectOptions(type, "unresolved-expense");
+    expect(screen.getByLabelText("Time precision")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Time precision"), "month");
+    expect(screen.getByLabelText("Month")).toBeInTheDocument();
   });
 });

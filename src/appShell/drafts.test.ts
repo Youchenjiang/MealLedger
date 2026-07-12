@@ -3,28 +3,90 @@ import { canCreateManualDraft, createTransactionDraft, type DraftForm } from "./
 
 const completeExpense: DraftForm = {
   date: "2026-07-11",
-  account: "Cash",
+  account: "Daily wallet",
   kind: "expense",
   category: "Daily",
   counterparty: "7-Eleven",
+  itemName: "Tea egg",
   transferAccount: "",
+  transferMode: "same-currency",
   amount: "100",
   currency: "TWD",
+  destinationAmount: "",
+  destinationCurrency: "",
+  feeEnabled: false,
+  feeAccount: "",
+  feeAmount: "",
+  feeCurrency: "",
+  feeCategory: "",
+  refundReason: "",
+  reason: "",
+  timePrecision: "day",
+  period: "",
   note: "",
 };
 
 describe("manual transaction drafts", () => {
-  test.each(["account", "category", "counterparty", "amount"] as const)("rejects blank %s after trimming", (field) => {
+  test.each(["account", "category", "counterparty", "itemName", "amount"] as const)("rejects blank expense %s after trimming", (field) => {
     expect(canCreateManualDraft({ ...completeExpense, [field]: "   " })).toBe(false);
   });
 
-  test("requires a destination account for transfers", () => {
-    expect(canCreateManualDraft({ ...completeExpense, kind: "transfer" })).toBe(false);
-    expect(canCreateManualDraft({ ...completeExpense, kind: "transfer", transferAccount: "Post office savings" })).toBe(true);
+  test("uses transfer-specific requirements without merchant or category", () => {
+    const transfer: DraftForm = {
+      ...completeExpense,
+      kind: "transfer",
+      category: "",
+      counterparty: "",
+      itemName: "",
+      transferAccount: "Savings",
+    };
+
+    expect(canCreateManualDraft(transfer)).toBe(true);
+    expect(canCreateManualDraft({ ...transfer, transferAccount: "" })).toBe(false);
   });
 
-  test.each(["expense", "income", "refund", "adjustment"] as const)("does not require a destination account for %s", (kind) => {
-    expect(canCreateManualDraft({ ...completeExpense, kind, transferAccount: "" })).toBe(true);
+  test("requires both amounts and currencies for cross-currency transfers", () => {
+    const transfer: DraftForm = {
+      ...completeExpense,
+      kind: "transfer",
+      category: "",
+      counterparty: "",
+      itemName: "",
+      transferAccount: "Japan cash",
+      transferMode: "cross-currency",
+      destinationAmount: "46000",
+      destinationCurrency: "JPY",
+    };
+
+    expect(canCreateManualDraft(transfer)).toBe(true);
+    expect(canCreateManualDraft({ ...transfer, destinationAmount: "" })).toBe(false);
+  });
+
+  test("requires complete fee fields when a transfer fee is enabled", () => {
+    const transfer: DraftForm = {
+      ...completeExpense,
+      kind: "transfer",
+      category: "",
+      counterparty: "",
+      itemName: "",
+      transferAccount: "Savings",
+      feeEnabled: true,
+      feeAccount: "Daily wallet",
+      feeAmount: "15",
+      feeCurrency: "TWD",
+      feeCategory: "Fees",
+    };
+
+    expect(canCreateManualDraft(transfer)).toBe(true);
+    expect(canCreateManualDraft({ ...transfer, feeCategory: "" })).toBe(false);
+  });
+
+  test("uses distinct fields for income, refunds, funding, adjustments, and unresolved expenses", () => {
+    expect(canCreateManualDraft({ ...completeExpense, kind: "income", itemName: "" })).toBe(true);
+    expect(canCreateManualDraft({ ...completeExpense, kind: "refund", itemName: "", refundReason: "Returned item" })).toBe(true);
+    expect(canCreateManualDraft({ ...completeExpense, kind: "fund-addition", category: "", itemName: "" })).toBe(true);
+    expect(canCreateManualDraft({ ...completeExpense, kind: "adjustment", category: "", counterparty: "", itemName: "", reason: "Balance correction" })).toBe(true);
+    expect(canCreateManualDraft({ ...completeExpense, kind: "unresolved-expense", date: "", category: "", counterparty: "", itemName: "", timePrecision: "month", period: "2026-07" })).toBe(true);
   });
 
   test("trims fields before a draft is created", () => {
@@ -32,20 +94,21 @@ describe("manual transaction drafts", () => {
       createTransactionDraft(
         {
           ...completeExpense,
-          account: " Cash ",
+          account: " Daily wallet ",
           category: " Daily ",
           counterparty: " 全聯 ",
+          itemName: " 茶葉蛋 ",
           amount: " 417 ",
           note: " dinner ",
         },
         "draft-1",
       ),
-    ).toEqual({
-      ...completeExpense,
+    ).toMatchObject({
       id: "draft-1",
-      account: "Cash",
+      account: "Daily wallet",
       category: "Daily",
       counterparty: "全聯",
+      itemName: "茶葉蛋",
       amount: "417",
       note: "dinner",
     });
