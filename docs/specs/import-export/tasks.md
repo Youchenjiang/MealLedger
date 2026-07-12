@@ -28,11 +28,17 @@ Expected verification:
 
 ## Task 3: Implement Row Validation
 
+Status: Complete for normalized local validation and review classification. Confirmed import writes remain a later task.
+
 Validate date, kind, account, amount, currency precision, and kind-specific required fields.
 
 Expected verification:
 
-- Invalid rows become review items.
+- Dates normalize from `YYYY-MM-DD` or `YYYY/MM/DD`.
+- Amounts normalize display commas and enforce currency precision.
+- Expense, income, transfer, refund, fund addition, adjustment, and unresolved-expense rules are checked separately.
+- Same-currency transfers default target amount/currency; cross-currency transfers require both destination values.
+- Invalid or incomplete rows become review items and never become official records.
 
 ## Task 4: Implement Alias Mapping
 
