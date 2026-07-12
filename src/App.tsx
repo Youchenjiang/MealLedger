@@ -576,9 +576,15 @@ function ManualDraftPanel({
   formError: string | null;
 }) {
   return (
-    <Panel title="Manual transaction draft" eyebrow="Local draft">
+    <article className="panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Local draft</p>
+          <h2>Manual transaction draft</h2>
+        </div>
+      </div>
       <ManualDraftForm form={form} updateForm={updateForm} onSubmit={onSubmit} formError={formError} />
-    </Panel>
+    </article>
   );
 }
 
