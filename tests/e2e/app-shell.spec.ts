@@ -59,8 +59,8 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
   await page.getByRole("button", { name: "Capture" }).click();
   await page.getByLabel("Account", { exact: true }).selectOption("Daily wallet");
   await page.getByLabel("Category", { exact: true }).selectOption("Daily");
-  await page.getByLabel("Merchant").fill("全聯");
-  await page.getByLabel("Item name").fill("香蕉");
+  await page.getByLabel("Merchant", { exact: true }).fill("全聯");
+  await page.getByLabel("Item name", { exact: true }).fill("香蕉");
   await page.getByLabel("Amount", { exact: true }).fill("417");
   await page.getByRole("button", { name: "Save record" }).click();
 
