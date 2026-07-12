@@ -51,17 +51,14 @@ Expected verification:
 
 - Local draft creation updates the review count.
 
-## Task 6: Minimal Manual Draft Flow
+## Task 6: Capture-To-Review Handoff
 
 Status: Complete
 
-Capture creates local transaction drafts. Ledger displays or discards them; it does not confirm or write official ledger records in this spec.
+Capture can hand a local preview draft to Ledger. Ledger displays or discards it; it does not confirm or write official ledger records in this spec. Detailed form fields and validation are accepted under Manual Ledger, not App Shell.
 
 Expected verification:
 
-- User can enter date, account, type, category, merchant/source, amount, currency, and optional note.
-- User can create initial expense, income, transfer, refund, and adjustment draft kinds.
-- Transfer drafts require a transfer account.
 - Submitted draft appears in the Ledger review queue.
 - User can discard a submitted draft from the Ledger review queue.
 - Confirmed ledger records remain empty.
@@ -83,14 +80,14 @@ Expected verification:
 
 ## Scope Boundary
 
-Spec 1 ends at local draft review. It deliberately excludes confirmation, official ledger writes, Supabase persistence, import parsing, image upload, meal entries, AI/OCR, and localization implementation. Those belong to later specs.
+Spec 1 ends at local draft review. It deliberately excludes accounting-field acceptance, confirmation, official ledger writes, Supabase persistence, import parsing, image upload, meal entries, AI/OCR, and localization implementation. Those belong to later specs.
 
 ## Final Verification Evidence
 
-Verified on 2026-07-11:
+Verified on 2026-07-12:
 
-- `npm run test`: 20 tests passed.
-- `npm run test:coverage`: 91.73% statements, 86.74% branches, 85.45% functions, and 91.89% lines.
+- `npm run test`: 45 tests passed.
+- `npm run test:coverage`: 92.34% statements, 87.88% branches, 90.96% functions, and 93.33% lines.
 - `npm run test:e2e`: 4 Playwright smoke tests passed, including desktop (1440px), compact (720px), and mobile (390px) viewports.
 - `npm run build`: production TypeScript and Vite build passed.
 - Read-only UX, QA, and responsive review: no remaining blocking finding. The responsive review added a compact-navigation breakpoint check at 720px.

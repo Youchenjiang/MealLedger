@@ -12,7 +12,7 @@ This spec covers:
 - empty states for V1 sections
 - offline and local-only status indicators
 - review queue entry point
-- minimal manual transaction draft capture
+- manual-entry entry point and local-draft review handoff
 
 This spec does not implement confirmed ledger CRUD, account/category CRUD, balance calculation, import parsing, media upload, AI/OCR, or Supabase schema. Those features get separate specs.
 
@@ -42,10 +42,10 @@ WHEN the user selects Capture
 THE SYSTEM SHALL show capture choices for manual entry, scan receipt or invoice, meal photo, and attachment.
 
 WHEN the user selects manual entry from Capture
-THE SYSTEM SHALL show a minimal transaction draft form.
+THE SYSTEM SHALL provide an entry point into the Manual Ledger form surface.
 
 WHEN the minimal transaction draft form is shown
-THE SYSTEM SHALL support expense, income, transfer, refund, and adjustment draft kinds.
+THE SYSTEM SHALL expose the Manual Ledger draft kinds defined by its specification without creating official records.
 
 WHEN the user selects a transfer draft kind
 THE SYSTEM SHALL show source account, amount, currency, and destination account fields, and shall not require a category or merchant field.
@@ -94,7 +94,7 @@ The shell must be PWA-ready but does not need final service-worker behavior in t
 
 The shell must not require real Supabase credentials to render local smoke-test states.
 
-The shell must not create official ledger records.
+The shell must not create official ledger records. Detailed manual-entry fields, record-kind validation, account/category creation, and accounting behavior belong to the Manual Ledger spec even while their local preview is rendered inside this shell.
 
 The shell must not upload media or call AI/OCR services.
 

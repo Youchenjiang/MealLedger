@@ -8,9 +8,9 @@ Test `npm run test` succeeds.
 
 Test `npm run test:coverage` succeeds before committing app-shell behavior changes.
 
-The initial app-shell coverage threshold is 70% lines, 70% functions, 70% statements, and 60% branches. Raise the thresholds as logic moves out of the shell into domain modules.
+The app-shell coverage threshold is 90% lines, 90% functions, 90% statements, and 85% branches. Manual Ledger owns the detailed validation cases even when its local preview is rendered from Capture.
 
-Automated tests must cover the minimal signed-out to signed-in navigation path, manual draft creation, transfer draft validation, draft review visibility, draft discard, and the rule that draft creation does not create confirmed ledger records.
+Automated tests must cover the minimal signed-out to signed-in navigation path, local draft handoff, draft review visibility, draft discard, and the rule that draft creation does not create confirmed ledger records. Detailed field and transfer validation belongs to the Manual Ledger test plan.
 
 ## Test Layers
 
@@ -18,18 +18,16 @@ Automated tests must cover the minimal signed-out to signed-in navigation path, 
 
 Run `npm run test`.
 
-Vitest covers the pure manual-draft helper in `src/appShell/drafts.ts`:
+Vitest covers the local-draft handoff helper in `src/appShell/drafts.ts`. Its accounting validation cases are tracked by the Manual Ledger spec:
 
 - trim and required-field validation
-- transfer destination validation
-- non-transfer draft kinds without a transfer destination
 - draft-only output shape with no confirmed-record fields
 
 ### React Integration Tests
 
 Run `npm run test`.
 
-React Testing Library covers the signed-out entry point, all core navigation, safe unknown-route recovery, offline/online state, zero/non-zero draft counts, Capture availability states, draft kinds, draft creation, and discard behavior.
+React Testing Library covers the signed-out entry point, all core navigation, safe unknown-route recovery, offline/online state, zero/non-zero draft counts, Capture availability states, local draft creation, and discard behavior.
 
 ### Browser Smoke
 
@@ -51,10 +49,10 @@ Blocking review findings must be fixed before the final verification run. Non-bl
 
 ## Verification Evidence
 
-Final verification is recorded on 2026-07-11:
+Final verification is recorded on 2026-07-12:
 
-- `npm run test`: 21 Vitest and React Testing Library tests passed.
-- `npm run test:coverage`: passed. Statements 91.86%, branches 87.05%, functions 85.45%, and lines 92.03% exceed the initial thresholds.
+- `npm run test`: 45 Vitest and React Testing Library tests passed.
+- `npm run test:coverage`: passed. Statements 92.34%, branches 87.88%, functions 90.96%, and lines 93.33% exceed the strengthened thresholds.
 - `npm run test:e2e`: 4 Playwright tests passed for the signed-out-to-Ledger draft flow, 1440px desktop, 720px compact, and 390px mobile.
 - `npm run build`: passed.
 
@@ -116,11 +114,11 @@ Test each V1 section has a useful empty state.
 
 Test empty states do not claim that fake balances or fake records are real.
 
-Test Capture page shows a manual transaction draft form.
+Test Capture page shows a Manual Ledger entry point and local-draft preview.
 
 Test Capture page shows scan, meal photo, and attachment actions as unavailable future entry points.
 
-## Manual Draft Flow
+## Capture-To-Review Handoff
 
 Test Overview Start a record navigates to Capture.
 
@@ -158,4 +156,4 @@ Test UI remains readable with longer Traditional Chinese labels.
 
 ## Scope Boundary
 
-The browser and integration suites must not claim that a draft can be confirmed in Spec 1. This spec intentionally stops at local draft creation, review visibility, and discard; official ledger writes belong to the later ledger spec.
+The browser and integration suites must not claim that a draft can be confirmed in Spec 1. This spec intentionally stops at local draft creation, review visibility, and discard; official ledger writes and detailed accounting validation belong to Manual Ledger.
