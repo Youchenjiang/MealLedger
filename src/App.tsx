@@ -571,45 +571,59 @@ function ManualDraftPanel({
 }) {
   return (
     <Panel title="Manual transaction draft" eyebrow="Local draft">
-      <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
-        <label>
-          <span>Date</span>
-          <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
-        </label>
-        <label>
-          <span>Account</span>
-          <input required pattern=".*\S.*" title="Enter an account name." value={form.account} onChange={(event) => updateForm("account", event.target.value)} placeholder="Cash" />
-        </label>
-        <label>
-          <span>Type</span>
-          <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-            <option value="transfer">Transfer</option>
-            <option value="refund">Refund</option>
-            <option value="adjustment">Adjustment</option>
-          </select>
-        </label>
-        <DraftKindFields form={form} updateForm={updateForm} />
-        <label>
-          <span>Amount</span>
-          <input required inputMode="decimal" min="0" step="any" type="number" value={form.amount} onChange={(event) => updateForm("amount", event.target.value)} placeholder="100" />
-        </label>
-        <label>
-          <span>Currency</span>
-          <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
-            <option value="TWD">TWD</option>
-            <option value="JPY">JPY</option>
-            <option value="USD">USD</option>
-          </select>
-        </label>
-        <label className="full-span">
-          <span>Note</span>
-          <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Optional context before review" />
-        </label>
-        <button className="primary-action align-start" type="submit">Create draft</button>
-      </form>
+      <ManualDraftForm form={form} updateForm={updateForm} onSubmit={onSubmit} />
     </Panel>
+  );
+}
+
+function ManualDraftForm({
+  form,
+  updateForm,
+  onSubmit,
+}: {
+  form: DraftForm;
+  updateForm: (field: keyof DraftForm, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
+      <label>
+        <span>Date</span>
+        <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+      </label>
+      <label>
+        <span>Account</span>
+        <input required pattern=".*\S.*" title="Enter an account name." value={form.account} onChange={(event) => updateForm("account", event.target.value)} placeholder="Cash" />
+      </label>
+      <label>
+        <span>Type</span>
+        <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
+          <option value="refund">Refund</option>
+          <option value="adjustment">Adjustment</option>
+        </select>
+      </label>
+      <DraftKindFields form={form} updateForm={updateForm} />
+      <label>
+        <span>Amount</span>
+        <input required inputMode="decimal" min="0" step="any" type="number" value={form.amount} onChange={(event) => updateForm("amount", event.target.value)} placeholder="100" />
+      </label>
+      <label>
+        <span>Currency</span>
+        <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
+          <option value="TWD">TWD</option>
+          <option value="JPY">JPY</option>
+          <option value="USD">USD</option>
+        </select>
+      </label>
+      <label className="full-span">
+        <span>Note</span>
+        <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Optional context before review" />
+      </label>
+      <button className="primary-action align-start" type="submit">Create draft</button>
+    </form>
   );
 }
 
