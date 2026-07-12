@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account balances, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, and provide selectable inline-created income/funding sources. Cloud sync, scheduled next-cycle generation, and several advanced field workflows remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account balances, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, provide selectable inline-created income/funding sources, and offer clean CSV/JSON exports without media bytes. Cloud sync, scheduled next-cycle generation, multi-table exports, and several advanced field workflows remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -124,7 +124,7 @@ Expected verification:
 
 ## Task 11: Final Verification
 
-Status: In progress for the first local-record slice.
+Status: Complete for the current local-record and clean-export slice. Remaining partial tasks are tracked separately above and are not hidden by this verification.
 
 Expected verification:
 
@@ -139,9 +139,9 @@ Current slice evidence is recorded in the branch commits and must be rerun after
 
 Latest verification for the local ledger slice:
 
-- `npm run test`: 74 tests passed.
-- `npm run test:coverage`: 85.69% statements, 80.84% branches, 82.67% functions, and 85.73% lines.
+- `npm run test`: 78 tests passed.
+- `npm run test:coverage`: 86.0% statements, 80.8% branches, 83.28% functions, and 86.01% lines.
 - `npm run test:e2e`: 4 browser smoke tests passed.
 - `npm run build`: passed.
 
-The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, selectable inline-created income sources, recurrence safety and lifecycle controls, and unresolved-expense conversion. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.
+The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, selectable inline-created income sources, recurrence safety and lifecycle controls, unresolved-expense conversion, and clean CSV/JSON export of active records while excluding voided records and media bytes/base64. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.

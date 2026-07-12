@@ -51,11 +51,16 @@ Expected verification:
 
 ## Task 7: Implement Clean Export
 
+Status: Complete for normalized local CSV and JSON export. Multi-table ZIP export remains Task 8.
+
 Generate normalized CSV and JSON without media bytes.
 
 Expected verification:
 
-- Export includes stable ids and excludes image bytes/base64.
+- Export includes stable ids, ISO dates, and the normalized field set.
+- CSV uses UTF-8 with BOM and escaped values; JSON remains valid UTF-8 JSON.
+- Only active records are exported; voided records and image bytes/base64 are excluded.
+- Settings exposes both download actions.
 
 ## Task 8: Implement Multi-Table ZIP Export
 
