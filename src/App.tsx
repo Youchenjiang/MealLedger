@@ -112,6 +112,47 @@ function StatusStrip({ items }: { items: StatusItem[] }) {
   );
 }
 
+function Brand({ caption, large = false }: { caption: string; large?: boolean }) {
+  return (
+    <div className={`brand ${large ? "large" : ""}`}>
+      <div className="brand-mark">
+        <ReceiptText size={large ? 22 : 20} aria-hidden="true" />
+      </div>
+      <div>
+        <p className="brand-name">MealLedger</p>
+        <p className="brand-caption">{caption}</p>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ route, navigate }: { route: AppRoute; navigate: (item: NavItem) => void }) {
+  return (
+    <aside className="sidebar" aria-label="MealLedger navigation">
+      <Brand caption="Personal ledger with optional meal notes" />
+      <PrimaryNav route={route} navigate={navigate} />
+      <div className="storage-note">
+        <ShieldCheck size={18} aria-hidden="true" />
+        <span>Ledger exports stay separate from receipt and meal photos.</span>
+      </div>
+    </aside>
+  );
+}
+
+function WorkspaceHeader({ route, statusItems }: { route: AppRoute; statusItems: StatusItem[] }) {
+  return (
+    <section className="page-header" aria-labelledby="page-title">
+      <header className="topbar">
+        <div className="topbar-title">
+          <p className="eyebrow">Personal finance workspace</p>
+          <h1 id="page-title">{routeTitle(route)}</h1>
+        </div>
+      </header>
+      <StatusStrip items={statusItems} />
+    </section>
+  );
+}
+
 function routeFromLocation(): AppRoute {
   if (window.location.pathname === "/") {
     return "overview";
@@ -197,37 +238,10 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar" aria-label="MealLedger navigation">
-        <div className="brand">
-          <div className="brand-mark">
-            <ReceiptText size={20} aria-hidden="true" />
-          </div>
-          <div>
-            <p className="brand-name">MealLedger</p>
-            <p className="brand-caption">Personal ledger with optional meal notes</p>
-          </div>
-        </div>
-
-        <PrimaryNav route={route} navigate={navigate} />
-
-        <div className="storage-note">
-          <ShieldCheck size={18} aria-hidden="true" />
-          <span>Ledger exports stay separate from receipt and meal photos.</span>
-        </div>
-      </aside>
+      <Sidebar route={route} navigate={navigate} />
 
       <section className="workspace">
-        <section className="page-header" aria-labelledby="page-title">
-          <header className="topbar">
-            <div className="topbar-title">
-              <p className="eyebrow">Personal finance workspace</p>
-              <h1 id="page-title">{routeTitle(route)}</h1>
-            </div>
-          </header>
-
-          <StatusStrip items={statusItems} />
-        </section>
-
+        <WorkspaceHeader route={route} statusItems={statusItems} />
         {renderRoute(route, drafts, setDrafts, navigate)}
       </section>
     </main>
@@ -238,15 +252,7 @@ function SignedOutShell({ onSignIn }: { onSignIn: () => void }) {
   return (
     <main className="signed-out-shell">
       <section className="signed-out-panel">
-        <div className="brand large">
-          <div className="brand-mark">
-            <ReceiptText size={22} aria-hidden="true" />
-          </div>
-          <div>
-            <p className="brand-name">MealLedger</p>
-            <p className="brand-caption">Personal finance records</p>
-          </div>
-        </div>
+        <Brand caption="Personal finance records" large />
         <div>
           <p className="eyebrow">MealLedger</p>
           <h1>Track spending first, attach meals when useful.</h1>
@@ -518,115 +524,8 @@ function CapturePage({
 
   return (
     <section className="capture-layout">
-      <Panel title="Choose how to start" eyebrow="Input sources">
-        <p className="panel-copy">
-          Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
-          you review or discard them; ledger confirmation arrives later.
-        </p>
-        <div className="planned-actions">
-          {actions.map((action) => <CaptureAction action={action} key={action.title} />)}
-        </div>
-      </Panel>
-      <Panel title="Manual transaction draft" eyebrow="Local draft">
-        <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
-          <label>
-            <span>Date</span>
-            <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
-          </label>
-          <label>
-            <span>Account</span>
-            <input
-              required
-              pattern=".*\S.*"
-              title="Enter an account name."
-              value={form.account}
-              onChange={(event) => updateForm("account", event.target.value)}
-              placeholder="Cash"
-            />
-          </label>
-          <label>
-            <span>Type</span>
-            <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-              <option value="transfer">Transfer</option>
-              <option value="refund">Refund</option>
-              <option value="adjustment">Adjustment</option>
-            </select>
-          </label>
-          {form.kind !== "transfer" ? (
-            <>
-              <label>
-                <span>Category</span>
-                <input
-                  required
-                  pattern=".*\S.*"
-                  title="Enter a category."
-                  value={form.category}
-                  onChange={(event) => updateForm("category", event.target.value)}
-                  placeholder="Daily"
-                />
-              </label>
-              <label>
-                <span>{form.kind === "income" ? "Source" : form.kind === "adjustment" ? "Reason" : "Merchant"}</span>
-                <input
-                  required
-                  pattern=".*\S.*"
-                  title="Enter the source, merchant, or reason."
-                  value={form.counterparty}
-                  onChange={(event) => updateForm("counterparty", event.target.value)}
-                  placeholder={form.kind === "income" ? "Salary" : "7-Eleven"}
-                />
-              </label>
-            </>
-          ) : null}
-          {form.kind === "transfer" ? (
-            <label>
-              <span>Transfer account</span>
-              <input
-                required
-                pattern=".*\S.*"
-                title="Enter the destination account."
-                value={form.transferAccount}
-                onChange={(event) => updateForm("transferAccount", event.target.value)}
-                placeholder="Post office savings"
-              />
-            </label>
-          ) : null}
-          <label>
-            <span>Amount</span>
-            <input
-              required
-              inputMode="decimal"
-              min="0"
-              step="any"
-              type="number"
-              value={form.amount}
-              onChange={(event) => updateForm("amount", event.target.value)}
-              placeholder="100"
-            />
-          </label>
-          <label>
-            <span>Currency</span>
-            <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
-              <option value="TWD">TWD</option>
-              <option value="JPY">JPY</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-          <label className="full-span">
-            <span>Note</span>
-            <textarea
-              value={form.note}
-              onChange={(event) => updateForm("note", event.target.value)}
-              placeholder="Optional context before review"
-            />
-          </label>
-          <button className="primary-action align-start" type="submit">
-            Create draft
-          </button>
-        </form>
-      </Panel>
+      <CaptureSourcesPanel actions={actions} />
+      <ManualDraftPanel form={form} updateForm={updateForm} onSubmit={handleSubmit} />
       {draftCount > 0 ? (
         <Panel title="Draft ready for review" eyebrow="Local draft">
           <p className="panel-copy">
@@ -644,6 +543,97 @@ function CapturePage({
         </Panel>
       ) : null}
     </section>
+  );
+}
+
+function CaptureSourcesPanel({ actions }: { actions: CaptureActionData[] }) {
+  return (
+    <Panel title="Choose how to start" eyebrow="Input sources">
+      <p className="panel-copy">
+        Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
+        you review or discard them; ledger confirmation arrives later.
+      </p>
+      <div className="planned-actions">
+        {actions.map((action) => <CaptureAction action={action} key={action.title} />)}
+      </div>
+    </Panel>
+  );
+}
+
+function ManualDraftPanel({
+  form,
+  updateForm,
+  onSubmit,
+}: {
+  form: DraftForm;
+  updateForm: (field: keyof DraftForm, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Panel title="Manual transaction draft" eyebrow="Local draft">
+      <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
+        <label>
+          <span>Date</span>
+          <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+        </label>
+        <label>
+          <span>Account</span>
+          <input required pattern=".*\S.*" title="Enter an account name." value={form.account} onChange={(event) => updateForm("account", event.target.value)} placeholder="Cash" />
+        </label>
+        <label>
+          <span>Type</span>
+          <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+            <option value="transfer">Transfer</option>
+            <option value="refund">Refund</option>
+            <option value="adjustment">Adjustment</option>
+          </select>
+        </label>
+        <DraftKindFields form={form} updateForm={updateForm} />
+        <label>
+          <span>Amount</span>
+          <input required inputMode="decimal" min="0" step="any" type="number" value={form.amount} onChange={(event) => updateForm("amount", event.target.value)} placeholder="100" />
+        </label>
+        <label>
+          <span>Currency</span>
+          <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
+            <option value="TWD">TWD</option>
+            <option value="JPY">JPY</option>
+            <option value="USD">USD</option>
+          </select>
+        </label>
+        <label className="full-span">
+          <span>Note</span>
+          <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Optional context before review" />
+        </label>
+        <button className="primary-action align-start" type="submit">Create draft</button>
+      </form>
+    </Panel>
+  );
+}
+
+function DraftKindFields({ form, updateForm }: { form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }) {
+  if (form.kind === "transfer") {
+    return (
+      <label>
+        <span>Transfer account</span>
+        <input required pattern=".*\S.*" title="Enter the destination account." value={form.transferAccount} onChange={(event) => updateForm("transferAccount", event.target.value)} placeholder="Post office savings" />
+      </label>
+    );
+  }
+
+  return (
+    <>
+      <label>
+        <span>Category</span>
+        <input required pattern=".*\S.*" title="Enter a category." value={form.category} onChange={(event) => updateForm("category", event.target.value)} placeholder="Daily" />
+      </label>
+      <label>
+        <span>{form.kind === "income" ? "Source" : form.kind === "adjustment" ? "Reason" : "Merchant"}</span>
+        <input required pattern=".*\S.*" title="Enter the source, merchant, or reason." value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)} placeholder={form.kind === "income" ? "Salary" : "7-Eleven"} />
+      </label>
+    </>
   );
 }
 
@@ -665,26 +655,38 @@ function SettingsPage() {
 
   return (
     <section className="content-grid">
-      <Panel title="Account and sync" eyebrow="Settings">
-        <dl className="settings-list">
-          <div>
-            <dt>Authentication</dt>
-            <dd>{isSupabaseConfigured ? "Cloud sign-in is ready" : "Cloud sign-in is unavailable in this workspace"}</dd>
-          </div>
-          <div>
-            <dt>Storage</dt>
-            <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
-          </div>
-        </dl>
-      </Panel>
-      <Panel title="Import and export safeguards" eyebrow="Data portability">
-        <p className="panel-copy">
-          Clean exports include confirmed ledger records only. Attachments stay as metadata
-          references, not image bytes, and CSV/JSON use the same stable field set.
-        </p>
-          <DataToolList items={dataTools} />
-      </Panel>
+      <AccountSyncPanel />
+      <ImportExportPanel dataTools={dataTools} />
     </section>
+  );
+}
+
+function AccountSyncPanel() {
+  return (
+    <Panel title="Account and sync" eyebrow="Settings">
+      <dl className="settings-list">
+        <div>
+          <dt>Authentication</dt>
+          <dd>{isSupabaseConfigured ? "Cloud sign-in is ready" : "Cloud sign-in is unavailable in this workspace"}</dd>
+        </div>
+        <div>
+          <dt>Storage</dt>
+          <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
+        </div>
+      </dl>
+    </Panel>
+  );
+}
+
+function ImportExportPanel({ dataTools }: { dataTools: Array<{ title: string; detail: string }> }) {
+  return (
+    <Panel title="Import and export safeguards" eyebrow="Data portability">
+      <p className="panel-copy">
+        Clean exports include confirmed ledger records only. Attachments stay as metadata
+        references, not image bytes, and CSV/JSON use the same stable field set.
+      </p>
+      <DataToolList items={dataTools} />
+    </Panel>
   );
 }
 
