@@ -43,6 +43,8 @@ function localDate(): string {
 
 let draftSequence = 0;
 
+const draftsStorageKey = "mealledger.app-shell.drafts";
+
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -50,6 +52,24 @@ function draftId(): string {
 
   draftSequence += 1;
   return `draft-${Date.now()}-${draftSequence}`;
+}
+
+function draftDisplayName(draft: TransactionDraft): string {
+  return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
+}
+
+function readStoredDrafts(): TransactionDraft[] {
+  try {
+    const stored = window.localStorage.getItem(draftsStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as TransactionDraft[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 function PrimaryNav({ route, navigate }: { route: AppRoute; navigate: (item: NavItem) => void }) {
@@ -104,8 +124,16 @@ export function App() {
   const [route, setRoute] = useState<AppRoute>(routeFromLocation);
   const [authState, setAuthState] = useState<AuthState>("signed-out");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [drafts, setDrafts] = useState<TransactionDraft[]>([]);
+  const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const draftCount = drafts.length;
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(draftsStorageKey, JSON.stringify(drafts));
+    } catch {
+      // Local persistence is best effort; the shell remains usable if storage is unavailable.
+    }
+  }, [drafts]);
 
   useEffect(() => {
     const handlePopState = () => setRoute(routeFromLocation());
@@ -363,10 +391,10 @@ function LedgerPage({
           {drafts.map((draft) => (
             <article className="draft-card" key={draft.id}>
               <div>
-                <strong>{draft.counterparty}</strong>
+                <strong>{draftDisplayName(draft)}</strong>
                 <span>
-                  {draft.date} · {draft.account} · {draft.category}
-                  {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ""}
+                  {draft.date} · {draft.account}
+                  {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
                 </span>
               </div>
               <div className="draft-amount">
@@ -526,28 +554,32 @@ function CapturePage({
               <option value="adjustment">Adjustment</option>
             </select>
           </label>
-          <label>
-            <span>Category</span>
-            <input
-              required
-              pattern=".*\S.*"
-              title="Enter a category."
-              value={form.category}
-              onChange={(event) => updateForm("category", event.target.value)}
-              placeholder="Daily"
-            />
-          </label>
-          <label>
-            <span>Merchant / source</span>
-            <input
-              required
-              pattern=".*\S.*"
-              title="Enter a merchant, payee, or source."
-              value={form.counterparty}
-              onChange={(event) => updateForm("counterparty", event.target.value)}
-              placeholder="7-Eleven"
-            />
-          </label>
+          {form.kind !== "transfer" ? (
+            <>
+              <label>
+                <span>Category</span>
+                <input
+                  required
+                  pattern=".*\S.*"
+                  title="Enter a category."
+                  value={form.category}
+                  onChange={(event) => updateForm("category", event.target.value)}
+                  placeholder="Daily"
+                />
+              </label>
+              <label>
+                <span>{form.kind === "income" ? "Source" : form.kind === "adjustment" ? "Reason" : "Merchant"}</span>
+                <input
+                  required
+                  pattern=".*\S.*"
+                  title="Enter the source, merchant, or reason."
+                  value={form.counterparty}
+                  onChange={(event) => updateForm("counterparty", event.target.value)}
+                  placeholder={form.kind === "income" ? "Salary" : "7-Eleven"}
+                />
+              </label>
+            </>
+          ) : null}
           {form.kind === "transfer" ? (
             <label>
               <span>Transfer account</span>
@@ -603,8 +635,7 @@ function CapturePage({
           </p>
           {latestDraft ? (
             <p className="draft-summary">
-              Latest: {latestDraft.counterparty}, {latestDraft.currency} {latestDraft.amount}
-              {latestDraft.kind === "transfer" ? ` to ${latestDraft.transferAccount}` : ""}
+              Latest: {draftDisplayName(latestDraft)}, {latestDraft.currency} {latestDraft.amount}
             </p>
           ) : null}
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>

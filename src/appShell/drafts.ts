@@ -33,11 +33,15 @@ export function normalizeDraftForm(form: DraftForm): DraftForm {
 }
 
 function canCreateNormalizedDraft(form: DraftForm): boolean {
-  if (!form.date || !form.account || !form.category || !form.counterparty || !form.amount) {
+  if (!form.date || !form.account || !form.amount || !form.currency) {
     return false;
   }
 
-  return form.kind !== "transfer" || Boolean(form.transferAccount);
+  if (form.kind === "transfer") {
+    return Boolean(form.transferAccount);
+  }
+
+  return Boolean(form.category && form.counterparty);
 }
 
 export function canCreateManualDraft(form: DraftForm): boolean {

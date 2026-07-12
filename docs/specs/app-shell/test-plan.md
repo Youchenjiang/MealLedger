@@ -132,6 +132,8 @@ Test expense, income, transfer, refund, and adjustment draft kinds can be select
 
 Test transfer draft submission requires a transfer account.
 
+Test transfer drafts do not render or require category and merchant fields.
+
 Test submitted manual draft appears in the Capture review summary.
 
 Test submitted manual draft appears in the Ledger review queue.
@@ -139,6 +141,8 @@ Test submitted manual draft appears in the Ledger review queue.
 Test a submitted manual draft can be discarded from the Ledger review queue.
 
 Test confirmed ledger records remain empty after draft creation.
+
+Test local drafts remain visible after the app is remounted from persisted browser storage.
 
 ## Browser Smoke
 

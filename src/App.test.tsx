@@ -5,7 +5,7 @@ import { App } from "./App";
 
 function renderWorkspace(path = "/") {
   window.history.pushState(null, "", path);
-  render(<App />);
+  return render(<App />);
 }
 
 async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
@@ -17,8 +17,8 @@ async function goToCapture(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function createExpenseDraft(user: ReturnType<typeof userEvent.setup>) {
-  await user.clear(screen.getByLabelText("Merchant / source"));
-  await user.type(screen.getByLabelText("Merchant / source"), "全聯");
+  await user.clear(screen.getByLabelText("Merchant"));
+  await user.type(screen.getByLabelText("Merchant"), "全聯");
   await user.clear(screen.getByLabelText("Amount"));
   await user.type(screen.getByLabelText("Amount"), "417");
   await user.click(screen.getByRole("button", { name: "Create draft" }));
@@ -30,6 +30,7 @@ describe("App shell draft flow", () => {
     vi.stubGlobal("crypto", {
       randomUUID: vi.fn(() => "draft-1"),
     });
+    window.localStorage.clear();
     window.history.pushState(null, "", "/");
   });
 
@@ -126,9 +127,9 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await goToCapture(user);
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
+    expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText("Merchant / source"));
-    await user.type(screen.getByLabelText("Merchant / source"), "小狗錢包");
     await user.clear(screen.getByLabelText("Amount"));
     await user.type(screen.getByLabelText("Amount"), "1000");
     await user.click(screen.getByRole("button", { name: "Create draft" }));
@@ -138,7 +139,7 @@ describe("App shell draft flow", () => {
     await user.type(screen.getByLabelText("Transfer account"), "郵局存款");
     await user.click(screen.getByRole("button", { name: "Create draft" }));
 
-    expect(screen.getByText("Latest: 小狗錢包, TWD 1000 to 郵局存款")).toBeInTheDocument();
+    expect(screen.getByText("Latest: Cash to 郵局存款, TWD 1000")).toBeInTheDocument();
   });
 
   test("uses native form validation to block incomplete manual drafts", async () => {
@@ -148,7 +149,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await goToCapture(user);
 
-    const merchant = screen.getByLabelText("Merchant / source");
+    const merchant = screen.getByLabelText("Merchant");
     const amount = screen.getByLabelText("Amount");
     expect(merchant).toBeInvalid();
     expect(amount).toBeInvalid();
@@ -156,6 +157,21 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: "Create draft" }));
 
     expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+  });
+
+  test("keeps local drafts after a reload", async () => {
+    const user = userEvent.setup();
+    const view = renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await createExpenseDraft(user);
+
+    view.unmount();
+    renderWorkspace();
+    await openWorkspace(user);
+    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    expect(screen.getByText("全聯")).toBeInTheDocument();
   });
 
   test("discards local drafts from the ledger review queue", async () => {
