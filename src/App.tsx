@@ -26,6 +26,7 @@ import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/b
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 import { validateCsvBytes } from "./importExport/csv";
+import { mapImportHeaders } from "./importExport/mapping";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -2161,9 +2162,16 @@ function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTool
     }
 
     const result = validateCsvBytes(new Uint8Array(await file.arrayBuffer()));
-    setImportMessage(result.ok
-      ? `CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. No records were created.`
-      : `CSV rejected: ${result.errors.join(" ")}`);
+    if (!result.ok) {
+      setImportMessage(`CSV rejected: ${result.errors.join(" ")}`);
+      return;
+    }
+
+    const headerMapping = mapImportHeaders(result.headers);
+    const mappedFields = Object.keys(headerMapping.mapping).join(", ");
+    const unmapped = headerMapping.unmappedHeaders.length > 0 ? ` Unmapped: ${headerMapping.unmappedHeaders.join(", ")}.` : "";
+    const conflicts = headerMapping.conflicts.length > 0 ? ` Conflicts: ${headerMapping.conflicts.join(" ")}` : "";
+    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}.${unmapped}${conflicts} No records were created.`);
   };
 
   return (
