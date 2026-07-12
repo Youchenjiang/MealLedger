@@ -29,6 +29,7 @@ export type DraftForm = {
   timePrecision: TimePrecision;
   periodStart: string;
   periodEnd: string;
+  note: string;
 };
 
 export type TransactionDraft = DraftForm & {
@@ -59,6 +60,7 @@ const textFields: Array<keyof Omit<DraftForm, "feeEnabled" | "kind" | "timePreci
   "reason",
   "periodStart",
   "periodEnd",
+  "note",
 ];
 
 export function normalizeDraftForm(form: DraftForm): DraftForm {

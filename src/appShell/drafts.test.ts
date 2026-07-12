@@ -24,6 +24,7 @@ const completeExpense: DraftForm = {
   timePrecision: "day",
   periodStart: "",
   periodEnd: "",
+  note: "",
 };
 
 const accounts = [

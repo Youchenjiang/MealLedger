@@ -232,6 +232,12 @@ h2 {
   background: #2f5d50;
 }
 
+.primary-action:disabled {
+  color: #8b867d;
+  background: #dedbd3;
+  cursor: not-allowed;
+}
+
 .secondary-action {
   gap: 8px;
   min-height: 38px;
@@ -260,6 +266,23 @@ h2 {
 
 .text-action:hover,
 .text-action:focus-visible {
+  color: #513817;
+  outline: 2px solid #dcc78b;
+  outline-offset: 2px;
+}
+
+.quiet-action {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  color: #75582e;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quiet-action:hover,
+.quiet-action:focus-visible {
   color: #513817;
   outline: 2px solid #dcc78b;
   outline-offset: 2px;
@@ -437,6 +460,211 @@ h2 {
   width: 18px;
   min-height: 18px;
   margin: 0;
+}
+
+.field-control-row {
+  display: flex;
+  gap: 8px;
+}
+
+.draft-form .form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-control-row select {
+  min-width: 0;
+  flex: 1;
+}
+
+.field-control-row .icon-button {
+  flex: 0 0 auto;
+}
+
+.amount-control {
+  display: grid;
+  gap: 6px;
+}
+
+.amount-control input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.amount-control input[type="number"]::-webkit-inner-spin-button,
+.amount-control input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.amount-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.amount-step {
+  min-width: 44px;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid #d7cec1;
+  border-radius: 6px;
+  color: #2f5d50;
+  background: #fffdf8;
+  font: inherit;
+  cursor: pointer;
+}
+
+.derived-value {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #d7cec1;
+  border-radius: 8px;
+  color: #69645c;
+  background: #f2f0ea;
+  font: inherit;
+}
+
+.amount-step:hover,
+.amount-step:focus-visible {
+  border-color: #8db9a4;
+  background: #edf4ef;
+  outline: 0;
+}
+
+.segmented-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d7cec1;
+  border-radius: 8px;
+  background: #fcfaf5;
+}
+
+.segmented-fieldset {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.segmented-fieldset legend {
+  padding: 0;
+  color: #4c4740;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.segmented-control label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: #4c4740;
+  cursor: pointer;
+}
+
+.segmented-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.segmented-control label.active {
+  color: #173f36;
+  background: #d8e5de;
+}
+
+.segmented-control label:focus-within {
+  outline: 2px solid #8db9a4;
+  outline-offset: 1px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: #4c4740;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.transfer-mode,
+.time-precision-fields,
+.quick-account {
+  display: grid;
+  gap: 8px;
+}
+
+.period-range,
+.quick-account {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.quick-account {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #bad7c7;
+  border-radius: 8px;
+  background: #f4fbf7;
+}
+
+.field-help,
+.quick-account-error {
+  margin: 0;
+  color: #75582e;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.entry-details {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+}
+
+.entry-details:disabled {
+  opacity: 0.58;
+}
+
+.quick-category {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #bad7c7;
+  border-radius: 8px;
+  background: #f4fbf7;
+}
+
+.quick-account-error {
+  grid-column: 1 / -1;
+  color: #9b2c2c;
+}
+
+.quick-account-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 8px;
 }
 
 .planned-actions {
@@ -739,6 +967,12 @@ button.action-card.unavailable {
   }
 
   .draft-form {
+    grid-template-columns: 1fr;
+  }
+
+  .period-range,
+  .quick-account,
+  .entry-details {
     grid-template-columns: 1fr;
   }
 

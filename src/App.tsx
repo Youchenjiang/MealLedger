@@ -9,6 +9,7 @@ import {
   Home,
   ImagePlus,
   LogIn,
+  Plus,
   ReceiptText,
   Settings,
   ShieldCheck,
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { createTransactionDraft, draftKinds, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { createTransactionDraft, draftKinds, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 
 const navItems: NavItem[] = [
@@ -63,10 +64,30 @@ function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
-
   draftSequence += 1;
   return `draft-${Date.now()}-${draftSequence}`;
 }
+
+const expenseCategories = [
+  "Daily",
+  "Electronics",
+  "Cleaning",
+  "Transport",
+  "Breakfast",
+  "Lunch",
+  "Dinner",
+  "Clothing",
+  "Learning",
+  "Medical",
+  "Stationery",
+  "Entertainment",
+  "Hiking",
+  "Gift",
+  "AI",
+  "Fees",
+];
+
+const incomeCategories = ["Allowance", "Salary", "Interest", "Gift", "Reimbursement", "Prize", "Other income"];
 
 function draftDisplayName(draft: TransactionDraft): string {
   return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
@@ -363,6 +384,7 @@ function renderRoute(
           drafts={drafts}
           accounts={accounts}
           navigate={navigate}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onCreateDraft={(draft) => setDrafts((current) => [draft, ...current])}
         />
       );
@@ -517,22 +539,128 @@ function CaptureAction({ action }: Readonly<{ action: CaptureActionData }>) {
   );
 }
 
+function adjustAmount(value: string, delta: number, allowNegative: boolean): string {
+  const current = Number(value);
+
+  if (!Number.isFinite(current)) {
+    return delta > 0 || allowNegative ? String(delta) : "";
+  }
+
+  return String(allowNegative ? current + delta : Math.max(0, current + delta));
+}
+
+function AmountField({
+  id,
+  label,
+  value,
+  required = false,
+  allowNegative = false,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  required?: boolean;
+  allowNegative?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const steps = [-1000, -100, -10, 10, 100, 1000];
+  const currentAmount = Number(value);
+
+  return (
+    <div className="form-field amount-field">
+      <label htmlFor={id}>
+        <span>{label}</span>
+      </label>
+      <div className="amount-control">
+        <input
+          id={id}
+          required={required}
+          inputMode="decimal"
+          min={allowNegative ? undefined : "0"}
+          step="1"
+          type="number"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="100"
+        />
+        <div className="amount-steps" aria-label={`${label} quick amount changes`}>
+          {steps.map((step) => (
+            <button
+              key={step}
+              className="amount-step"
+              type="button"
+              aria-label={`${step > 0 ? "Increase" : "Decrease"} ${label} by ${Math.abs(step)}`}
+              disabled={!allowNegative && step < 0 && (!Number.isFinite(currentAmount) || currentAmount <= 0)}
+              onClick={() => onChange(adjustAmount(value, step, allowNegative))}
+            >
+              {step > 0 ? `+${step === 1000 ? "1k" : step}` : step === -1000 ? "-1k" : step}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickAccountSetup({
+  accountName,
+  currency,
+  error,
+  onAccountNameChange,
+  onCurrencyChange,
+  onConfirm,
+  onCancel,
+}: {
+  accountName: string;
+  currency: string;
+  error: string;
+  onAccountNameChange: (value: string) => void;
+  onCurrencyChange: (value: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <section className="quick-account" aria-label="Quick account setup">
+      <label>
+        <span>New account name</span>
+        <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" />
+      </label>
+      <label>
+        <span>Currency</span>
+        <select value={currency} onChange={(event) => onCurrencyChange(event.target.value)}>
+          <option value="TWD">TWD</option>
+          <option value="JPY">JPY</option>
+          <option value="USD">USD</option>
+        </select>
+      </label>
+      <div className="quick-account-actions">
+        <button className="primary-action" type="button" onClick={onConfirm}>Add and select</button>
+        <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+      {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
+    </section>
+  );
+}
+
 function CapturePage({
   drafts,
   accounts,
   navigate,
+  onAddAccount,
   onCreateDraft,
 }: Readonly<{
   drafts: TransactionDraft[];
   accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
+  onAddAccount: (account: LocalAccount) => void;
   onCreateDraft: (draft: TransactionDraft) => void;
 }>) {
   const [form, setForm] = useState<DraftForm>({
     date: localDate(),
     account: "",
     kind: "expense",
-    category: "Daily",
+    category: "",
     counterparty: "",
     itemName: "",
     transferAccount: "",
@@ -549,10 +677,19 @@ function CapturePage({
     refundReason: "",
     reason: "",
     timePrecision: "day",
-    period: "",
+    periodStart: "",
+    periodEnd: "",
     note: "",
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [quickAccountField, setQuickAccountField] = useState<"account" | "transferAccount" | "feeAccount" | null>(null);
+  const [quickAccountName, setQuickAccountName] = useState("");
+  const [quickAccountCurrency, setQuickAccountCurrency] = useState("TWD");
+  const [quickAccountError, setQuickAccountError] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [quickCategoryName, setQuickCategoryName] = useState("");
+  const [quickCategoryError, setQuickCategoryError] = useState("");
 
   const draftCount = drafts.length;
   const latestDraft = drafts[0];
@@ -593,12 +730,90 @@ function CapturePage({
   const counterpartyLabel =
     form.kind === "expense" ? "Merchant" : form.kind === "income" || form.kind === "fund-addition" ? "Source" : "Merchant or source";
   const needsCounterparty = form.kind === "expense" || form.kind === "income" || form.kind === "refund" || form.kind === "fund-addition";
-  const shouldShowDate = form.kind !== "unresolved-expense" || form.timePrecision === "day";
+  const isUnresolvedExpense = form.kind === "unresolved-expense";
+  const hasSelectedAccount = accounts.some((account) => account.name === form.account);
+  const categoryOptions = (form.kind === "income" ? incomeCategories : expenseCategories).concat(customCategories);
+
+  const selectSourceAccount = (name: string) => {
+    const account = accounts.find((item) => item.name === name);
+    setForm((current) => {
+      const currentDestination = accounts.find((item) => item.name === current.transferAccount);
+      const shouldClearDestination = current.transferMode === "same-currency"
+        && Boolean(account && currentDestination && account.currency !== currentDestination.currency);
+
+      return {
+        ...current,
+        account: name,
+        currency: account?.currency ?? current.currency,
+        transferAccount: shouldClearDestination ? "" : current.transferAccount,
+      };
+    });
+  };
+
+  const selectDestinationAccount = (name: string) => {
+    const account = accounts.find((item) => item.name === name);
+    setForm((current) => ({
+      ...current,
+      transferAccount: name,
+      destinationCurrency: account?.currency ?? current.destinationCurrency,
+    }));
+  };
+
+  const selectFeeAccount = (name: string) => {
+    const account = accounts.find((item) => item.name === name);
+    setForm((current) => ({ ...current, feeAccount: name, feeCurrency: account?.currency ?? current.feeCurrency }));
+  };
+
+  const setTransferMode = (transferMode: DraftForm["transferMode"]) => {
+    setForm((current) => {
+      const sourceAccount = accounts.find((account) => account.name === current.account);
+      const destinationAccount = accounts.find((account) => account.name === current.transferAccount);
+      const shouldClearDestination = transferMode === "same-currency"
+        && Boolean(sourceAccount && destinationAccount && sourceAccount.currency !== destinationAccount.currency);
+
+      return {
+        ...current,
+        transferMode,
+        transferAccount: shouldClearDestination ? "" : current.transferAccount,
+      };
+    });
+  };
+
+  const beginQuickAccountSetup = (field: "account" | "transferAccount" | "feeAccount") => {
+    setQuickAccountField(field);
+    setQuickAccountName("");
+    setQuickAccountError("");
+  };
+
+  const setRecordKind = (kind: DraftForm["kind"]) => {
+    setForm((current) => ({ ...current, kind, category: "" }));
+    setIsAddingCategory(false);
+  };
+
+  const addQuickCategory = () => {
+    const category = quickCategoryName.trim();
+
+    if (!category) {
+      setQuickCategoryError("Enter a category name before adding it.");
+      return;
+    }
+
+    if (categoryOptions.some((item) => item.toLocaleLowerCase() === category.toLocaleLowerCase())) {
+      setQuickCategoryError("This category already exists.");
+      return;
+    }
+
+    setCustomCategories((current) => [...current, category]);
+    setForm((current) => ({ ...current, category }));
+    setQuickCategoryName("");
+    setQuickCategoryError("");
+    setIsAddingCategory(false);
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
-    const nextDraft = createTransactionDraft(form, draftId());
+    const nextDraft = createTransactionDraft(form, draftId(), accounts);
 
     if (!nextDraft) {
       setFormError("Please fill in all required fields before creating a draft.");
@@ -619,8 +834,61 @@ function CapturePage({
       feeCategory: "",
       refundReason: "",
       reason: "",
-      period: "",
-      note: "",
+      periodStart: "",
+      periodEnd: "",
+    }));
+  };
+
+  const addQuickAccount = () => {
+    const account = createLocalAccount(quickAccountName, quickAccountCurrency, crypto.randomUUID());
+
+    if (!quickAccountField) {
+      return;
+    }
+
+    if (!account) {
+      setQuickAccountError("Enter an account name before adding it.");
+      return;
+    }
+
+    if (accounts.some((item) => item.name.toLocaleLowerCase() === account.name.toLocaleLowerCase())) {
+      setQuickAccountError("An account with this name already exists.");
+      return;
+    }
+
+    onAddAccount(account);
+    if (quickAccountField === "account") {
+      setForm((current) => ({ ...current, account: account.name, currency: account.currency }));
+    } else if (quickAccountField === "transferAccount") {
+      setForm((current) => ({ ...current, transferAccount: account.name, destinationCurrency: account.currency }));
+    } else {
+      setForm((current) => ({ ...current, feeAccount: account.name, feeCurrency: account.currency }));
+    }
+    setQuickAccountField(null);
+    setQuickAccountName("");
+    setQuickAccountError("");
+  };
+
+  const setTimePrecision = (timePrecision: DraftForm["timePrecision"]) => {
+    setForm((current) => ({
+      ...current,
+      timePrecision,
+      date: timePrecision === "day" ? current.date : "",
+      periodStart: timePrecision === "day" ? "" : current.periodStart,
+      periodEnd: timePrecision === "day" ? "" : current.periodEnd,
+    }));
+  };
+
+  const setMonthRange = (month: string) => {
+    const range = monthToPeriodRange(month);
+    if (!range) {
+      setForm((current) => ({ ...current, periodStart: "", periodEnd: "" }));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      ...range,
     }));
   };
 
@@ -662,31 +930,93 @@ function CapturePage({
       </Panel>
       <Panel title="Manual transaction draft" eyebrow="Local draft">
         <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
-          {shouldShowDate ? (
+          {!isUnresolvedExpense ? (
             <label>
               <span>Date</span>
               <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
             </label>
           ) : null}
-          <label>
-            <span>{isTransfer ? "Source account" : "Account"}</span>
-            <select
-              required
-              disabled={accounts.length === 0}
-              value={form.account}
-              onChange={(event) => updateForm("account", event.target.value)}
-            >
-              <option value="">{accounts.length === 0 ? "Create an account in Settings first" : "Select an account"}</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.name}>
-                  {account.name} ({account.currency})
-                </option>
-              ))}
-            </select>
-          </label>
+          {isUnresolvedExpense ? (
+            <section className="full-span time-precision-fields" aria-label="Unresolved expense timing">
+              <fieldset className="segmented-fieldset">
+                <legend>Time precision</legend>
+                <div className="segmented-control">
+                {(["day", "month", "period"] as const).map((precision) => (
+                  <label
+                    className={form.timePrecision === precision ? "active" : ""}
+                    key={precision}
+                  >
+                    <input checked={form.timePrecision === precision} name="time-precision" type="radio" value={precision} onChange={() => setTimePrecision(precision)} />
+                    <span>{precision === "day" ? "Day" : precision === "month" ? "Month" : "Period"}</span>
+                  </label>
+                ))}
+                </div>
+              </fieldset>
+              {form.timePrecision === "day" ? (
+                <label>
+                  <span>Date</span>
+                  <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+                </label>
+              ) : null}
+              {form.timePrecision === "month" ? (
+                <label>
+                  <span>Month to record</span>
+                  <input required type="month" value={form.periodStart.slice(0, 7)} onChange={(event) => setMonthRange(event.target.value)} />
+                </label>
+              ) : null}
+              {form.timePrecision === "period" ? (
+                <div className="period-range">
+                  <label>
+                    <span>Period start</span>
+                    <input required type="date" value={form.periodStart} onChange={(event) => updateForm("periodStart", event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Period end</span>
+                    <input required type="date" value={form.periodEnd} onChange={(event) => updateForm("periodEnd", event.target.value)} />
+                  </label>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+          <div className="form-field">
+            <label htmlFor="entry-account">
+              <span>{isTransfer ? "Source account" : "Account"}</span>
+            </label>
+            <div className="field-control-row">
+              <select
+                id="entry-account"
+                required
+                disabled={accounts.length === 0}
+                value={form.account}
+                onChange={(event) => selectSourceAccount(event.target.value)}
+              >
+                <option value="">{accounts.length === 0 ? "Add an account" : "Select an account"}</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.name}>
+                    {account.name} ({account.currency})
+                  </option>
+                ))}
+              </select>
+              <button className="icon-button" type="button" aria-label="Add account" title="Add account" onClick={() => beginQuickAccountSetup("account")}>
+                <Plus size={18} aria-hidden="true" />
+              </button>
+            </div>
+            {accounts.length === 0 ? <p className="field-help">Add an account to start recording.</p> : null}
+            {quickAccountField === "account" ? (
+              <QuickAccountSetup
+                accountName={quickAccountName}
+                currency={quickAccountCurrency}
+                error={quickAccountError}
+                onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
+                onCurrencyChange={setQuickAccountCurrency}
+                onConfirm={addQuickAccount}
+                onCancel={() => { setQuickAccountField(null); setQuickAccountError(""); }}
+              />
+            ) : null}
+          </div>
           <label>
             <span>Type</span>
-            <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
+            <select value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
               {draftKinds.map((kind) => (
                 <option key={kind} value={kind}>
                   {kindLabel(kind)}
@@ -694,18 +1024,35 @@ function CapturePage({
               ))}
             </select>
           </label>
+          <fieldset className="entry-details" disabled={!hasSelectedAccount}>
           {needsCategory ? (
-            <label>
-              <span>Category</span>
-              <input
-                required
-                pattern=".*\S.*"
-                title="Enter a category."
-                value={form.category}
-                onChange={(event) => updateForm("category", event.target.value)}
-                placeholder="Daily"
-              />
-            </label>
+            <div className="form-field">
+              <label htmlFor="entry-category">
+                <span>Category</span>
+              </label>
+              <div className="field-control-row">
+                <select id="entry-category" required value={form.category} onChange={(event) => updateForm("category", event.target.value)}>
+                  <option value="">Select a category</option>
+                  {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+                <button className="icon-button" type="button" aria-label="Add category" title="Add category" onClick={() => { setIsAddingCategory(true); setQuickCategoryError(""); }}>
+                  <Plus size={18} aria-hidden="true" />
+                </button>
+              </div>
+              {isAddingCategory ? (
+                <section className="quick-category" aria-label="Quick category setup">
+                  <label>
+                    <span>New category name</span>
+                    <input value={quickCategoryName} onChange={(event) => { setQuickCategoryName(event.target.value); setQuickCategoryError(""); }} placeholder="Household" />
+                  </label>
+                  <div className="quick-account-actions">
+                    <button className="primary-action" type="button" onClick={addQuickCategory}>Add and select</button>
+                    <button className="quiet-action" type="button" onClick={() => { setIsAddingCategory(false); setQuickCategoryError(""); }}>Cancel</button>
+                  </div>
+                  {quickCategoryError ? <p className="quick-account-error" role="alert">{quickCategoryError}</p> : null}
+                </section>
+              ) : null}
+            </div>
           ) : null}
           {needsCounterparty ? (
             <label>
@@ -727,68 +1074,86 @@ function CapturePage({
           ) : null}
           {isTransfer ? (
             <>
-              <label>
-                <span>Transfer type</span>
-                <select value={form.transferMode} onChange={(event) => updateForm("transferMode", event.target.value as DraftForm["transferMode"])}>
-                  <option value="same-currency">Same currency</option>
-                  <option value="cross-currency">Cross currency</option>
-                </select>
-              </label>
-              <label>
-                <span>Destination account</span>
-              <select
-                required
-                disabled={accounts.length < 2}
-                value={form.transferAccount}
-                onChange={(event) => updateForm("transferAccount", event.target.value)}
-              >
-                <option value="">{accounts.length < 2 ? "Create another account in Settings first" : "Select destination account"}</option>
-                {accounts
-                  .filter((account) => account.name !== form.account)
-                  .map((account) => (
-                    <option key={account.id} value={account.name}>
-                      {account.name} ({account.currency})
-                    </option>
+              <section className="transfer-mode full-span" aria-label="Transfer type">
+                <fieldset className="segmented-fieldset">
+                  <legend>Transfer type</legend>
+                  <div className="segmented-control">
+                  {(["same-currency", "cross-currency"] as const).map((mode) => (
+                    <label
+                      className={form.transferMode === mode ? "active" : ""}
+                      key={mode}
+                    >
+                      <input checked={form.transferMode === mode} name="transfer-mode" type="radio" value={mode} onChange={() => setTransferMode(mode)} />
+                      <span>{mode === "same-currency" ? "Same currency" : "Cross currency"}</span>
+                    </label>
                   ))}
-              </select>
-              </label>
+                  </div>
+                </fieldset>
+              </section>
+              <div className="form-field">
+                <label htmlFor="entry-destination-account">
+                  <span>Destination account</span>
+                </label>
+                <div className="field-control-row">
+                  <select
+                    id="entry-destination-account"
+                    required
+                    disabled={accounts.length < 2}
+                    value={form.transferAccount}
+                    onChange={(event) => selectDestinationAccount(event.target.value)}
+                  >
+                    <option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>
+                    {accounts
+                      .filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency))
+                      .map((account) => (
+                        <option key={account.id} value={account.name}>
+                          {account.name} ({account.currency})
+                        </option>
+                      ))}
+                  </select>
+                  <button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => beginQuickAccountSetup("transferAccount")}>
+                    <Plus size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                {quickAccountField === "transferAccount" ? (
+                  <QuickAccountSetup
+                    accountName={quickAccountName}
+                    currency={quickAccountCurrency}
+                    error={quickAccountError}
+                    onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
+                    onCurrencyChange={setQuickAccountCurrency}
+                    onConfirm={addQuickAccount}
+                    onCancel={() => { setQuickAccountField(null); setQuickAccountError(""); }}
+                  />
+                ) : null}
+              </div>
             </>
           ) : null}
-          <label>
-            <span>{isTransfer && form.transferMode === "cross-currency" ? "Source amount" : "Amount"}</span>
-            <input
-              required
-              inputMode="decimal"
-              min="0"
-              step="1"
-              type="number"
-              value={form.amount}
-              onChange={(event) => updateForm("amount", event.target.value)}
-              placeholder="100"
-            />
-          </label>
-          <label>
+          <AmountField
+            id="entry-amount"
+            label={isTransfer && form.transferMode === "cross-currency" ? "Source amount" : "Amount"}
+            required
+            value={form.amount}
+            allowNegative={form.kind === "adjustment"}
+            onChange={(value) => updateForm("amount", value)}
+          />
+          <div className="form-field">
             <span>{isTransfer && form.transferMode === "cross-currency" ? "Source currency" : "Currency"}</span>
-            <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
-              <option value="TWD">TWD</option>
-              <option value="JPY">JPY</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
+            <output className="derived-value">{hasSelectedAccount ? form.currency : "Select an account first"}</output>
+          </div>
           {isTransfer && form.transferMode === "cross-currency" ? (
             <>
-              <label>
-                <span>Destination amount</span>
-                <input required inputMode="decimal" min="0" step="1" type="number" value={form.destinationAmount} onChange={(event) => updateForm("destinationAmount", event.target.value)} />
-              </label>
-              <label>
+              <AmountField
+                id="entry-destination-amount"
+                label="Destination amount"
+                required
+                value={form.destinationAmount}
+                onChange={(value) => updateForm("destinationAmount", value)}
+              />
+              <div className="form-field">
                 <span>Destination currency</span>
-                <select value={form.destinationCurrency} onChange={(event) => updateForm("destinationCurrency", event.target.value)}>
-                  <option value="TWD">TWD</option>
-                  <option value="JPY">JPY</option>
-                  <option value="USD">USD</option>
-                </select>
-              </label>
+                <output className="derived-value">{form.destinationCurrency}</output>
+              </div>
             </>
           ) : null}
           {isTransfer ? (
@@ -799,25 +1164,41 @@ function CapturePage({
           ) : null}
           {isTransfer && form.feeEnabled ? (
             <>
-              <label>
-                <span>Fee account</span>
-                <select value={form.feeAccount} onChange={(event) => updateForm("feeAccount", event.target.value)}>
-                  <option value="">Select fee account</option>
-                  {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Fee amount</span>
-                <input inputMode="decimal" min="0" step="1" type="number" value={form.feeAmount} onChange={(event) => updateForm("feeAmount", event.target.value)} />
-              </label>
-              <label>
+              <div className="form-field">
+                <label htmlFor="entry-fee-account">
+                  <span>Fee account</span>
+                </label>
+                <div className="field-control-row">
+                  <select id="entry-fee-account" value={form.feeAccount} onChange={(event) => selectFeeAccount(event.target.value)}>
+                    <option value="">Select fee account</option>
+                    {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
+                  </select>
+                  <button className="icon-button" type="button" aria-label="Add fee account" title="Add fee account" onClick={() => beginQuickAccountSetup("feeAccount")}>
+                    <Plus size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                {quickAccountField === "feeAccount" ? (
+                  <QuickAccountSetup
+                    accountName={quickAccountName}
+                    currency={quickAccountCurrency}
+                    error={quickAccountError}
+                    onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
+                    onCurrencyChange={setQuickAccountCurrency}
+                    onConfirm={addQuickAccount}
+                    onCancel={() => { setQuickAccountField(null); setQuickAccountError(""); }}
+                  />
+                ) : null}
+              </div>
+              <AmountField
+                id="entry-fee-amount"
+                label="Fee amount"
+                value={form.feeAmount}
+                onChange={(value) => updateForm("feeAmount", value)}
+              />
+              <div className="form-field">
                 <span>Fee currency</span>
-                <select value={form.feeCurrency} onChange={(event) => updateForm("feeCurrency", event.target.value)}>
-                  <option value="TWD">TWD</option>
-                  <option value="JPY">JPY</option>
-                  <option value="USD">USD</option>
-                </select>
-              </label>
+                <output className="derived-value">{form.feeCurrency}</output>
+              </div>
               <label>
                 <span>Fee category</span>
                 <input value={form.feeCategory} onChange={(event) => updateForm("feeCategory", event.target.value)} placeholder="Fees" />
@@ -836,41 +1217,11 @@ function CapturePage({
               <textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} />
             </label>
           ) : null}
-          {form.kind === "unresolved-expense" ? (
-            <>
-              <label>
-                <span>Time precision</span>
-                <select value={form.timePrecision} onChange={(event) => updateForm("timePrecision", event.target.value as DraftForm["timePrecision"])}>
-                  <option value="day">Day</option>
-                  <option value="month">Month</option>
-                  <option value="period">Period</option>
-                </select>
-              </label>
-              {form.timePrecision !== "day" ? (
-                <label>
-                  <span>{form.timePrecision === "month" ? "Month" : "Period"}</span>
-                  <input required value={form.period} onChange={(event) => updateForm("period", event.target.value)} placeholder={form.timePrecision === "month" ? "2026-07" : "2026-07-01 to 2026-07-31"} />
-                </label>
-              ) : null}
-            </>
-          ) : null}
-          <label className="full-span">
-            <span>Note</span>
-            <textarea
-              value={form.note}
-              onChange={(event) => updateForm("note", event.target.value)}
-              placeholder="Optional context before review"
-            />
-          </label>
-          <button className="primary-action align-start" type="submit">
-            Create draft
+          </fieldset>
+          <button className="primary-action align-start" disabled={!hasSelectedAccount} type="submit">
+            {hasSelectedAccount ? "Create draft" : "Add an account first"}
           </button>
         </form>
-        {accounts.length === 0 ? (
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItems[3])}>
-            Set up accounts
-          </button>
-        ) : null}
       </Panel>
       {draftCount > 0 ? (
         <Panel title="Draft ready for review" eyebrow="Local draft">
