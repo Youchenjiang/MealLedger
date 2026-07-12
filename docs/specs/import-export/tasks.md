@@ -42,11 +42,16 @@ Expected verification:
 
 ## Task 4: Implement Alias Mapping
 
+Status: Complete for local alias classification and review suggestions. Alias acceptance and official import writes remain review-gated.
+
 Apply default taxonomy aliases and review rules.
 
 Expected verification:
 
-- `特殊`, `0`, and `?` enter review.
+- `特殊`, `0`, and `?` enter review without silent final categories.
+- `AI` suggests `訂閱 > AI` and remains review-gated.
+- `登山` suggests event/tag context; `浪費` suggests a tag.
+- Original labels remain available for later `source_label` preservation.
 
 ## Task 5: Implement Duplicate Detection
 
