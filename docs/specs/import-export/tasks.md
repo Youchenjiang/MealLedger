@@ -64,11 +64,16 @@ Expected verification:
 
 ## Task 8: Implement Multi-Table ZIP Export
 
+Status: Complete for small synchronous local exports. Large-export progress or async handling remains Task 9.
+
 Generate manifest, ledger tables, and account summary.
 
 Expected verification:
 
-- ZIP has expected files and record counts.
+- ZIP has the expected manifest, six ledger tables, and account summary.
+- Manifest records schema version, export time, date range, currency modes, file list, and per-file counts.
+- Account summary includes opening balance, income, expense, refund, fund addition, transfer, adjustment, closing balance, and record count columns.
+- ZIP rows exclude voided records and media bytes/base64.
 
 ## Task 9: Add Performance Path
 
