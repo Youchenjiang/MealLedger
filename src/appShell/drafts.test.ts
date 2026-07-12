@@ -64,6 +64,18 @@ describe("manual transaction drafts", () => {
 
   test("allows auto-record only for complete fixed-amount records", () => {
     expect(canCreate({ ...completeExpense, recurrenceChoice: "auto-record-next-cycle" })).toBe(true);
+    expect(canCreate({ ...completeExpense, kind: "income", recurrenceChoice: "auto-record-next-cycle" })).toBe(true);
+    expect(
+      canCreate({
+        ...completeExpense,
+        kind: "transfer",
+        category: "",
+        counterparty: "",
+        itemName: "",
+        transferAccount: "Savings",
+        recurrenceChoice: "auto-record-next-cycle",
+      }),
+    ).toBe(true);
     expect(canCreate({ ...completeExpense, recurrenceChoice: "auto-record-next-cycle", recurrenceAmountMode: "variable" })).toBe(false);
     expect(canCreate({ ...completeExpense, recurrenceChoice: "auto-record-next-cycle", amount: "" })).toBe(false);
     expect(canCreate({ ...completeExpense, recurrenceChoice: "prompt-next-cycle", recurrenceAmountMode: "variable" })).toBe(true);

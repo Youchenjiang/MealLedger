@@ -105,6 +105,7 @@ describe("App shell draft flow", () => {
 
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
+    vi.stubGlobal("confirm", vi.fn(() => true));
     renderWorkspace();
 
     await openWorkspace(user);
@@ -130,6 +131,12 @@ describe("App shell draft flow", () => {
 
     expect(screen.getByRole("button", { name: "Pause recurring" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel recurring" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Pause recurring" }));
+    expect(screen.getByRole("button", { name: "Resume recurring" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Resume recurring" }));
+    await user.click(screen.getByRole("button", { name: "Cancel recurring" }));
+    expect(screen.queryByRole("button", { name: "Pause recurring" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel recurring" })).not.toBeInTheDocument();
   });
 
   test("opens the workspace and navigates between core routes", async () => {
