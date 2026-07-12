@@ -497,6 +497,52 @@ describe("App shell draft flow", () => {
     expect(storedAuditEvents.map((event) => event.eventType)).toEqual(["record-created", "record-updated", "record-voided"]);
   });
 
+  test("links a friend payback to an existing expense", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+    await user.selectOptions(screen.getByLabelText("Type"), "refund");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.selectOptions(screen.getByLabelText("Refund type"), "payback");
+    await user.selectOptions(screen.getByLabelText("Original expense"), "record-local-2");
+    await user.clear(screen.getByLabelText("Merchant or source"));
+    await user.type(screen.getByLabelText("Merchant or source"), "朋友");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "100");
+    await user.type(screen.getByLabelText("Refund reason"), "朋友還款");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+    const storedRecords = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]") as Array<{ kind: string; refundSubtype: string; refundLinkedRecordId: string }>;
+    expect(storedRecords).toHaveLength(2);
+    expect(storedRecords[1]).toMatchObject({ kind: "refund", refundSubtype: "payback", refundLinkedRecordId: "record-local-2" });
+  });
+
+  test("blocks an excess payback until the excess is classified", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+    await user.selectOptions(screen.getByLabelText("Type"), "refund");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.selectOptions(screen.getByLabelText("Refund type"), "payback");
+    await user.selectOptions(screen.getByLabelText("Original expense"), "record-local-2");
+    await user.clear(screen.getByLabelText("Merchant or source"));
+    await user.type(screen.getByLabelText("Merchant or source"), "朋友");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "500");
+    await user.type(screen.getByLabelText("Refund reason"), "朋友還款");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Classify the amount above");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Excess amount handling" }), "income");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+  });
+
   test("does not place official records in the draft review queue", async () => {
     const user = userEvent.setup();
     renderWorkspace();

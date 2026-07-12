@@ -31,6 +31,9 @@ export type LocalLedgerRecord = {
   feeCurrency: string;
   feeCategory: string;
   refundReason: string;
+  refundSubtype: TransactionDraft["refundSubtype"];
+  refundLinkedRecordId: string;
+  refundExcessHandling: TransactionDraft["refundExcessHandling"];
   reason: string;
   timePrecision: TransactionDraft["timePrecision"];
   periodStart: string;
@@ -133,6 +136,9 @@ function createRecord(
     feeCurrency: draft.feeCurrency,
     feeCategory: draft.feeCategory,
     refundReason: draft.refundReason,
+    refundSubtype: draft.refundSubtype,
+    refundLinkedRecordId: draft.refundLinkedRecordId,
+    refundExcessHandling: draft.refundExcessHandling,
     reason: draft.reason,
     timePrecision: draft.timePrecision,
     periodStart: draft.periodStart,

@@ -5,6 +5,8 @@ export { manualRecordKinds as draftKinds };
 export type DraftKind = ManualRecordKind;
 export type TransferMode = "same-currency" | "cross-currency";
 export type TimePrecision = "day" | "month" | "period";
+export type RefundSubtype = "refund" | "payback";
+export type RefundExcessHandling = "unclassified" | "income" | "negative-expense";
 
 export type DraftForm = {
   date: string;
@@ -25,6 +27,9 @@ export type DraftForm = {
   feeCurrency: string;
   feeCategory: string;
   refundReason: string;
+  refundSubtype: RefundSubtype;
+  refundLinkedRecordId: string;
+  refundExcessHandling: RefundExcessHandling;
   reason: string;
   timePrecision: TimePrecision;
   periodStart: string;
@@ -41,7 +46,29 @@ export type DraftAccount = {
   currency: string;
 };
 
-const textFields: Array<keyof Omit<DraftForm, "feeEnabled" | "kind" | "timePrecision" | "transferMode">> = [
+type TextDraftField =
+  | "date"
+  | "account"
+  | "category"
+  | "counterparty"
+  | "itemName"
+  | "transferAccount"
+  | "amount"
+  | "currency"
+  | "destinationAmount"
+  | "destinationCurrency"
+  | "feeAccount"
+  | "feeAmount"
+  | "feeCurrency"
+  | "feeCategory"
+  | "refundReason"
+  | "refundLinkedRecordId"
+  | "reason"
+  | "periodStart"
+  | "periodEnd"
+  | "note";
+
+const textFields: TextDraftField[] = [
   "date",
   "account",
   "category",
@@ -57,6 +84,7 @@ const textFields: Array<keyof Omit<DraftForm, "feeEnabled" | "kind" | "timePreci
   "feeCurrency",
   "feeCategory",
   "refundReason",
+  "refundLinkedRecordId",
   "reason",
   "periodStart",
   "periodEnd",
@@ -169,7 +197,8 @@ export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]):
           && destinationAccount.currency === normalized.destinationCurrency;
     case "refund":
       return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty", "refundReason"])
-        && isPositiveAmount(normalized.amount);
+        && isPositiveAmount(normalized.amount)
+        && (normalized.refundSubtype !== "payback" || Boolean(normalized.refundLinkedRecordId));
     case "fund-addition":
       return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "counterparty"])
         && isPositiveAmount(normalized.amount);

@@ -923,6 +923,9 @@ function CapturePage({
     feeCurrency: "TWD",
     feeCategory: "",
     refundReason: "",
+    refundSubtype: "refund",
+    refundLinkedRecordId: "",
+    refundExcessHandling: "unclassified",
     reason: "",
     timePrecision: "day",
     periodStart: "",
@@ -990,6 +993,14 @@ function CapturePage({
   const isUnresolvedExpense = form.kind === "unresolved-expense";
   const hasSelectedAccount = accounts.some((account) => account.name === form.account);
   const categoryOptions = (form.kind === "income" ? incomeCategories : expenseCategories).concat(customCategories);
+  const refundableRecords = records.filter((record) => record.kind === "expense" && record.recordState !== "voided");
+  const selectedRefundRecord = refundableRecords.find((record) => record.id === form.refundLinkedRecordId);
+  const refundExceedsLinkedAmount = Boolean(
+    form.kind === "refund"
+      && form.refundSubtype === "payback"
+      && selectedRefundRecord
+      && Number(form.amount) > Number(selectedRefundRecord.amount),
+  );
 
   const selectSourceAccount = (name: string) => {
     const account = accounts.find((item) => item.name === name);
@@ -1077,6 +1088,11 @@ function CapturePage({
       return;
     }
 
+    if (refundExceedsLinkedAmount && form.refundExcessHandling === "unclassified") {
+      setFormError("Classify the amount above the linked expense before saving this payback.");
+      return;
+    }
+
     if (!onSaveRecord(nextDraft)) {
       setFormError("This record could not be saved. Check the selected accounts and amounts.");
       return;
@@ -1095,6 +1111,9 @@ function CapturePage({
       feeAmount: "",
       feeCategory: "",
       refundReason: "",
+      refundSubtype: "refund",
+      refundLinkedRecordId: "",
+      refundExcessHandling: "unclassified",
       reason: "",
       periodStart: "",
       periodEnd: "",
@@ -1328,6 +1347,30 @@ function CapturePage({
               />
             </label>
           ) : null}
+          {form.kind === "refund" ? (
+            <>
+              <label>
+                <span>Refund type</span>
+                <select value={form.refundSubtype} onChange={(event) => updateForm("refundSubtype", event.target.value as DraftForm["refundSubtype"])}>
+                  <option value="refund">Store refund</option>
+                  <option value="payback">Friend payback</option>
+                </select>
+              </label>
+              {form.refundSubtype === "payback" ? (
+                <label>
+                  <span>Original expense</span>
+                  <select required value={form.refundLinkedRecordId} onChange={(event) => updateForm("refundLinkedRecordId", event.target.value)}>
+                    <option value="">Select an expense to link</option>
+                    {refundableRecords.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.localDate} · {record.counterparty} · {record.currency} {record.amount}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </>
+          ) : null}
           {form.kind === "expense" ? (
             <label>
               <span>Item name</span>
@@ -1468,10 +1511,23 @@ function CapturePage({
             </>
           ) : null}
           {form.kind === "refund" ? (
-            <label className="full-span">
-              <span>Refund reason</span>
-              <textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} />
-            </label>
+            <>
+              <label className="full-span">
+                <span>Refund reason</span>
+                <textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} />
+              </label>
+              {refundExceedsLinkedAmount ? (
+                <label className="full-span warning-field">
+                  <span>Excess amount handling</span>
+                  <select aria-label="Excess amount handling" value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}>
+                    <option value="unclassified">Choose a classification</option>
+                    <option value="income">Classify excess as income</option>
+                    <option value="negative-expense">Classify excess as additional negative expense</option>
+                  </select>
+                  <small>This payback exceeds the linked expense and needs an explicit classification.</small>
+                </label>
+              ) : null}
+            </>
           ) : null}
           {form.kind === "adjustment" ? (
             <label className="full-span">

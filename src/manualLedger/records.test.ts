@@ -28,6 +28,9 @@ const expense: TransactionDraft = {
   feeCurrency: "",
   feeCategory: "",
   refundReason: "",
+  refundSubtype: "refund",
+  refundLinkedRecordId: "",
+  refundExcessHandling: "unclassified",
   reason: "",
   timePrecision: "day",
   periodStart: "",
@@ -114,6 +117,46 @@ describe("local official ledger records", () => {
       category: "Fees",
       linkedRecordId: "record-1",
     });
+  });
+
+  test("preserves refund subtype and linked expense identity", () => {
+    const refund: TransactionDraft = {
+      ...expense,
+      id: "draft-refund",
+      kind: "refund",
+      category: "Daily",
+      counterparty: "Friend",
+      itemName: "",
+      amount: "50",
+      refundReason: "Payback",
+      refundSubtype: "payback",
+      refundLinkedRecordId: "record-original",
+    };
+
+    const bundle = createOfficialRecordBundle(refund, accounts, options);
+
+    expect(bundle?.records[0]).toMatchObject({
+      kind: "refund",
+      refundSubtype: "payback",
+      refundLinkedRecordId: "record-original",
+    });
+  });
+
+  test("rejects a payback without a linked expense", () => {
+    const refund: TransactionDraft = {
+      ...expense,
+      id: "draft-refund",
+      kind: "refund",
+      category: "Daily",
+      counterparty: "Friend",
+      itemName: "",
+      amount: "50",
+      refundReason: "Payback",
+      refundSubtype: "payback",
+      refundLinkedRecordId: "",
+    };
+
+    expect(createOfficialRecordBundle(refund, accounts, options)).toBeNull();
   });
 
   test("rejects a record whose account or currency does not match", () => {
