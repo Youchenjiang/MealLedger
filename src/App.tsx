@@ -22,6 +22,7 @@ import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { createTransactionDraft, draftKinds, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
+import { appendIdempotentRecords, createOfficialRecordBundle, type LocalAuditEvent, type LocalLedgerRecord } from "./manualLedger/records";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -59,6 +60,8 @@ function localDate(): string {
 let draftSequence = 0;
 
 const draftsStorageKey = "mealledger.app-shell.drafts";
+const recordsStorageKey = "mealledger.manual-ledger.records";
+const auditEventsStorageKey = "mealledger.manual-ledger.audit-events";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -66,6 +69,34 @@ function draftId(): string {
   }
   draftSequence += 1;
   return `draft-${Date.now()}-${draftSequence}`;
+}
+
+function readStoredRecords(): LocalLedgerRecord[] {
+  try {
+    const stored = window.localStorage.getItem(recordsStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as LocalLedgerRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredAuditEvents(): LocalAuditEvent[] {
+  try {
+    const stored = window.localStorage.getItem(auditEventsStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as LocalAuditEvent[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 const expenseCategories = [
@@ -91,6 +122,10 @@ const incomeCategories = ["Allowance", "Salary", "Interest", "Gift", "Reimbursem
 
 function draftDisplayName(draft: TransactionDraft): string {
   return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
+}
+
+function recordDisplayName(record: LocalLedgerRecord): string {
+  return record.kind === "transfer" ? `${record.accountName} to ${record.transferAccountName}` : record.counterparty || record.reason || record.kind;
 }
 
 function draftCountLabel(draftCount: number): string {
@@ -252,8 +287,11 @@ export function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>([]);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
+  const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
+  const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
   const route = location.route;
   const draftCount = drafts.length;
+  const recordCount = records.length;
 
   useEffect(() => {
     try {
@@ -262,6 +300,15 @@ export function App() {
       // Local persistence is best effort; the shell remains usable if storage is unavailable.
     }
   }, [drafts]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(recordsStorageKey, JSON.stringify(records));
+      window.localStorage.setItem(auditEventsStorageKey, JSON.stringify(auditEvents));
+    } catch {
+      // Local persistence is best effort; the ledger remains usable for this session.
+    }
+  }, [auditEvents, records]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -311,8 +358,17 @@ export function App() {
       });
     }
 
+    if (recordCount > 0) {
+      items.push({
+        label: `${recordCount} local record${recordCount === 1 ? "" : "s"}`,
+        detail: "Official manual records are stored locally until cloud sync is enabled.",
+        icon: CloudOff,
+        tone: "warn",
+      });
+    }
+
     return items;
-  }, [isOnline, draftCount]);
+  }, [draftCount, isOnline, recordCount]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -329,7 +385,7 @@ export function App() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} />
-        {renderRoute(route, drafts, setDrafts, accounts, setAccounts, navigate)}
+        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate)}
       </section>
     </main>
   );
@@ -361,18 +417,23 @@ function renderRoute(
   route: AppRoute,
   drafts: TransactionDraft[],
   setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>,
+  records: LocalLedgerRecord[],
+  setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>,
+  setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>,
   accounts: LocalAccount[],
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
 ) {
   const draftCount = drafts.length;
+  const recordCount = records.length;
 
   switch (route) {
     case "overview":
-      return <OverviewPage draftCount={draftCount} navigate={navigate} />;
+      return <OverviewPage draftCount={draftCount} recordCount={recordCount} navigate={navigate} />;
     case "ledger":
       return (
         <LedgerPage
+          records={records}
           drafts={drafts}
           navigate={navigate}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -381,11 +442,27 @@ function renderRoute(
     case "capture":
       return (
         <CapturePage
-          drafts={drafts}
+          records={records}
           accounts={accounts}
           navigate={navigate}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onCreateDraft={(draft) => setDrafts((current) => [draft, ...current])}
+          onSaveRecord={(draft) => {
+            const now = new Date().toISOString();
+            const bundle = createOfficialRecordBundle(draft, accounts, {
+              userId: "local-user",
+              recordId: `record-${draft.id}`,
+              idempotencyKey: `manual:${draft.id}`,
+              createdAt: now,
+            });
+
+            if (!bundle) {
+              return false;
+            }
+
+            setRecords((current) => appendIdempotentRecords(current, bundle));
+            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            return true;
+          }}
         />
       );
     case "settings":
@@ -395,12 +472,12 @@ function renderRoute(
   }
 }
 
-function OverviewPage({ draftCount, navigate }: Readonly<{ draftCount: number; navigate: (item: NavItem) => void }>) {
+function OverviewPage({ draftCount, recordCount, navigate }: Readonly<{ draftCount: number; recordCount: number; navigate: (item: NavItem) => void }>) {
   return (
     <div className="route-stack">
       <section className="summary-grid">
         <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
-        <EmptyMetric label="Ledger records" value="No records" detail="Confirmed transactions will appear here." />
+        <EmptyMetric label="Ledger records" value={recordCount > 0 ? `${recordCount} saved` : "No records"} detail={recordCount > 0 ? "Official local records are ready in Ledger." : "Your confirmed transactions will appear here."} />
         <EmptyMetric
           label="Draft reviews"
           value={draftCount > 0 ? `${draftCount} waiting` : "None"}
@@ -429,10 +506,12 @@ function OverviewPage({ draftCount, navigate }: Readonly<{ draftCount: number; n
 }
 
 function LedgerPage({
+  records,
   drafts,
   navigate,
   onDiscardDraft,
 }: Readonly<{
+  records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
@@ -460,10 +539,7 @@ function LedgerPage({
     <div className="route-stack">
       <section className="content-grid">
         <Panel title="Ledger records" eyebrow="Confirmed records">
-          <p className="panel-copy">
-            Confirmed transactions will appear here in a later ledger workflow. This app shell keeps
-            spreadsheet-friendly fields visible from the start.
-          </p>
+          <p className="panel-copy">Manual records are written locally as official ledger records. Cloud sync is not enabled yet.</p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
             Start a record
           </button>
@@ -474,6 +550,29 @@ function LedgerPage({
           </p>
         </Panel>
       </section>
+      {records.length > 0 ? (
+        <section className="draft-list" aria-label="Confirmed ledger records">
+          <div className="draft-list-heading">
+            <div>
+              <p className="eyebrow">Official local records</p>
+              <h2>Ledger history</h2>
+            </div>
+            <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
+          </div>
+          {records.map((record) => (
+            <article className="draft-card" key={record.id}>
+              <div>
+                <strong>{recordDisplayName(record)}</strong>
+                <span>{record.localDate} · {record.accountName} · {record.category || record.reason || "No category"}</span>
+              </div>
+              <div className="draft-amount">
+                <strong>{record.currency} {record.amount}</strong>
+                <span>{record.kind} · {record.status}</span>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
       {draftCount > 0 ? (
         <section className="draft-list" aria-label="Draft records waiting for review">
           <div className="draft-list-heading">
@@ -511,7 +610,7 @@ function LedgerPage({
             <span key={column}>{column}</span>
           ))}
         </div>
-        <div className="table-empty">No confirmed ledger records yet.</div>
+        {records.length === 0 ? <div className="table-empty">No confirmed ledger records yet.</div> : null}
       </section>
     </div>
   );
@@ -644,17 +743,17 @@ function QuickAccountSetup({
 }
 
 function CapturePage({
-  drafts,
+  records,
   accounts,
   navigate,
   onAddAccount,
-  onCreateDraft,
+  onSaveRecord,
 }: Readonly<{
-  drafts: TransactionDraft[];
+  records: LocalLedgerRecord[];
   accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onAddAccount: (account: LocalAccount) => void;
-  onCreateDraft: (draft: TransactionDraft) => void;
+  onSaveRecord: (draft: TransactionDraft) => boolean;
 }>) {
   const [form, setForm] = useState<DraftForm>({
     date: localDate(),
@@ -690,13 +789,13 @@ function CapturePage({
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [quickCategoryName, setQuickCategoryName] = useState("");
   const [quickCategoryError, setQuickCategoryError] = useState("");
+  const [savedMessage, setSavedMessage] = useState("");
 
-  const draftCount = drafts.length;
-  const latestDraft = drafts[0];
+  const recordCount = records.length;
   const actions = [
     {
       title: "Record a transaction",
-      detail: "The primary path for expenses, income, transfers, refunds, and adjustments.",
+      detail: "Save expenses, income, transfers, refunds, and adjustments to the local ledger.",
       icon: Banknote,
       available: true,
     },
@@ -722,6 +821,7 @@ function CapturePage({
 
   const updateForm = (field: keyof DraftForm, value: string) => {
     setFormError(null);
+    setSavedMessage("");
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -816,11 +916,16 @@ function CapturePage({
     const nextDraft = createTransactionDraft(form, draftId(), accounts);
 
     if (!nextDraft) {
-      setFormError("Please fill in all required fields before creating a draft.");
+      setFormError("Please fill in all required fields before saving this record.");
       return;
     }
 
-    onCreateDraft(nextDraft);
+    if (!onSaveRecord(nextDraft)) {
+      setFormError("This record could not be saved. Check the selected accounts and amounts.");
+      return;
+    }
+
+    setSavedMessage("Record saved to the local ledger.");
     setForm((current) => ({
       ...current,
       counterparty: "",
@@ -896,8 +1001,8 @@ function CapturePage({
     <section className="capture-layout">
       <Panel title="Choose how to start" eyebrow="Input sources">
         <p className="panel-copy">
-          Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
-          you review or discard them; ledger confirmation arrives later.
+          Manual entries are saved as official local ledger records. Scans, meal photos, and attachments
+          remain unavailable until their own workflows are implemented.
         </p>
         <div className="planned-actions">
           {actions.map((action) => {
@@ -909,7 +1014,7 @@ function CapturePage({
                   <span>
                     <strong>{action.title}</strong>
                     <small>{action.detail}</small>
-                    <em>Manual draft</em>
+                    <em>Manual record</em>
                   </span>
                 </a>
               );
@@ -928,7 +1033,7 @@ function CapturePage({
           })}
         </div>
       </Panel>
-      <Panel title="Manual transaction draft" eyebrow="Local draft">
+      <Panel title="Manual ledger record" eyebrow="Official local record">
         <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
           {!isUnresolvedExpense ? (
             <label>
@@ -1219,24 +1324,17 @@ function CapturePage({
           ) : null}
           </fieldset>
           {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
+          {savedMessage ? <p className="form-success full-span" role="status">{savedMessage}</p> : null}
           <button className="primary-action align-start" disabled={!hasSelectedAccount} type="submit">
-            {hasSelectedAccount ? "Create draft" : "Add an account first"}
+            {hasSelectedAccount ? "Save record" : "Add an account first"}
           </button>
         </form>
       </Panel>
-      {draftCount > 0 ? (
-        <Panel title="Draft ready for review" eyebrow="Local draft">
-          <p className="panel-copy">
-            {draftCount} manual transaction draft{draftCount === 1 ? "" : "s"} exist locally. They
-            are not confirmed ledger records yet.
-          </p>
-          {latestDraft ? (
-            <p className="draft-summary">
-              Latest: {draftSummary(latestDraft)}
-            </p>
-          ) : null}
+      {recordCount > 0 ? (
+        <Panel title="Record saved" eyebrow="Local ledger">
+          <p className="panel-copy">{recordCount} official local record{recordCount === 1 ? "" : "s"} stored on this device.</p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
-            Review in Ledger
+            Open Ledger
           </button>
         </Panel>
       ) : null}

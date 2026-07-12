@@ -24,7 +24,7 @@ async function addAccount(user: ReturnType<typeof userEvent.setup>, name: string
   await user.click(screen.getByRole("button", { name: "Add account" }));
 }
 
-async function createExpenseDraft(user: ReturnType<typeof userEvent.setup>) {
+async function createExpenseRecord(user: ReturnType<typeof userEvent.setup>) {
   await addAccount(user, "Daily wallet");
   await goToCapture(user);
   await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
@@ -35,7 +35,7 @@ async function createExpenseDraft(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Item name"), "香蕉");
   await user.clear(screen.getByLabelText("Amount"));
   await user.type(screen.getByLabelText("Amount"), "417");
-  await user.click(screen.getByRole("button", { name: "Create draft" }));
+  await user.click(screen.getByRole("button", { name: "Save record" }));
 }
 
 describe("App shell draft flow", () => {
@@ -49,25 +49,23 @@ describe("App shell draft flow", () => {
     window.history.pushState(null, "", "/");
   });
 
-  test("creates a manual expense draft and keeps confirmed ledger empty", async () => {
+  test("creates an official local expense record", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
     await openWorkspace(user);
     await goToCapture(user);
-    await createExpenseDraft(user);
+    await createExpenseRecord(user);
 
-    expect(screen.getByText("Draft ready for review")).toBeInTheDocument();
-    expect(screen.getByText("Latest: 全聯, TWD 417")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Review in Ledger" }));
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
 
     expect(screen.getByRole("heading", { name: "Ledger" })).toBeInTheDocument();
-    const reviewQueue = screen.getByLabelText("Draft records waiting for review");
-    expect(within(reviewQueue).getByRole("heading", { name: "Drafts waiting" })).toBeInTheDocument();
-    expect(within(reviewQueue).getByText("全聯")).toBeInTheDocument();
-    expect(within(reviewQueue).getByText("TWD 417")).toBeInTheDocument();
-    expect(screen.getByText("No confirmed ledger records yet.")).toBeInTheDocument();
+    const recordList = screen.getByLabelText("Confirmed ledger records");
+    expect(within(recordList).getByRole("heading", { name: "Ledger history" })).toBeInTheDocument();
+    expect(within(recordList).getByText("全聯")).toBeInTheDocument();
+    expect(within(recordList).getByText("TWD 417")).toBeInTheDocument();
+    expect(screen.queryByText("No confirmed ledger records yet.")).not.toBeInTheDocument();
   });
 
   test("opens the workspace and navigates between core routes", async () => {
@@ -143,7 +141,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Sync not enabled")).toBeInTheDocument();
   });
 
-  test("shows draft counts as drafts are created", async () => {
+  test("shows local record counts as records are created", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
@@ -151,17 +149,16 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("No drafts to review")).toBeInTheDocument();
 
     await goToCapture(user);
-    await createExpenseDraft(user);
+    await createExpenseRecord(user);
 
-    expect(screen.getByText("1 draft waiting")).toBeInTheDocument();
-    expect(screen.getByText("Local-only data")).toBeInTheDocument();
+    expect(screen.getByText("1 local record")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Overview" }));
-    expect(screen.getByText("Draft reviews")).toBeInTheDocument();
-    expect(screen.getByText("1 waiting")).toBeInTheDocument();
+    expect(screen.getByText("Ledger records")).toBeInTheDocument();
+    expect(screen.getByText("1 saved")).toBeInTheDocument();
   });
 
-  test("requires a transfer account before creating transfer drafts", async () => {
+  test("requires a transfer account before saving a transfer", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
@@ -173,16 +170,16 @@ describe("App shell draft flow", () => {
     await user.selectOptions(screen.getByLabelText("Source account"), "Daily wallet");
     await user.clear(screen.getByLabelText("Amount"));
     await user.type(screen.getByLabelText("Amount"), "1000");
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await user.click(screen.getByRole("button", { name: "Save record" }));
 
-    expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Record saved to the local ledger.")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Merchant")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Source")).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Destination account"), "Savings");
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await user.click(screen.getByRole("button", { name: "Save record" }));
 
-    expect(screen.getByText("Latest: Daily wallet 1000 TWD to Savings TWD")).toBeInTheDocument();
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
   });
 
   test("shows cross-currency and fee fields only for transfers", async () => {
@@ -354,12 +351,12 @@ describe("App shell draft flow", () => {
     fireEvent.change(screen.getByLabelText("Period start"), { target: { value: "2026-07-01" } });
     fireEvent.change(screen.getByLabelText("Period end"), { target: { value: "2026-07-31" } });
     await user.type(screen.getByLabelText("Amount"), "20");
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await user.click(screen.getByRole("button", { name: "Save record" }));
 
-    expect(screen.getByText("Latest: Unresolved expense, TWD 20")).toBeInTheDocument();
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
   });
 
-  test("supports inline transfer accounts and balance adjustment drafts", async () => {
+  test("supports inline transfer accounts and balance adjustments", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
@@ -387,9 +384,9 @@ describe("App shell draft flow", () => {
     await user.clear(screen.getByLabelText("Amount"));
     await user.type(screen.getByLabelText("Amount"), "-10");
     await user.type(screen.getByLabelText("Adjustment reason"), "Cash count");
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await user.click(screen.getByRole("button", { name: "Save record" }));
 
-    expect(screen.getByText("Latest: Cash count, TWD -10")).toBeInTheDocument();
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
   });
 
   test("keeps duplicate Settings accounts out of the local account list", async () => {
@@ -403,7 +400,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByLabelText("Available accounts").querySelectorAll("li")).toHaveLength(1);
   });
 
-  test("uses native form validation to block incomplete manual drafts", async () => {
+  test("uses native form validation to block incomplete manual records", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
@@ -420,9 +417,9 @@ describe("App shell draft flow", () => {
     expect(merchant).toBeInvalid();
     expect(itemName).toBeInvalid();
     expect(amount).toBeInvalid();
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await user.click(screen.getByRole("button", { name: "Save record" }));
 
-    expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Record saved to the local ledger.")).not.toBeInTheDocument();
   });
 
   test("shows a fallback error when draft validation rejects submission", async () => {
@@ -440,40 +437,36 @@ describe("App shell draft flow", () => {
     fireEvent.submit(form);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Please fill in all required fields");
-    expect(screen.queryByText("Draft ready for review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Record saved to the local ledger.")).not.toBeInTheDocument();
   });
 
-  test("keeps local drafts after a reload", async () => {
+  test("keeps official local records after a reload", async () => {
     const user = userEvent.setup();
     const view = renderWorkspace();
 
     await openWorkspace(user);
     await goToCapture(user);
-    await createExpenseDraft(user);
+    await createExpenseRecord(user);
 
     view.unmount();
     renderWorkspace();
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "Ledger" }));
-    expect(screen.getByText("全聯")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("全聯");
   });
 
-  test("discards local drafts from the ledger review queue", async () => {
+  test("does not place official records in the draft review queue", async () => {
     const user = userEvent.setup();
     renderWorkspace();
 
     await openWorkspace(user);
     await goToCapture(user);
-    await createExpenseDraft(user);
-    await user.click(screen.getByRole("button", { name: "Review in Ledger" }));
-
-    const reviewQueue = screen.getByLabelText("Draft records waiting for review");
-    await user.click(within(reviewQueue).getByRole("button", { name: "Discard" }));
+    await createExpenseRecord(user);
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
 
     expect(screen.queryByLabelText("Draft records waiting for review")).not.toBeInTheDocument();
-    expect(screen.getByText("No confirmed ledger records yet.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("全聯");
     expect(screen.getByText("No drafts to review")).toBeInTheDocument();
-    expect(screen.queryByText("Local-only data")).not.toBeInTheDocument();
   });
 
   test("labels unavailable capture paths as unavailable and keeps manual entry available", async () => {

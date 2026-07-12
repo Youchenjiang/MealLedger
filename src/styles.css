@@ -450,6 +450,12 @@ h2 {
   font-weight: 700;
 }
 
+.form-success {
+  margin: 0;
+  color: #21634f;
+  font-weight: 700;
+}
+
 .draft-form .checkbox-field {
   display: flex;
   align-items: center;
