@@ -51,7 +51,7 @@ async function expectHorizontallyWithinViewport(page: Page, selector: string) {
   }
 }
 
-test("creates a local draft and keeps the confirmed ledger empty", async ({ page }) => {
+test("creates a local official record and shows it in Ledger", async ({ page }) => {
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
@@ -62,14 +62,14 @@ test("creates a local draft and keeps the confirmed ledger empty", async ({ page
   await page.getByLabel("Merchant").fill("全聯");
   await page.getByLabel("Item name").fill("香蕉");
   await page.getByLabel("Amount", { exact: true }).fill("417");
-  await page.getByRole("button", { name: "Create draft" }).click();
+  await page.getByRole("button", { name: "Save record" }).click();
 
-  await expect(page.getByRole("heading", { name: "Draft ready for review" })).toBeVisible();
-  await page.getByRole("button", { name: "Review in Ledger" }).click();
+  await expect(page.getByText("Record saved to the local ledger.")).toBeVisible();
+  await page.getByRole("button", { name: "Open Ledger" }).click();
 
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Draft records waiting for review")).toContainText("全聯");
-  await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
+  await expect(page.getByLabel("Confirmed ledger records")).toContainText("全聯");
+  await expect(page.getByText("No confirmed ledger records yet.")).not.toBeVisible();
   expect(errors).toEqual([]);
 });
 

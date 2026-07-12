@@ -2,11 +2,11 @@
 
 ## Current Implementation Boundary
 
-The current local Capture preview contains early Manual Ledger UI work. It has not created official records, persistence, sync, audit events, or ledger CRUD. The status labels below distinguish an implemented local preview from accepted Manual Ledger behavior.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve an audit event, and expose stable idempotency keys. Cloud sync, editing, deletion, and several advanced field workflows remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
-Status: Complete for local-preview configuration; official-record model pending.
+Status: Complete for the current local record boundary.
 
 Create record-kind configuration for fields, labels, required fields, and validation.
 
@@ -16,7 +16,7 @@ Expected verification:
 
 ## Task 2: Build Kind Selection And Shared Form Layout
 
-Status: Complete for local-preview layout; official-save behavior pending.
+Status: Complete for the current local-save layout.
 
 Implement the manual entry shell with kind selection and common field components.
 
@@ -26,7 +26,7 @@ Expected verification:
 
 ## Task 3: Implement Expense And Income Forms
 
-Status: Partial. The local preview has account/category selection and kind-specific fields. Missing-value controls, source suggestions, official save, and acceptance coverage remain.
+Status: Partial. Expense and income records save locally as official records. Explicit missing-value controls and history suggestions remain.
 
 Add expense and income validation, missing merchant/item controls, and inline category/source creation placeholders.
 
@@ -36,7 +36,7 @@ Expected verification:
 
 ## Task 4: Implement Fund Addition And Adjustment Forms
 
-Status: Partial. The local preview exposes fields; report behavior and official save remain.
+Status: Partial. The local form and local official-save boundary exist. Report projections remain.
 
 Add fund addition and adjustment flows with report-safe labels and required reasons.
 
@@ -47,7 +47,7 @@ Expected verification:
 
 ## Task 5: Implement Transfer Form
 
-Status: Partial. The local preview supports source/destination selection, same/cross-currency amounts, and fee input. Linked official records and accounting behavior remain.
+Status: Partial. The local form supports source/destination selection, same/cross-currency amounts, and fee input. The domain boundary creates a linked fee expense; report projections remain.
 
 Add same-currency and cross-currency transfer input, including optional fee entry.
 
@@ -58,7 +58,7 @@ Expected verification:
 
 ## Task 6: Implement Refund And Payback Form
 
-Status: Partial. The local preview exposes refund fields. Payback subtype, linking, excess handling, and official save remain.
+Status: Partial. Refund fields save locally as official records. Payback subtype, linking, and excess handling remain.
 
 Add refund flow, payback subtype, linked expense selection placeholder, and excess refund warning.
 
@@ -68,7 +68,7 @@ Expected verification:
 
 ## Task 7: Implement Unresolved Expense Flow
 
-Status: Partial. The local preview supports day, month, and period input. Official unresolved records and conversion remain.
+Status: Partial. Day, month, and period unresolved records save locally. Conversion to expense remains.
 
 Add time precision, day/month/period inputs, and conversion prompt placeholder.
 
@@ -95,7 +95,7 @@ Expected verification:
 
 ## Task 10: Offline And Idempotency UI Hook
 
-Add local-only save state and idempotency key creation boundary.
+Status: Partial. Local-only save state, browser persistence, audit events, and idempotency key creation are implemented. Cloud retry transport remains.
 
 Expected verification:
 
@@ -103,11 +103,15 @@ Expected verification:
 
 ## Task 11: Final Verification
 
-Run final verification before PR.
+Status: In progress for the first local-record slice.
 
 Expected verification:
 
+- `npm run test`
+- `npm run test:coverage`
+- `npm run test:e2e`
 - `npm run build`
-- browser smoke test
 - no console errors
 - accounting acceptance cases documented or automated
+
+Current slice evidence is recorded in the branch commits and must be rerun after the remaining Manual Ledger tasks are implemented.
