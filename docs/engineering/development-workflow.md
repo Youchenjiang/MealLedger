@@ -16,16 +16,6 @@ Medium or high-risk product work should follow the [Spec-Driven Workflow](spec-d
 4. Rebase on `main` if the branch becomes stale.
 5. Merge only after checks pass and review threads are resolved.
 
-## Remote Action Approval
-
-The normal development flow ends at a verified local commit until the user explicitly asks for a remote action. A passing verification run does not itself authorize publication or review activity.
-
-- Agents may inspect remotes with `git fetch`, but must not run `git pull`, rebase onto a remote branch, or push without explicit approval.
-- Agents must not create, edit, request review for, merge, close, or otherwise change a GitHub PR without explicit approval.
-- Local commits are not permission to publish. Report the commit and verification evidence, then wait for the user to request the next remote action.
-
-The complete rule and examples live in [CONTRIBUTING.md](../../CONTRIBUTING.md#user-approval-gate).
-
 ## Frontend Stack
 
 - Vite

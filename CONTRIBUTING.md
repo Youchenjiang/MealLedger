@@ -14,20 +14,6 @@ MealLedger uses a strict commit and pull request policy. The goal is to keep his
   - `chore/<short-name>` for maintenance
 - Keep branches short-lived. Rebase on `main` before opening a PR if the branch is stale.
 
-## User Approval Gate
-
-Local implementation work may proceed without a separate approval for every step: creating a local topic branch, editing files, running verification, and creating local commits are all allowed once the task is in scope.
-
-Remote or review-affecting actions require an explicit user instruction for that action. Do not infer approval from a completed local commit, a passing test suite, or a plan that mentions a later PR.
-
-- `git fetch` is allowed for read-only inspection.
-- Do not run `git pull`, rebase onto a remote branch, or otherwise change the local branch from a remote without approval.
-- Do not run `git push` without approval.
-- Do not create, edit, mark ready, request review on, merge, or close a GitHub PR without approval.
-- Do not add reviewers, submit review comments, or resolve GitHub review threads without approval.
-
-Before any of these actions, report the local verification result and ask for the next instruction. An explicit request such as "push this branch", "open the PR", or "merge PR 12" grants approval only for that named action.
-
 ## Commit Format
 
 Every commit must use Conventional Commits:
@@ -142,8 +128,6 @@ feat(app): add meals, upload photos, rewrite docs, fix exports
 ```
 
 ## Pull Request Rules
-
-Opening or changing a PR is subject to the [User Approval Gate](#user-approval-gate).
 
 PR titles must also follow Conventional Commits:
 

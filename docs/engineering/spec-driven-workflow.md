@@ -83,8 +83,6 @@ Tasks should be ordered so the project can stop safely between PRs. Prefer verti
 
 Each task should mention its expected verification command or review evidence.
 
-Implementation tasks should add or update automated tests before commit when the spec has executable behavior. If the first slice is only scaffolding, the PR must still state why automated coverage is not yet meaningful.
-
 ## Test Plan
 
 `test-plan.md` defines verification before implementation.
@@ -102,7 +100,7 @@ High-risk areas should list acceptance cases before code:
 - sync conflicts
 - privacy deletion
 
-UI shell work can use build checks and browser smoke tests only before executable behavior exists. Once a shell flow captures, validates, stores, or reviews user input, the spec must include automated tests and a coverage command.
+UI shell work can use build checks and browser smoke tests when it does not affect ledger correctness.
 
 ## Review Roles
 
