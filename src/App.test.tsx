@@ -125,7 +125,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Parent")).toBeInTheDocument();
   });
 
-  test("exposes clean CSV and JSON exports from Settings", async () => {
+  test("exposes clean CSV, JSON, and ZIP exports from Settings", async () => {
     const user = userEvent.setup();
     const createObjectURL = vi.fn(() => "blob:mealledger");
     const revokeObjectURL = vi.fn();
@@ -141,10 +141,11 @@ describe("App shell draft flow", () => {
 
     await user.click(screen.getByRole("button", { name: "Export CSV" }));
     await user.click(screen.getByRole("button", { name: "Export JSON" }));
+    await user.click(screen.getByRole("button", { name: "Export ZIP" }));
 
-    expect(createObjectURL).toHaveBeenCalledTimes(2);
-    expect(revokeObjectURL).toHaveBeenCalledTimes(2);
-    expect(anchorClick).toHaveBeenCalledTimes(2);
+    expect(createObjectURL).toHaveBeenCalledTimes(3);
+    expect(revokeObjectURL).toHaveBeenCalledTimes(3);
+    expect(anchorClick).toHaveBeenCalledTimes(3);
     anchorClick.mockRestore();
     Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: originalCreateObjectURL });
     Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectURL });

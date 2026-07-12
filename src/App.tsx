@@ -24,7 +24,7 @@ import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCoun
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
-import { serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
+import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -66,6 +66,22 @@ function downloadTextFile(content: string, fileName: string, mimeType: string): 
   }
 
   const url = urlApi.createObjectURL(new Blob([content], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  urlApi.revokeObjectURL(url);
+}
+
+function downloadBinaryFile(content: Uint8Array, fileName: string, mimeType: string): void {
+  const urlApi = window.URL;
+  if (!urlApi.createObjectURL) {
+    return;
+  }
+
+  const bytes = new Uint8Array(content.byteLength);
+  bytes.set(content);
+  const url = urlApi.createObjectURL(new Blob([bytes.buffer], { type: mimeType }));
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
@@ -2112,7 +2128,7 @@ function SettingsPage({ accounts, records, onAddAccount }: Readonly<{ accounts: 
         ) : null}
       </Panel>
       <AccountSyncPanel />
-      <ImportExportPanel dataTools={dataTools} records={records} />
+      <ImportExportPanel dataTools={dataTools} accounts={accounts} records={records} />
     </section>
   );
 }
@@ -2134,7 +2150,7 @@ function AccountSyncPanel() {
   );
 }
 
-function ImportExportPanel({ dataTools, records }: Readonly<{ dataTools: Array<{ title: string; detail: string }>; records: LocalLedgerRecord[] }>) {
+function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTools: Array<{ title: string; detail: string }>; accounts: LocalAccount[]; records: LocalLedgerRecord[] }>) {
   return (
     <Panel title="Import and export safeguards" eyebrow="Data portability">
       <p className="panel-copy">
@@ -2144,6 +2160,7 @@ function ImportExportPanel({ dataTools, records }: Readonly<{ dataTools: Array<{
       <div className="quick-account-actions">
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
+        <button className="secondary-action" type="button" onClick={() => downloadBinaryFile(createMultiTableExport(accounts, records).zip, "mealledger-export.zip", "application/zip")}>Export ZIP</button>
       </div>
       <DataToolList items={dataTools} />
     </Panel>

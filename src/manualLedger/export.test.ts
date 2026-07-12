@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { serializeCleanCsv, serializeCleanJson, toCleanExportRow } from "./export";
+import { createMultiTableExport, serializeCleanCsv, serializeCleanJson, toCleanExportRow } from "./export";
+import type { LocalAccount } from "./accounts";
 import type { LocalLedgerRecord } from "./records";
+
+const account: LocalAccount = { id: "cash", name: "Cash", currency: "TWD" };
 
 const record: LocalLedgerRecord = {
   id: "record-1",
@@ -74,5 +77,37 @@ describe("clean ledger export", () => {
     expect(json).not.toContain("base64");
     expect(json).not.toContain("media");
     expect(json).not.toContain("base64");
+  });
+
+  test("builds the spreadsheet-style ZIP with manifest counts and account summary", () => {
+    const income = { ...record, id: "income-1", kind: "income" as const, amount: "1000", category: "Allowance" };
+    const transfer = {
+      ...record,
+      id: "transfer-1",
+      kind: "transfer" as const,
+      accountId: "cash",
+      transferAccountId: "cash",
+      transferAccountName: "Cash",
+      destinationAmount: "1000",
+    };
+    const bundle = createMultiTableExport([account], [record, income, transfer], "2026-07-13T00:00:00.000Z");
+
+    expect(bundle.manifest.files).toEqual([
+      "manifest.json",
+      "ledger/transactions.csv",
+      "ledger/transfers.csv",
+      "ledger/fund_additions.csv",
+      "ledger/refunds.csv",
+      "ledger/unresolved_expenses.csv",
+      "ledger/adjustments.csv",
+      "reports/account_summary.csv",
+    ]);
+    expect(bundle.manifest.record_counts["ledger/transactions.csv"]).toBe(2);
+    expect(bundle.manifest.currency_modes).toEqual(["TWD"]);
+    expect(bundle.files["reports/account_summary.csv"]).toContain("fund_addition_total");
+    expect(bundle.files["reports/account_summary.csv"]).toContain("Cash");
+    expect(bundle.zip[0]).toBe(0x50);
+    expect(bundle.zip[1]).toBe(0x4b);
+    expect(new TextDecoder().decode(bundle.zip)).toContain("ledger/transactions.csv");
   });
 });
