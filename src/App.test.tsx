@@ -160,7 +160,7 @@ describe("App shell draft flow", () => {
     const file = new File(["date,account,amount\n2026-07-13,Cash,417\n"], "ledger.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
-    expect(await screen.findByText("CSV ready for review: 1 rows and 3 columns. Mapped: date, account, amount. No records were created.")).toBeInTheDocument();
+    expect(await screen.findByText("CSV ready for review: 1 rows and 3 columns. Mapped: date, account, amount. Rows ready: 0; review required: 1. No records were created.")).toBeInTheDocument();
     expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
   });
 

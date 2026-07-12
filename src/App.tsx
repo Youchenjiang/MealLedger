@@ -26,7 +26,8 @@ import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/b
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
 import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from "./manualLedger/export";
 import { validateCsvBytes } from "./importExport/csv";
-import { mapImportHeaders } from "./importExport/mapping";
+import { mapImportHeaders, mapImportRow } from "./importExport/mapping";
+import { validateImportRows } from "./importExport/rowValidation";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -2171,7 +2172,9 @@ function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTool
     const mappedFields = Object.keys(headerMapping.mapping).join(", ");
     const unmapped = headerMapping.unmappedHeaders.length > 0 ? ` Unmapped: ${headerMapping.unmappedHeaders.join(", ")}.` : "";
     const conflicts = headerMapping.conflicts.length > 0 ? ` Conflicts: ${headerMapping.conflicts.join(" ")}` : "";
-    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}.${unmapped}${conflicts} No records were created.`);
+    const rowResults = validateImportRows(result.rows.map((row) => mapImportRow(result.headers, row, headerMapping)), accounts);
+    const reviewCount = rowResults.filter((row) => !row.ok).length;
+    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts} No records were created.`);
   };
 
   return (
