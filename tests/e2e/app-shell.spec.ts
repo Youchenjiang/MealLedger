@@ -77,6 +77,44 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+test("captures a meal with multiple photos without a ledger write", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: /Record meal/ }).click();
+  await page.getByLabel("Meal photos").setInputFiles([
+    { name: "meal-1.jpg", mimeType: "image/jpeg", buffer: Buffer.from("one") },
+    { name: "meal-2.jpg", mimeType: "image/jpeg", buffer: Buffer.from("two") },
+  ]);
+  await page.getByRole("button", { name: "Save meal" }).click();
+
+  await expect(page.getByText("Meal saved locally with 2 photos.")).toBeVisible();
+  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("keeps invoice scans in review without creating a ledger record", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: /Scan invoice/ }).click();
+  await page.getByLabel("Scan images").setInputFiles({
+    name: "invoice.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from("invoice"),
+  });
+  await page.getByRole("button", { name: "Save scan drafts" }).click();
+
+  await expect(page.getByText("1 scan draft saved locally for review.")).toBeVisible();
+  await expect(page.getByText("invoice.jpg")).toBeVisible();
+  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("keeps the desktop shell within its viewport", async ({ page }) => {
   const errors = collectBrowserErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
