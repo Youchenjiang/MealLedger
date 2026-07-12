@@ -238,6 +238,48 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("1 local draft")).toBeInTheDocument();
   });
 
+  test("offers cancel choices and persists an incomplete manual entry as a local draft", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.type(screen.getByLabelText("Merchant"), "全聯");
+    await user.click(screen.getByRole("button", { name: "Cancel entry" }));
+
+    expect(screen.getByRole("dialog", { name: "Cancel entry" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue editing" }));
+    expect(screen.queryByRole("dialog", { name: "Cancel entry" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Merchant")).toHaveValue("全聯");
+
+    await user.click(screen.getByRole("button", { name: "Cancel entry" }));
+    await user.click(screen.getByRole("button", { name: "Keep as draft" }));
+    expect(screen.getByText("Entry cancelled.")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.app-shell.drafts") ?? "[]")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    expect(screen.getByText("1 local draft")).toBeInTheDocument();
+  });
+
+  test("discarding a manual entry clears the changed form without creating a record", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.type(screen.getByLabelText("Merchant"), "全聯");
+    await user.click(screen.getByRole("button", { name: "Cancel entry" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(screen.getByText("Entry cancelled.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Merchant")).toHaveValue("");
+    expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
+  });
+
   test("offers recurrence intent and keeps variable amounts out of auto-record", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("confirm", vi.fn(() => true));

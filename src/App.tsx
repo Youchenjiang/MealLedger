@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
-import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
@@ -209,6 +209,17 @@ const expenseCategories = [
 ];
 
 const incomeCategories = ["Allowance", "Salary", "Interest", "Gift", "Reimbursement", "Prize", "Other income"];
+
+function createEmptyDraftForm(): DraftForm {
+  return {
+    date: localDate(), account: "", kind: "expense", category: "", counterparty: "", counterpartyMissing: false,
+    itemName: "", itemNameMissing: false, transferAccount: "", transferMode: "same-currency", amount: "", currency: "TWD",
+    destinationAmount: "", destinationCurrency: "JPY", feeEnabled: false, feeAccount: "", feeAmount: "", feeCurrency: "TWD",
+    feeCategory: "", refundReason: "", refundSubtype: "refund", refundLinkedRecordId: "", refundExcessHandling: "unclassified",
+    recurrenceChoice: "current-cycle-only", recurrenceAmountMode: "fixed", reason: "", timePrecision: "day", periodStart: "",
+    periodEnd: "", note: "",
+  };
+}
 
 function draftDisplayName(draft: TransactionDraft): string {
   return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
@@ -589,6 +600,7 @@ function renderRoute(
             setAuditEvents((current) => [...current, ...bundle.auditEvents]);
             return true;
           }}
+          onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
         />
       );
     case "settings":
@@ -1165,46 +1177,19 @@ function CapturePage({
   navigate,
   onAddAccount,
   onSaveRecord,
+  onSaveDraft,
 }: Readonly<{
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveRecord: (draft: TransactionDraft) => boolean;
+  onSaveDraft: (draft: TransactionDraft) => void;
 }>) {
-  const [form, setForm] = useState<DraftForm>({
-    date: localDate(),
-    account: "",
-    kind: "expense",
-    category: "",
-    counterparty: "",
-    counterpartyMissing: false,
-    itemName: "",
-    itemNameMissing: false,
-    transferAccount: "",
-    transferMode: "same-currency",
-    amount: "",
-    currency: "TWD",
-    destinationAmount: "",
-    destinationCurrency: "JPY",
-    feeEnabled: false,
-    feeAccount: "",
-    feeAmount: "",
-    feeCurrency: "TWD",
-    feeCategory: "",
-    refundReason: "",
-    refundSubtype: "refund",
-    refundLinkedRecordId: "",
-    refundExcessHandling: "unclassified",
-    recurrenceChoice: "current-cycle-only",
-    recurrenceAmountMode: "fixed",
-    reason: "",
-    timePrecision: "day",
-    periodStart: "",
-    periodEnd: "",
-    note: "",
-  });
+  const [form, setForm] = useState<DraftForm>(createEmptyDraftForm);
+  const [cleanForm, setCleanForm] = useState<DraftForm>(createEmptyDraftForm);
   const [formError, setFormError] = useState<string | null>(null);
+  const [showCancelChoices, setShowCancelChoices] = useState(false);
   const [quickAccountField, setQuickAccountField] = useState<"account" | "transferAccount" | "feeAccount" | null>(null);
   const [quickAccountName, setQuickAccountName] = useState("");
   const [quickAccountCurrency, setQuickAccountCurrency] = useState("TWD");
@@ -1218,6 +1203,7 @@ function CapturePage({
   const [quickSourceName, setQuickSourceName] = useState("");
   const [quickSourceError, setQuickSourceError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
+  const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(cleanForm);
 
   useEffect(() => {
     try {
@@ -1434,9 +1420,8 @@ function CapturePage({
       return;
     }
 
-    setSavedMessage("Record saved to the local ledger.");
-    setForm((current) => ({
-      ...current,
+    const nextCleanForm: DraftForm = {
+      ...form,
       counterparty: "",
       counterpartyMissing: false,
       itemName: "",
@@ -1457,7 +1442,25 @@ function CapturePage({
       reason: "",
       periodStart: "",
       periodEnd: "",
-    }));
+    };
+    setSavedMessage("Record saved to the local ledger.");
+    setForm(nextCleanForm);
+    setCleanForm(nextCleanForm);
+    setShowCancelChoices(false);
+  };
+
+  const resetEntry = () => {
+    const nextForm = createEmptyDraftForm();
+    setForm(nextForm);
+    setCleanForm(nextForm);
+    setFormError(null);
+    setSavedMessage("Entry cancelled.");
+    setShowCancelChoices(false);
+  };
+
+  const keepEntryAsDraft = () => {
+    onSaveDraft({ ...normalizeDraftForm(form), id: draftId() });
+    resetEntry();
   };
 
   const addQuickAccount = () => {
@@ -1965,9 +1968,22 @@ function CapturePage({
           ) : null}
           {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
           {savedMessage ? <p className="form-success full-span" role="status">{savedMessage}</p> : null}
-          <button className="primary-action align-start" disabled={!hasSelectedAccount} type="submit">
-            {hasSelectedAccount ? "Save record" : "Add an account first"}
-          </button>
+          {showCancelChoices ? (
+            <section className="cancel-choice full-span" aria-label="Cancel entry" role="dialog">
+              <strong>What should happen to this entry?</strong>
+              <div className="quick-account-actions">
+                <button className="danger-action" type="button" onClick={resetEntry}>Discard changes</button>
+                <button className="secondary-action" type="button" onClick={keepEntryAsDraft}>Keep as draft</button>
+                <button className="quiet-action" type="button" onClick={() => setShowCancelChoices(false)}>Continue editing</button>
+              </div>
+            </section>
+          ) : null}
+          <div className="quick-account-actions full-span">
+            <button className="quiet-action" type="button" onClick={() => hasUnsavedChanges ? setShowCancelChoices(true) : resetEntry()}>Cancel entry</button>
+            <button className="primary-action" disabled={!hasSelectedAccount} type="submit">
+              {hasSelectedAccount ? "Save record" : "Add an account first"}
+            </button>
+          </div>
         </form>
       </Panel>
       {recordCount > 0 ? (

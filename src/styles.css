@@ -694,6 +694,15 @@ h2 {
   gap: 8px;
 }
 
+.cancel-choice {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8b66a;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
 .planned-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
