@@ -28,6 +28,7 @@ import { createMultiTableExport, serializeCleanCsv, serializeCleanJson } from ".
 import { validateCsvBytes } from "./importExport/csv";
 import { mapImportHeaders, mapImportRow } from "./importExport/mapping";
 import { validateImportRows } from "./importExport/rowValidation";
+import { categoryReviewSummary } from "./importExport/aliases";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -2173,8 +2174,18 @@ function ImportExportPanel({ dataTools, accounts, records }: Readonly<{ dataTool
     const unmapped = headerMapping.unmappedHeaders.length > 0 ? ` Unmapped: ${headerMapping.unmappedHeaders.join(", ")}.` : "";
     const conflicts = headerMapping.conflicts.length > 0 ? ` Conflicts: ${headerMapping.conflicts.join(" ")}` : "";
     const rowResults = validateImportRows(result.rows.map((row) => mapImportRow(result.headers, row, headerMapping)), accounts);
-    const reviewCount = rowResults.filter((row) => !row.ok).length;
-    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts} No records were created.`);
+    const aliasReviews = rowResults.flatMap((row) => {
+      if (!(["expense", "income", "refund"] as string[]).includes(row.normalized.kind ?? "")) {
+        return [];
+      }
+      const summary = categoryReviewSummary(row.normalized.category ?? "");
+      return summary ? [`Row ${row.rowNumber}: ${summary}`] : [];
+    });
+    const reviewRows = rowResults.filter((row) => !row.ok).map((row) => row.rowNumber);
+    const reviewedRowNumbers = new Set([...reviewRows, ...aliasReviews.map((summary) => Number(summary.match(/^Row (\d+)/)?.[1]))]);
+    const reviewCount = reviewedRowNumbers.size;
+    const aliasMessage = aliasReviews.length > 0 ? ` Category review: ${aliasReviews.join(" ")}` : "";
+    setImportMessage(`CSV ready for review: ${result.rowCount} rows and ${result.headers.length} columns. Mapped: ${mappedFields || "none"}. Rows ready: ${result.rowCount - reviewCount}; review required: ${reviewCount}.${unmapped}${conflicts}${aliasMessage} No records were created.`);
   };
 
   return (
