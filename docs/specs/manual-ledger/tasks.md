@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account balances, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, and convert unresolved expenses in place while preserving record identity. Cloud sync, scheduled next-cycle generation, and several advanced field workflows remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account balances, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, and provide selectable inline-created income/funding sources. Cloud sync, scheduled next-cycle generation, and several advanced field workflows remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -26,13 +26,14 @@ Expected verification:
 
 ## Task 3: Implement Expense And Income Forms
 
-Status: Partial. Expense and income records save locally as official records, history suggestions are available, and explicitly unavailable expense merchant/item fields use fixed labels and persisted flags. Inline category/source creation and richer category management remain.
+Status: Partial. Expense and income records save locally as official records, history suggestions are available, explicitly unavailable expense merchant/item fields use fixed labels and persisted flags, and income/funding sources can be selected or created inline. Richer category management remains.
 
-Add expense and income validation, fixed missing merchant/item controls, and inline category/source creation placeholders.
+Add expense and income validation, fixed missing merchant/item controls, and inline category/source creation.
 
 Expected verification:
 
 - Expense and income acceptance cases pass, including fixed missing-value labels and rejection of arbitrary replacements.
+- Income and funding source options can be selected or added inline and persist locally.
 
 ## Task 4: Implement Fund Addition And Adjustment Forms
 
@@ -138,9 +139,9 @@ Current slice evidence is recorded in the branch commits and must be rerun after
 
 Latest verification for the local ledger slice:
 
-- `npm run test`: 73 tests passed.
-- `npm run test:coverage`: 86.20% statements, 80.83% branches, 83.16% functions, and 86.03% lines.
+- `npm run test`: 74 tests passed.
+- `npm run test:coverage`: 85.69% statements, 80.84% branches, 82.67% functions, and 85.73% lines.
 - `npm run test:e2e`: 4 browser smoke tests passed.
 - `npm run build`: passed.
 
-The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, recurrence safety and lifecycle controls, and unresolved-expense conversion. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.
+The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, selectable inline-created income sources, recurrence safety and lifecycle controls, and unresolved-expense conversion. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.
