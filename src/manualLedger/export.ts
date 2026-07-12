@@ -78,7 +78,7 @@ export function toCleanExportRow(record: LocalLedgerRecord): CleanLedgerExportRo
 
 function escapeCsv(value: string | number): string {
   const text = String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export function serializeCleanCsv(records: LocalLedgerRecord[]): string {
