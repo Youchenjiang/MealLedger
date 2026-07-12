@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, and project per-account balances. Cloud sync and several advanced field workflows remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account balances, and represent explicitly unavailable expense merchant/item fields with fixed system labels. Cloud sync and several advanced field workflows remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -26,13 +26,13 @@ Expected verification:
 
 ## Task 3: Implement Expense And Income Forms
 
-Status: Partial. Expense and income records save locally as official records, and history suggestions are available. Explicit missing-value controls remain.
+Status: Partial. Expense and income records save locally as official records, history suggestions are available, and explicitly unavailable expense merchant/item fields use fixed labels and persisted flags. Inline category/source creation and richer category management remain.
 
-Add expense and income validation, missing merchant/item controls, and inline category/source creation placeholders.
+Add expense and income validation, fixed missing merchant/item controls, and inline category/source creation placeholders.
 
 Expected verification:
 
-- Expense and income acceptance cases pass.
+- Expense and income acceptance cases pass, including fixed missing-value labels and rejection of arbitrary replacements.
 
 ## Task 4: Implement Fund Addition And Adjustment Forms
 
@@ -132,9 +132,11 @@ Expected verification:
 
 Current slice evidence is recorded in the branch commits and must be rerun after the remaining Manual Ledger tasks are implemented.
 
-Latest verification for the local lifecycle slice:
+Latest verification for the local ledger slice:
 
-- `npm run test`: 64 tests passed.
-- `npm run test:coverage`: 85.97% statements, 79.96% branches, 82.19% functions, and 85.90% lines.
+- `npm run test`: 67 tests passed.
+- `npm run test:coverage`: 86.16% statements, 80.25% branches, 82.46% functions, and 86.09% lines.
 - `npm run test:e2e`: 4 browser smoke tests passed.
 - `npm run build`: passed.
+
+The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.
