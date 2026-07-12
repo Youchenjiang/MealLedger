@@ -86,8 +86,8 @@ Spec 1 ends at local draft review. It deliberately excludes accounting-field acc
 
 Verified on 2026-07-12:
 
-- `npm run test`: 45 tests passed.
-- `npm run test:coverage`: 92.34% statements, 87.88% branches, 90.96% functions, and 93.33% lines.
+- `npm run test`: 48 tests passed across 4 test files.
+- `npm run test:coverage`: 88.04% statements, 83.61% branches, 83.33% functions, and 88.07% lines; this exceeds the Spec 1 temporary gate of 70% statements/lines/functions and 60% branches.
 - `npm run test:e2e`: 4 Playwright smoke tests passed, including desktop (1440px), compact (720px), and mobile (390px) viewports.
 - `npm run build`: production TypeScript and Vite build passed.
 - Read-only UX, QA, and responsive review: no remaining blocking finding. The responsive review added a compact-navigation breakpoint check at 720px.
