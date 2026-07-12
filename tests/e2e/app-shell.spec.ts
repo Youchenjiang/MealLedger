@@ -57,10 +57,11 @@ test("creates a local draft and keeps the confirmed ledger empty", async ({ page
   await openWorkspace(page);
   await addAccount(page, "Daily wallet");
   await page.getByRole("button", { name: "Capture" }).click();
-  await page.getByLabel("Account").selectOption("Daily wallet");
+  await page.getByLabel("Account", { exact: true }).selectOption("Daily wallet");
+  await page.getByLabel("Category", { exact: true }).selectOption("Daily");
   await page.getByLabel("Merchant").fill("全聯");
   await page.getByLabel("Item name").fill("香蕉");
-  await page.getByLabel("Amount").fill("417");
+  await page.getByLabel("Amount", { exact: true }).fill("417");
   await page.getByRole("button", { name: "Create draft" }).click();
 
   await expect(page.getByRole("heading", { name: "Draft ready for review" })).toBeVisible();
