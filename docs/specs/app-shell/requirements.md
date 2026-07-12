@@ -12,8 +12,11 @@ This spec covers:
 - empty states for V1 sections
 - offline and local-only status indicators
 - review queue entry point
+- minimal manual transaction draft capture
 
-This spec does not implement ledger CRUD, import parsing, media upload, AI/OCR, or Supabase schema. Those features get separate specs.
+This spec does not implement confirmed ledger CRUD, account/category CRUD, balance calculation, import parsing, media upload, AI/OCR, or Supabase schema. Those features get separate specs.
+
+This spec does not implement localization. It must avoid layouts that break with longer Traditional Chinese labels, while the localization spec defines language selection, copy dictionaries, and formatting.
 
 ## Requirements
 
@@ -27,25 +30,43 @@ WHEN the user is authenticated
 THE SYSTEM SHALL show the primary navigation.
 
 WHEN primary navigation is visible
-THE SYSTEM SHALL include Overview, Ledger, Capture, Meals, Imports, and Settings.
+THE SYSTEM SHALL include Overview, Ledger, Capture, and Settings.
 
 WHEN the user selects Overview
-THE SYSTEM SHALL show account summary, recent activity, local-only warning, and review queue entry placeholders.
+THE SYSTEM SHALL show account summary, confirmed ledger records, and draft review status placeholders.
 
 WHEN the user selects Ledger
-THE SYSTEM SHALL show an empty ledger state and entry points for future manual ledger actions.
+THE SYSTEM SHALL show an empty confirmed ledger state and any local drafts waiting for review.
 
 WHEN the user selects Capture
 THE SYSTEM SHALL show capture choices for manual entry, scan receipt or invoice, meal photo, and attachment.
 
-WHEN the user selects Meals
-THE SYSTEM SHALL show an empty meal timeline state.
+WHEN the user selects manual entry from Capture
+THE SYSTEM SHALL show a minimal transaction draft form.
 
-WHEN the user selects Imports
-THE SYSTEM SHALL show empty import history and draft review placeholders.
+WHEN the minimal transaction draft form is shown
+THE SYSTEM SHALL support expense, income, transfer, refund, and adjustment draft kinds.
+
+WHEN the user selects a transfer draft kind
+THE SYSTEM SHALL show source account, amount, currency, and destination account fields, and shall not require a category or merchant field.
+
+WHEN the user selects a non-transfer draft kind
+THE SYSTEM SHALL show the category and merchant, source, or reason field appropriate to that kind.
+
+WHEN the user submits the minimal transaction draft form
+THE SYSTEM SHALL create a local draft that is visible in the review queue.
+
+WHEN a local draft is created
+THE SYSTEM SHALL NOT create a confirmed ledger record.
+
+WHEN local drafts exist
+THE SYSTEM SHALL retain them across a page reload as local-only data; this persistence is not cloud backup.
+
+WHEN the user discards a local draft
+THE SYSTEM SHALL remove it from the local review queue without affecting confirmed ledger records.
 
 WHEN the user selects Settings
-THE SYSTEM SHALL show account, sync, export, and documentation placeholders.
+THE SYSTEM SHALL show account, sync, import, and export safeguards.
 
 WHEN the app is offline
 THE SYSTEM SHALL show an offline indicator without blocking navigation.
@@ -54,7 +75,7 @@ WHEN the app has local-only data
 THE SYSTEM SHALL show a local-only indicator until data is synced or discarded.
 
 WHEN the app has unresolved review items
-THE SYSTEM SHALL show a review queue entry point from Overview and Imports.
+THE SYSTEM SHALL show the review count in the shell and a draft review entry point from Capture and Ledger.
 
 WHEN a section is not implemented yet
 THE SYSTEM SHALL show a useful empty state instead of a broken or hidden page.
@@ -76,3 +97,5 @@ The shell must not require real Supabase credentials to render local smoke-test 
 The shell must not create official ledger records.
 
 The shell must not upload media or call AI/OCR services.
+
+The shell must not treat local draft data as backed up cloud data.

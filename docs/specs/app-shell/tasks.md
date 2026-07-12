@@ -2,7 +2,9 @@
 
 ## Task 1: Project Shell
 
-Create the Vite + React + TypeScript app structure if it does not already exist.
+Status: Complete
+
+Vite, React, and TypeScript provide the app shell.
 
 Expected verification:
 
@@ -10,24 +12,30 @@ Expected verification:
 
 ## Task 2: Route Layout
 
-Add routes for Overview, Ledger, Capture, Meals, Imports, and Settings.
+Status: Complete
+
+Overview, Ledger, Capture, and Settings render from the shell. Unknown paths show a recovery page.
 
 Expected verification:
 
-- Browser smoke test confirms each route renders.
+- RTL and Playwright smoke tests confirm core navigation and route rendering.
 
 ## Task 3: Responsive Navigation
 
-Implement primary navigation for mobile and desktop.
+Status: Complete
+
+Primary navigation adapts from a sidebar to a compact mobile navigation row.
 
 Expected verification:
 
-- Desktop and mobile viewport screenshots or manual notes.
+- Playwright verifies 1440px desktop and 390px mobile viewports have no document-level horizontal overflow.
 - Current route is visually indicated.
 
 ## Task 4: Empty States
 
-Add empty states and placeholders for each section.
+Status: Complete
+
+Each V1 page states what is currently available instead of presenting fake balances, records, or tools.
 
 Expected verification:
 
@@ -35,27 +43,54 @@ Expected verification:
 
 ## Task 5: Status Indicators
 
-Add offline, sync, local-only, and review-count UI placeholders.
+Status: Complete
+
+The shell shows offline/local-preview state and zero/non-zero local draft review counts.
 
 Expected verification:
 
-- Mock states can be toggled or rendered for smoke testing.
+- Local draft creation updates the review count.
 
-## Task 6: Documentation Links
+## Task 6: Minimal Manual Draft Flow
 
-Add settings links to relevant documentation or make room for them if the runtime should not open local files.
+Status: Complete
+
+Capture creates local transaction drafts. Ledger displays or discards them; it does not confirm or write official ledger records in this spec.
 
 Expected verification:
 
-- UI does not expose broken local paths in production mode.
+- User can enter date, account, type, category, merchant/source, amount, currency, and optional note.
+- User can create initial expense, income, transfer, refund, and adjustment draft kinds.
+- Transfer drafts require a transfer account.
+- Submitted draft appears in the Ledger review queue.
+- User can discard a submitted draft from the Ledger review queue.
+- Confirmed ledger records remain empty.
 
 ## Task 7: Final Smoke Test
 
-Run final verification before PR.
+Status: Complete
+
+Final verification runs before the PR is opened.
 
 Expected verification:
 
+- `npm run test`
+- `npm run test:coverage`
+- `npm run test:e2e`
 - `npm run build`
-- app loads at `http://127.0.0.1:5173/`
-- console has no errors
-- desktop and mobile layouts have no overlapping text
+- Playwright opens the signed-out state, enters the workspace, creates a local draft, and shows it in Ledger.
+- Playwright asserts no browser console/page errors and no document-level horizontal overflow at desktop and mobile sizes.
+
+## Scope Boundary
+
+Spec 1 ends at local draft review. It deliberately excludes confirmation, official ledger writes, Supabase persistence, import parsing, image upload, meal entries, AI/OCR, and localization implementation. Those belong to later specs.
+
+## Final Verification Evidence
+
+Verified on 2026-07-11:
+
+- `npm run test`: 20 tests passed.
+- `npm run test:coverage`: 91.73% statements, 86.74% branches, 85.45% functions, and 91.89% lines.
+- `npm run test:e2e`: 4 Playwright smoke tests passed, including desktop (1440px), compact (720px), and mobile (390px) viewports.
+- `npm run build`: production TypeScript and Vite build passed.
+- Read-only UX, QA, and responsive review: no remaining blocking finding. The responsive review added a compact-navigation breakpoint check at 720px.

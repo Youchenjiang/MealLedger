@@ -1,0 +1,846 @@
+import { useEffect, useMemo, useState } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
+import {
+  AlertCircle,
+  Banknote,
+  Camera,
+  CheckCircle2,
+  CloudOff,
+  Home,
+  ImagePlus,
+  LogIn,
+  ReceiptText,
+  Settings,
+  ShieldCheck,
+  Upload,
+  Wifi,
+  WifiOff,
+  type LucideIcon,
+} from "lucide-react";
+import { isSupabaseConfigured } from "./lib/supabase";
+import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
+import { createTransactionDraft, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+
+const navItems: NavItem[] = [
+  { route: "overview", label: "Overview", path: "/overview", icon: Home },
+  { route: "ledger", label: "Ledger", path: "/ledger", icon: Banknote },
+  { route: "capture", label: "Capture", path: "/capture", icon: Camera },
+  { route: "settings", label: "Settings", path: "/settings", icon: Settings },
+];
+
+type RouteDefinition = {
+  segments: string[];
+  route: Exclude<AppRoute, "not-found">;
+};
+
+const routeDefinitions: RouteDefinition[] = [
+  { segments: [], route: "overview" },
+  { segments: ["overview"], route: "overview" },
+  { segments: ["ledger"], route: "ledger" },
+  { segments: ["ledger", "draft", ":draftId"], route: "ledger" },
+  { segments: ["capture"], route: "capture" },
+  { segments: ["settings"], route: "settings" },
+  { segments: ["settings", "localization"], route: "settings" },
+];
+
+function navItemFor(route: AppRoute): NavItem {
+  return navItems.find((item) => item.route === route) ?? navItems[0];
+}
+
+function localDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+let draftSequence = 0;
+
+const draftsStorageKey = "mealledger.app-shell.drafts";
+
+function draftId(): string {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  draftSequence += 1;
+  return `draft-${Date.now()}-${draftSequence}`;
+}
+
+function draftDisplayName(draft: TransactionDraft): string {
+  return draft.kind === "transfer" ? `${draft.account} to ${draft.transferAccount}` : draft.counterparty;
+}
+
+function draftCountLabel(draftCount: number): string {
+  if (draftCount === 0) {
+    return "No drafts to review";
+  }
+
+  const noun = draftCount === 1 ? "draft" : "drafts";
+  return `${draftCount} ${noun} waiting`;
+}
+
+function draftReviewCopy(draftCount: number): string {
+  if (draftCount === 0) {
+    return "CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain separate files.";
+  }
+
+  const noun = draftCount === 1 ? "draft" : "drafts";
+  return `${draftCount} ${noun} can be reviewed here; confirmation arrives later.`;
+}
+
+function counterpartyLabel(kind: DraftForm["kind"]): string {
+  switch (kind) {
+    case "income":
+      return "Source";
+    case "adjustment":
+      return "Reason";
+    default:
+      return "Merchant";
+  }
+}
+
+function readStoredDrafts(): TransactionDraft[] {
+  try {
+    const stored = window.localStorage.getItem(draftsStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? (parsed as TransactionDraft[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
+  return (
+    <nav className="nav-list">
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            className={`nav-item ${route === item.route ? "active" : ""}`}
+            key={item.route}
+            type="button"
+            aria-current={route === item.route ? "page" : undefined}
+            onClick={() => navigate(item)}
+          >
+            <Icon size={18} aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
+
+function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
+  return (
+    <section className="status-strip" aria-label="Application status">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <div className={`status-item ${item.tone}`} key={item.label} title={item.detail} aria-label={`${item.label}. ${item.detail}`}>
+            <Icon size={16} aria-hidden="true" />
+            <strong>{item.label}</strong>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function Brand({ caption, large = false }: Readonly<{ caption: string; large?: boolean }>) {
+  return (
+    <div className={`brand ${large ? "large" : ""}`}>
+      <div className="brand-mark">
+        <ReceiptText size={large ? 22 : 20} aria-hidden="true" />
+      </div>
+      <div>
+        <p className="brand-name">MealLedger</p>
+        <p className="brand-caption">{caption}</p>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
+  return (
+    <aside className="sidebar" aria-label="MealLedger navigation">
+      <Brand caption="Personal ledger with optional meal notes" />
+      <PrimaryNav route={route} navigate={navigate} />
+      <div className="storage-note">
+        <ShieldCheck size={18} aria-hidden="true" />
+        <span>Ledger exports stay separate from receipt and meal photos.</span>
+      </div>
+    </aside>
+  );
+}
+
+function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
+  return (
+    <section className="page-header" aria-labelledby="page-title">
+      <header className="topbar">
+        <div className="topbar-title">
+          <p className="eyebrow">Personal finance workspace</p>
+          <h1 id="page-title">{routeTitle(route)}</h1>
+        </div>
+      </header>
+      <StatusStrip items={statusItems} />
+    </section>
+  );
+}
+
+function routeFromLocation(): AppLocation {
+  const segments = window.location.pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment));
+
+  for (const definition of routeDefinitions) {
+    if (definition.segments.length !== segments.length) {
+      continue;
+    }
+
+    const params: Record<string, string> = {};
+    const matches = definition.segments.every((segment, index) => {
+      const value = segments[index];
+      if (segment.startsWith(":")) {
+        params[segment.slice(1)] = value;
+        return true;
+      }
+      return segment === value;
+    });
+
+    if (matches) {
+      return { route: definition.route, params };
+    }
+  }
+
+  return { route: "not-found", params: {} };
+}
+
+export function App() {
+  const [location, setLocation] = useState<AppLocation>(routeFromLocation);
+  const [authState, setAuthState] = useState<AuthState>("signed-out");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
+  const route = location.route;
+  const draftCount = drafts.length;
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(draftsStorageKey, JSON.stringify(drafts));
+    } catch {
+      // Local persistence is best effort; the shell remains usable if storage is unavailable.
+    }
+  }, [drafts]);
+
+  useEffect(() => {
+    const handlePopState = () => setLocation(routeFromLocation());
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo({ left: 0, top: 0 });
+  }, [location]);
+
+  const statusItems = useMemo(() => {
+    const items = [
+      {
+        label: isOnline ? "Sync not enabled" : "Offline",
+        detail: isOnline ? "This preview keeps changes on this device." : "Drafts stay visible on this device.",
+        icon: isOnline ? Wifi : WifiOff,
+        tone: "neutral",
+      },
+      {
+        label: draftCountLabel(draftCount),
+        detail:
+          draftCount > 0
+            ? "Review or discard drafts before the later ledger workflow writes records."
+            : "Nothing is waiting for review.",
+        icon: draftCount > 0 ? AlertCircle : CheckCircle2,
+        tone: draftCount > 0 ? "warn" : "good",
+      },
+    ];
+
+    if (draftCount > 0) {
+      items.push({
+        label: "Local-only data",
+        detail: "These drafts stay on this device until a future sync workflow is enabled.",
+        icon: CloudOff,
+        tone: "warn",
+      });
+    }
+
+    return items;
+  }, [isOnline, draftCount]);
+
+  const navigate = (item: NavItem) => {
+    window.history.pushState(null, "", item.path);
+    setLocation({ route: item.route, params: {} });
+  };
+
+  if (authState !== "signed-in") {
+    return <SignedOutShell onSignIn={() => setAuthState("signed-in")} />;
+  }
+
+  return (
+    <main className="app-shell">
+      <Sidebar route={route} navigate={navigate} />
+
+      <section className="workspace">
+        <WorkspaceHeader route={route} statusItems={statusItems} />
+        {renderRoute(route, drafts, setDrafts, navigate)}
+      </section>
+    </main>
+  );
+}
+
+function SignedOutShell({ onSignIn }: Readonly<{ onSignIn: () => void }>) {
+  return (
+    <main className="signed-out-shell">
+      <section className="signed-out-panel">
+        <Brand caption="Personal finance records" large />
+        <div>
+          <p className="eyebrow">MealLedger</p>
+          <h1>Track spending first, attach meals when useful.</h1>
+          <p className="lede">
+            Start with ledger records, keep scans and photos separate, and review every draft before
+            a later ledger workflow writes it.
+          </p>
+        </div>
+        <button className="primary-action" type="button" onClick={onSignIn}>
+          <LogIn size={18} aria-hidden="true" />
+          Open workspace
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function renderRoute(
+  route: AppRoute,
+  drafts: TransactionDraft[],
+  setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>,
+  navigate: (item: NavItem) => void,
+) {
+  const draftCount = drafts.length;
+
+  switch (route) {
+    case "overview":
+      return <OverviewPage draftCount={draftCount} navigate={navigate} />;
+    case "ledger":
+      return (
+        <LedgerPage
+          drafts={drafts}
+          navigate={navigate}
+          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+        />
+      );
+    case "capture":
+      return (
+        <CapturePage
+          drafts={drafts}
+          navigate={navigate}
+          onCreateDraft={(draft) => setDrafts((current) => [draft, ...current])}
+        />
+      );
+    case "settings":
+      return <SettingsPage />;
+    default:
+      return <NotFoundPage navigate={navigate} />;
+  }
+}
+
+function OverviewPage({ draftCount, navigate }: Readonly<{ draftCount: number; navigate: (item: NavItem) => void }>) {
+  return (
+    <div className="route-stack">
+      <section className="summary-grid">
+        <EmptyMetric label="Account summary" value="No balances yet" detail="Create accounts before showing totals." />
+        <EmptyMetric label="Ledger records" value="No records" detail="Confirmed transactions will appear here." />
+        <EmptyMetric
+          label="Draft reviews"
+          value={draftCount > 0 ? `${draftCount} waiting` : "None"}
+          detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for review."}
+        />
+      </section>
+      <section className="content-grid">
+        <Panel title="Start with a new record" eyebrow="First step">
+          <p className="panel-copy">
+            Begin with a transaction draft, then review it in Ledger. Confirmation is part of a later
+            ledger workflow.
+          </p>
+              <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
+            Start a record
+          </button>
+        </Panel>
+        <Panel title="Review before it counts" eyebrow="Data safety">
+          <p className="panel-copy">
+            Imported rows, scanned receipts, meal photos, and AI suggestions stay as drafts until a
+            later ledger workflow confirms them.
+          </p>
+        </Panel>
+      </section>
+    </div>
+  );
+}
+
+function LedgerPage({
+  drafts,
+  navigate,
+  onDiscardDraft,
+}: Readonly<{
+  drafts: TransactionDraft[];
+  navigate: (item: NavItem) => void;
+  onDiscardDraft: (id: string) => void;
+}>) {
+  const draftCount = drafts.length;
+  const ledgerColumns = [
+    "Record ID",
+    "Date",
+    "Account",
+    "Type",
+    "Category",
+    "Merchant / Payee",
+    "Transfer account",
+    "Amount",
+    "Currency",
+    "Notes",
+    "Tags",
+    "Attachment",
+    "Entry source",
+    "Balance",
+    "Status",
+  ];
+
+  return (
+    <div className="route-stack">
+      <section className="content-grid">
+        <Panel title="Ledger records" eyebrow="Confirmed records">
+          <p className="panel-copy">
+            Confirmed transactions will appear here in a later ledger workflow. This app shell keeps
+            spreadsheet-friendly fields visible from the start.
+          </p>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
+            Start a record
+          </button>
+        </Panel>
+        <Panel title={draftCount > 0 ? "Drafts waiting" : "Clean export"} eyebrow="Portability">
+          <p className="panel-copy">
+            {draftReviewCopy(draftCount)}
+          </p>
+        </Panel>
+      </section>
+      {draftCount > 0 ? (
+        <section className="draft-list" aria-label="Draft records waiting for review">
+          <div className="draft-list-heading">
+            <div>
+              <p className="eyebrow">Review queue</p>
+              <h2>Drafts waiting</h2>
+            </div>
+            <span>{draftCount} local draft{draftCount === 1 ? "" : "s"}</span>
+          </div>
+          {drafts.map((draft) => (
+            <article className="draft-card" key={draft.id}>
+              <div>
+                <strong>{draftDisplayName(draft)}</strong>
+                <span>
+                  {draft.date} · {draft.account}
+                  {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
+                </span>
+              </div>
+              <div className="draft-amount">
+                <strong>
+                  {draft.currency} {draft.amount}
+                </strong>
+                <span>{draft.kind}</span>
+              </div>
+              <button className="text-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
+                Discard
+              </button>
+            </article>
+          ))}
+        </section>
+      ) : null}
+      <section className="table-card" aria-label="Ledger table fields">
+        <div className="table-row table-head">
+          {ledgerColumns.map((column) => (
+            <span key={column}>{column}</span>
+          ))}
+        </div>
+        <div className="table-empty">No confirmed ledger records yet.</div>
+      </section>
+    </div>
+  );
+}
+
+type CaptureActionData = { title: string; detail: string; icon: LucideIcon; available: boolean };
+
+function CaptureAction({ action }: Readonly<{ action: CaptureActionData }>) {
+  const Icon = action.icon;
+  const content = (
+    <>
+      <Icon size={22} aria-hidden="true" />
+      <span>
+        <strong>{action.title}</strong>
+        <small>{action.detail}</small>
+        <em>{action.available ? "Manual draft" : "Coming soon"}</em>
+      </span>
+    </>
+  );
+
+  return action.available ? (
+    <a className="action-card primary-card" href="#manual-draft-form">{content}</a>
+  ) : (
+    <button className="action-card unavailable" disabled type="button">{content}</button>
+  );
+}
+
+function CapturePage({
+  drafts,
+  navigate,
+  onCreateDraft,
+}: Readonly<{
+  drafts: TransactionDraft[];
+  navigate: (item: NavItem) => void;
+  onCreateDraft: (draft: TransactionDraft) => void;
+}>) {
+  const [form, setForm] = useState<DraftForm>({
+    date: localDate(),
+    account: "Cash",
+    kind: "expense",
+    category: "Daily",
+    counterparty: "",
+    transferAccount: "",
+    amount: "",
+    currency: "TWD",
+    note: "",
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const draftCount = drafts.length;
+  const latestDraft = drafts[0];
+  const actions = [
+    {
+      title: "Record a transaction",
+      detail: "The primary path for expenses, income, transfers, refunds, and adjustments.",
+      icon: Banknote,
+      available: true,
+    },
+    {
+      title: "Scan receipt or invoice",
+      detail: "Create a draft from a source image; ledger confirmation arrives in a later workflow.",
+      icon: ReceiptText,
+      available: false,
+    },
+    {
+      title: "Attach meal photo",
+      detail: "Meal notes can support a transaction, but ordinary accounting never requires them.",
+      icon: ImagePlus,
+      available: false,
+    },
+    {
+      title: "Attachment",
+      detail: "Keep supporting evidence separate from clean ledger exports.",
+      icon: Upload,
+      available: false,
+    },
+  ];
+
+  const updateForm = (field: keyof DraftForm, value: string) => {
+    setFormError(null);
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+    const nextDraft = createTransactionDraft(form, draftId());
+
+    if (!nextDraft) {
+      setFormError("Please fill in all required fields before creating a draft.");
+      return;
+    }
+
+    onCreateDraft(nextDraft);
+    setForm((current) => ({
+      ...current,
+      counterparty: "",
+      transferAccount: "",
+      amount: "",
+      note: "",
+    }));
+  };
+
+  return (
+    <section className="capture-layout">
+      <CaptureSourcesPanel actions={actions} />
+       <ManualDraftPanel form={form} updateForm={updateForm} onSubmit={handleSubmit} formError={formError} />
+      {draftCount > 0 ? (
+        <Panel title="Draft ready for review" eyebrow="Local draft">
+          <p className="panel-copy">
+            {draftCount} manual transaction draft{draftCount === 1 ? "" : "s"} exist locally. They
+            are not confirmed ledger records yet.
+          </p>
+          {latestDraft ? (
+            <p className="draft-summary">
+              Latest: {draftDisplayName(latestDraft)}, {latestDraft.currency} {latestDraft.amount}
+            </p>
+          ) : null}
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
+            Review in Ledger
+          </button>
+        </Panel>
+      ) : null}
+    </section>
+  );
+}
+
+function CaptureSourcesPanel({ actions }: Readonly<{ actions: CaptureActionData[] }>) {
+  return (
+    <Panel title="Choose how to start" eyebrow="Input sources">
+      <p className="panel-copy">
+        Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
+        you review or discard them; ledger confirmation arrives later.
+      </p>
+      <div className="planned-actions">
+        {actions.map((action) => <CaptureAction action={action} key={action.title} />)}
+      </div>
+    </Panel>
+  );
+}
+
+function ManualDraftPanel({
+  form,
+  updateForm,
+  onSubmit,
+  formError,
+}: Readonly<{
+  form: DraftForm;
+  updateForm: (field: keyof DraftForm, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  formError: string | null;
+}>) {
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Local draft</p>
+          <h2>Manual transaction draft</h2>
+        </div>
+      </div>
+      <ManualDraftForm form={form} updateForm={updateForm} onSubmit={onSubmit} formError={formError} />
+    </article>
+  );
+}
+
+function ManualDraftForm({
+  form,
+  updateForm,
+  onSubmit,
+  formError,
+}: Readonly<{
+  form: DraftForm;
+  updateForm: (field: keyof DraftForm, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  formError: string | null;
+}>) {
+  return (
+    <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
+      <label>
+        <span>Date</span>
+        <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+      </label>
+      <label>
+        <span>Account</span>
+        <input required pattern=".*\S.*" title="Enter an account name." value={form.account} onChange={(event) => updateForm("account", event.target.value)} placeholder="Cash" />
+      </label>
+      <label>
+        <span>Type</span>
+        <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
+          <option value="refund">Refund</option>
+          <option value="adjustment">Adjustment</option>
+        </select>
+      </label>
+      <DraftKindFields form={form} updateForm={updateForm} />
+      <label>
+        <span>Amount</span>
+        <input required inputMode="decimal" min="0" step="any" type="number" value={form.amount} onChange={(event) => updateForm("amount", event.target.value)} placeholder="100" />
+      </label>
+      <label>
+        <span>Currency</span>
+        <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
+          <option value="TWD">TWD</option>
+          <option value="JPY">JPY</option>
+          <option value="USD">USD</option>
+        </select>
+      </label>
+      <label className="full-span">
+        <span>Note</span>
+        <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Optional context before review" />
+      </label>
+      {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
+      <button className="primary-action align-start" type="submit">Create draft</button>
+    </form>
+  );
+}
+
+function DraftKindFields({ form, updateForm }: Readonly<{ form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }>) {
+  if (form.kind === "transfer") {
+    return (
+      <label>
+        <span>Transfer account</span>
+        <input required pattern=".*\S.*" title="Enter the destination account." value={form.transferAccount} onChange={(event) => updateForm("transferAccount", event.target.value)} placeholder="Post office savings" />
+      </label>
+    );
+  }
+
+  return (
+    <>
+      <label>
+        <span>Category</span>
+        <input required pattern=".*\S.*" title="Enter a category." value={form.category} onChange={(event) => updateForm("category", event.target.value)} placeholder="Daily" />
+      </label>
+      <label>
+        <span>{counterpartyLabel(form.kind)}</span>
+        <input required pattern=".*\S.*" title="Enter the source, merchant, or reason." value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)} placeholder={form.kind === "income" ? "Salary" : "7-Eleven"} />
+      </label>
+    </>
+  );
+}
+
+function SettingsPage() {
+  const dataTools = [
+    {
+      title: "CSV import review",
+      detail: "Map spreadsheet columns, preview errors, and create drafts before ledger writes.",
+    },
+    {
+      title: "Clean ledger export",
+      detail: "Export CSV and JSON without bundling receipt or meal photo bytes.",
+    },
+    {
+      title: "Statement reconciliation",
+      detail: "Bank or wallet records can later match confirmed transactions.",
+    },
+  ];
+
+  return (
+    <section className="content-grid">
+      <AccountSyncPanel />
+      <ImportExportPanel dataTools={dataTools} />
+    </section>
+  );
+}
+
+function AccountSyncPanel() {
+  return (
+    <Panel title="Account and sync" eyebrow="Settings">
+      <dl className="settings-list">
+        <div>
+          <dt>Authentication</dt>
+          <dd>{isSupabaseConfigured ? "Cloud sign-in is ready" : "Cloud sign-in is unavailable in this workspace"}</dd>
+        </div>
+        <div>
+          <dt>Storage</dt>
+          <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
+        </div>
+      </dl>
+    </Panel>
+  );
+}
+
+function ImportExportPanel({ dataTools }: Readonly<{ dataTools: Array<{ title: string; detail: string }> }>) {
+  return (
+    <Panel title="Import and export safeguards" eyebrow="Data portability">
+      <p className="panel-copy">
+        Clean exports include confirmed ledger records only. Attachments stay as metadata
+        references, not image bytes, and CSV/JSON use the same stable field set.
+      </p>
+      <DataToolList items={dataTools} />
+    </Panel>
+  );
+}
+
+function DataToolList({ items }: Readonly<{ items: Array<{ title: string; detail: string }> }>) {
+  return (
+    <dl className="settings-list" aria-label="Data tool status">
+      {items.map((item) => (
+        <div key={item.title}>
+          <dt>{item.title}</dt>
+          <dd>{item.detail}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function NotFoundPage({ navigate }: Readonly<{ navigate: (item: NavItem) => void }>) {
+  return (
+    <Panel title="Page not found" eyebrow="Safe recovery">
+      <p className="panel-copy">This page is not part of the current workspace. Return to Overview.</p>
+      <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("overview"))}>
+        <Home size={18} aria-hidden="true" />
+        Go to Overview
+      </button>
+    </Panel>
+  );
+}
+
+function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow: string; children: React.ReactNode }>) {
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+      </div>
+      {children}
+    </article>
+  );
+}
+
+function EmptyMetric({ label, value, detail }: Readonly<{ label: string; value: string; detail: string }>) {
+  return (
+    <article className="summary-card">
+      <p>{label}</p>
+      <strong>{value}</strong>
+      <span>{detail}</span>
+    </article>
+  );
+}
+
+function routeTitle(route: AppRoute) {
+  switch (route) {
+    case "overview":
+      return "Overview";
+    case "ledger":
+      return "Ledger";
+    case "capture":
+      return "Capture";
+    case "settings":
+      return "Settings";
+    default:
+      return "Unknown route";
+  }
+}
