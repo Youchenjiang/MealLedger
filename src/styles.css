@@ -787,6 +787,55 @@ h2 {
   font-weight: 700;
 }
 
+.history-suggestions {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px;
+  border-left: 3px solid #8db9a4;
+  background: #f4faf6;
+}
+
+.suggestion-label {
+  color: #21634f;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.suggestion-row {
+  display: grid;
+  gap: 6px;
+}
+
+.suggestion-row > strong {
+  color: #48463f;
+  font-size: 13px;
+}
+
+.suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.suggestion-button,
+.suggestion-clear {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #b7d3c4;
+  border-radius: 5px;
+  background: #fffdf8;
+  color: #21634f;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.suggestion-clear {
+  border-color: #d9b9ae;
+  color: #a43d2f;
+}
+
 .table-row {
   display: grid;
   grid-template-columns:

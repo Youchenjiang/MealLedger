@@ -543,6 +543,30 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
   });
 
+  test("offers field-by-field history suggestions for merchant and item input", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+
+    await user.type(screen.getByLabelText("Merchant"), "全");
+    const merchantSuggestions = screen.getByRole("region", { name: "Merchant history suggestions" });
+    expect(merchantSuggestions).toHaveTextContent("全聯");
+    await user.click(within(merchantSuggestions).getByRole("button", { name: "Use amount TWD 417" }));
+    expect(screen.getByLabelText("Amount")).toHaveValue(417);
+    await user.click(within(merchantSuggestions).getByRole("button", { name: "Use account Daily wallet" }));
+    expect(screen.getByLabelText("Account")).toHaveValue("Daily wallet");
+    await user.click(within(merchantSuggestions).getByRole("button", { name: "Clear merchant" }));
+    expect(screen.getByLabelText("Merchant")).toHaveValue("");
+
+    await user.type(screen.getByLabelText("Item name"), "香蕉");
+    const itemSuggestions = screen.getByRole("region", { name: "Item history suggestions" });
+    expect(itemSuggestions).toHaveTextContent("香蕉");
+    await user.click(within(itemSuggestions).getByRole("button", { name: "Use merchant 全聯" }));
+    expect(screen.getByLabelText("Merchant")).toHaveValue("全聯");
+  });
+
   test("does not place official records in the draft review queue", async () => {
     const user = userEvent.setup();
     renderWorkspace();

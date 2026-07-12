@@ -765,6 +765,45 @@ function RecordEditor({
   );
 }
 
+function HistorySuggestions({
+  records,
+  source,
+  onApply,
+}: Readonly<{
+  records: LocalLedgerRecord[];
+  source: "merchant" | "item";
+  onApply: (field: "counterparty" | "itemName" | "amount" | "account" | "category" | "currency", value: string) => void;
+}>) {
+  return (
+    <section className="history-suggestions" aria-label={source === "merchant" ? "Merchant history suggestions" : "Item history suggestions"}>
+      <span className="suggestion-label">Previous records</span>
+      {records.map((record) => (
+        <div className="suggestion-row" key={record.id}>
+          <strong>{source === "merchant" ? record.counterparty : record.itemName}</strong>
+          <div className="suggestion-actions">
+            {source === "item" ? (
+              <SuggestionButton label={`Use merchant ${record.counterparty}`} onClick={() => onApply("counterparty", record.counterparty)} />
+            ) : null}
+            {source === "merchant" ? (
+              <SuggestionButton label={`Use item ${record.itemName}`} onClick={() => onApply("itemName", record.itemName)} />
+            ) : null}
+            <SuggestionButton label={`Use amount ${record.currency} ${record.amount}`} onClick={() => onApply("amount", record.amount)} />
+            <SuggestionButton label={`Use account ${record.accountName}`} onClick={() => onApply("account", record.accountName)} />
+            <SuggestionButton label={`Use category ${record.category}`} onClick={() => onApply("category", record.category)} />
+            <button className="suggestion-clear" type="button" onClick={() => onApply(source === "merchant" ? "counterparty" : "itemName", "")}>
+              Clear {source === "merchant" ? "merchant" : "item"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function SuggestionButton({ label, onClick }: Readonly<{ label: string; onClick: () => void }>) {
+  return <button className="suggestion-button" type="button" onClick={onClick}>{label}</button>;
+}
+
 type CaptureActionData = { title: string; detail: string; icon: LucideIcon; available: boolean };
 
 function CaptureAction({ action }: Readonly<{ action: CaptureActionData }>) {
@@ -994,6 +1033,12 @@ function CapturePage({
   const hasSelectedAccount = accounts.some((account) => account.name === form.account);
   const categoryOptions = (form.kind === "income" ? incomeCategories : expenseCategories).concat(customCategories);
   const refundableRecords = records.filter((record) => record.kind === "expense" && record.recordState !== "voided");
+  const merchantSuggestions = form.counterparty.trim()
+    ? records.filter((record) => record.recordState !== "voided" && record.counterparty.toLocaleLowerCase().includes(form.counterparty.trim().toLocaleLowerCase())).slice(0, 5)
+    : [];
+  const itemSuggestions = form.itemName.trim()
+    ? records.filter((record) => record.recordState !== "voided" && record.itemName && record.itemName.toLocaleLowerCase().includes(form.itemName.trim().toLocaleLowerCase())).slice(0, 5)
+    : [];
   const selectedRefundRecord = refundableRecords.find((record) => record.id === form.refundLinkedRecordId);
   const refundExceedsLinkedAmount = Boolean(
     form.kind === "refund"
@@ -1076,6 +1121,15 @@ function CapturePage({
     setQuickCategoryName("");
     setQuickCategoryError("");
     setIsAddingCategory(false);
+  };
+
+  const applySuggestion = (field: "counterparty" | "itemName" | "amount" | "account" | "category" | "currency", value: string) => {
+    if (field === "account") {
+      selectSourceAccount(value);
+      return;
+    }
+
+    updateForm(field, value);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1336,16 +1390,22 @@ function CapturePage({
             </div>
           ) : null}
           {needsCounterparty ? (
-            <label>
-              <span>{counterpartyLabel}</span>
+            <div className="form-field">
+              <label htmlFor="entry-counterparty">
+                <span>{counterpartyLabel}</span>
+              </label>
               <input
+                id="entry-counterparty"
                 required
                 pattern=".*\S.*"
                 title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`}
                 value={form.counterparty}
                 onChange={(event) => updateForm("counterparty", event.target.value)}
               />
-            </label>
+              {merchantSuggestions.length > 0 ? (
+                <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} />
+              ) : null}
+            </div>
           ) : null}
           {form.kind === "refund" ? (
             <>
@@ -1372,10 +1432,15 @@ function CapturePage({
             </>
           ) : null}
           {form.kind === "expense" ? (
-            <label>
-              <span>Item name</span>
-              <input required pattern=".*\S.*" value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
-            </label>
+            <div className="form-field">
+              <label htmlFor="entry-item-name">
+                <span>Item name</span>
+              </label>
+              <input id="entry-item-name" required pattern=".*\S.*" value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
+              {itemSuggestions.length > 0 ? (
+                <HistorySuggestions records={itemSuggestions} source="item" onApply={applySuggestion} />
+              ) : null}
+            </div>
           ) : null}
           {isTransfer ? (
             <>
