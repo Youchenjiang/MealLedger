@@ -122,6 +122,26 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
   });
 
+  test("saves a meal with multiple photos without creating a ledger record", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: /Record meal/ }));
+    await user.upload(screen.getByLabelText("Meal photos"), [
+      new File(["one"], "meal-1.jpg", { type: "image/jpeg" }),
+      new File(["two"], "meal-2.jpg", { type: "image/jpeg" }),
+    ]);
+    await user.click(screen.getByRole("button", { name: "Save meal" }));
+
+    expect(screen.getByText("Meal saved locally with 2 photos.")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.capture.meals") ?? "[]")).toEqual(
+      [expect.objectContaining({ transactionIds: [], mediaAssetIds: ["local-photo-0-meal-1.jpg", "local-photo-1-meal-2.jpg"] })],
+    );
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+  });
+
   test("saves explicit fixed labels when expense details are unavailable", async () => {
     const user = userEvent.setup();
     renderWorkspace();

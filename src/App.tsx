@@ -37,6 +37,7 @@ import { detectImportDuplicates, type ImportDuplicate } from "./importExport/dup
 import { createInitialFundingDraft } from "./onboarding/initialFunding";
 import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/defaults";
 import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
+import { createMealEntry, type MealEntry } from "./captureMedia/meals";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -76,6 +77,10 @@ function localDate(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function localDateTime(): string {
+  return `${localDate()}T12:00`;
 }
 
 function downloadTextFile(content: string, fileName: string, mimeType: string): void {
@@ -119,6 +124,7 @@ const sourcesStorageKey = "mealledger.manual-ledger.custom-sources";
 const onboardingStorageKey = "mealledger.onboarding.completed";
 const tagsStorageKey = "mealledger.taxonomy.tags";
 const aliasesStorageKey = "mealledger.taxonomy.aliases";
+const mealsStorageKey = "mealledger.capture.meals";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -190,6 +196,20 @@ function readStoredAliases(): TaxonomyAliasSeed[] {
       && parsed.every((item) => item && typeof item === "object" && "alias" in item && "canonical" in item)
       ? parsed as TaxonomyAliasSeed[]
       : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredMeals(): MealEntry[] {
+  try {
+    const stored = window.localStorage.getItem(mealsStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed as MealEntry[] : [];
   } catch {
     return [];
   }
@@ -449,6 +469,7 @@ function AuthenticatedApp() {
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [meals, setMeals] = useState<MealEntry[]>(readStoredMeals);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
@@ -470,10 +491,11 @@ function AuthenticatedApp() {
       window.localStorage.setItem(recordsStorageKey, JSON.stringify(records));
       window.localStorage.setItem(auditEventsStorageKey, JSON.stringify(auditEvents));
       window.localStorage.setItem(onboardingStorageKey, String(onboardingCompleted));
+      window.localStorage.setItem(mealsStorageKey, JSON.stringify(meals));
     } catch {
       // Local persistence is best effort; the ledger remains usable for this session.
     }
-  }, [accounts, auditEvents, onboardingCompleted, records]);
+  }, [accounts, auditEvents, meals, onboardingCompleted, records]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -595,7 +617,7 @@ function AuthenticatedApp() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true))}
+        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]))}
       </section>
     </main>
   );
@@ -762,6 +784,7 @@ function renderRoute(
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
   onReopenOnboarding: () => void,
+  onSaveMeal: (meal: MealEntry) => void,
 ) {
   const draftCount = drafts.length;
   const recordCount = records.length;
@@ -838,6 +861,7 @@ function renderRoute(
             return true;
           }}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
+          onSaveMeal={onSaveMeal}
         />
       );
     case "settings":
@@ -1438,6 +1462,7 @@ function CapturePage({
   onAddAccount,
   onSaveRecord,
   onSaveDraft,
+  onSaveMeal,
 }: Readonly<{
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
@@ -1445,6 +1470,7 @@ function CapturePage({
   onAddAccount: (account: LocalAccount) => void;
   onSaveRecord: (draft: TransactionDraft) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
+  onSaveMeal: (meal: MealEntry) => void;
 }>) {
   const [form, setForm] = useState<DraftForm>(createEmptyDraftForm);
   const [cleanForm, setCleanForm] = useState<DraftForm>(createEmptyDraftForm);
@@ -1464,6 +1490,11 @@ function CapturePage({
   const [quickSourceError, setQuickSourceError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
   const [captureIntent, setCaptureIntent] = useState<CaptureIntent>("manual-ledger");
+  const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime);
+  const [mealNote, setMealNote] = useState("");
+  const [mealPhotoNames, setMealPhotoNames] = useState<string[]>([]);
+  const [mealError, setMealError] = useState("");
+  const [mealSavedMessage, setMealSavedMessage] = useState("");
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(cleanForm);
 
   useEffect(() => {
@@ -1706,6 +1737,27 @@ function CapturePage({
   const keepEntryAsDraft = () => {
     onSaveDraft({ ...normalizeDraftForm(form), id: draftId() });
     resetEntry();
+  };
+
+  const handleMealSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMealError("");
+    const mealId = `meal-${crypto.randomUUID()}`;
+    const meal = createMealEntry({
+      occurredAt: mealOccurredAt,
+      note: mealNote,
+      mediaAssetIds: mealPhotoNames.map((name, index) => `local-photo-${index}-${name}`),
+    }, mealId);
+
+    if (!meal) {
+      setMealError("Choose a meal time before saving.");
+      return;
+    }
+
+    onSaveMeal(meal);
+    setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
+    setMealNote("");
+    setMealPhotoNames([]);
   };
 
   const addQuickAccount = () => {
@@ -2235,7 +2287,29 @@ function CapturePage({
             </button>
           </div>
         </form>
-      </Panel> : (
+      </Panel> : captureIntent === "record-meal" ? (
+        <Panel title="Record meal" eyebrow="Optional meal record">
+          <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
+          <form className="meal-form" onSubmit={handleMealSubmit}>
+            <label>
+              <span>Meal time</span>
+              <input required type="datetime-local" value={mealOccurredAt} onChange={(event) => { setMealOccurredAt(event.target.value); setMealError(""); }} />
+            </label>
+            <label>
+              <span>Meal note</span>
+              <textarea value={mealNote} onChange={(event) => setMealNote(event.target.value)} placeholder="Optional" />
+            </label>
+            <label>
+              <span>Meal photos</span>
+              <input accept="image/*" multiple type="file" onChange={(event) => setMealPhotoNames(Array.from(event.target.files ?? []).map((file) => file.name))} />
+            </label>
+            {mealPhotoNames.length > 0 ? <p className="field-help">Selected {mealPhotoNames.length} photo{mealPhotoNames.length === 1 ? "" : "s"}.</p> : null}
+            <button className="primary-action align-start" type="submit">Save meal</button>
+            {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
+            {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
+          </form>
+        </Panel>
+      ) : (
         <Panel title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
           <p className="panel-copy">This source is kept separate from the official ledger. The workflow will ask for confirmation before any ledger record is created.</p>
           <p className="field-help">Select Manual ledger when you want to record an official transaction now.</p>

@@ -112,6 +112,17 @@ a {
   align-items: center;
 }
 
+.meal-form {
+  display: grid;
+  max-width: 640px;
+  gap: 16px;
+}
+
+.meal-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
 @media (max-width: 560px) {
   .onboarding-balance-fields,
   .onboarding-actions {
