@@ -63,10 +63,15 @@ Expected verification:
 
 ## Task 6: Implement Import Review Actions
 
+Status: Partial. Local review queue supports confirm for structurally valid, non-ambiguous rows and skip; row editing, merge, link, and durable review persistence remain.
+
 Support skip, keep separate, merge into draft, and link to existing.
 
 Expected verification:
 
+- Confirmed rows pass through the shared official-record boundary and create local records.
+- Invalid rows and ambiguous category aliases cannot be confirmed yet.
+- Skipped rows do not create or modify official records.
 - Review action does not destructively overwrite official records.
 
 ## Task 7: Implement Clean Export
