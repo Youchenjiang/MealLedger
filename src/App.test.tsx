@@ -64,6 +64,8 @@ describe("App shell draft flow", () => {
 
     expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect(screen.getByText("1 account")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.custom-categories") ?? "[]")).toEqual(expect.arrayContaining(["飲食", "AI"]));
+    expect(JSON.parse(window.localStorage.getItem("mealledger.taxonomy.tags") ?? "[]")).toEqual(expect.arrayContaining(["訂閱"]));
   });
 
   test("records an entered starting balance as fund addition", async () => {

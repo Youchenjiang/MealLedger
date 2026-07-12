@@ -35,6 +35,7 @@ import { categoryReviewSummary } from "./importExport/aliases";
 import { toImportedTransactionDraft } from "./importExport/recordDraft";
 import { detectImportDuplicates, type ImportDuplicate } from "./importExport/duplicates";
 import { createInitialFundingDraft } from "./onboarding/initialFunding";
+import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/defaults";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -115,6 +116,8 @@ const auditEventsStorageKey = "mealledger.manual-ledger.audit-events";
 const categoriesStorageKey = "mealledger.manual-ledger.custom-categories";
 const sourcesStorageKey = "mealledger.manual-ledger.custom-sources";
 const onboardingStorageKey = "mealledger.onboarding.completed";
+const tagsStorageKey = "mealledger.taxonomy.tags";
+const aliasesStorageKey = "mealledger.taxonomy.aliases";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -157,6 +160,37 @@ function readOnboardingCompleted(): boolean {
     return window.localStorage.getItem(onboardingStorageKey) === "true";
   } catch {
     return false;
+  }
+}
+
+function readStoredLabels(key: string): string[] {
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredAliases(): TaxonomyAliasSeed[] {
+  try {
+    const stored = window.localStorage.getItem(aliasesStorageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed)
+      && parsed.every((item) => item && typeof item === "object" && "alias" in item && "canonical" in item)
+      ? parsed as TaxonomyAliasSeed[]
+      : [];
+  } catch {
+    return [];
   }
 }
 
@@ -518,6 +552,21 @@ function AuthenticatedApp() {
       <OnboardingPage
         onComplete={() => { setOnboardingCompleted(true); setOnboardingOpen(false); }}
         onAddAccount={(account) => setAccounts((current) => [...current, account])}
+        onApplyDefaultTaxonomy={() => {
+          const next = applyDefaultTaxonomy({
+            categories: readStoredCategories(),
+            tags: readStoredLabels(tagsStorageKey),
+            aliases: readStoredAliases(),
+          });
+
+          try {
+            window.localStorage.setItem(categoriesStorageKey, JSON.stringify(next.categories));
+            window.localStorage.setItem(tagsStorageKey, JSON.stringify(next.tags));
+            window.localStorage.setItem(aliasesStorageKey, JSON.stringify(next.aliases));
+          } catch {
+            // Taxonomy seed is best effort in local development.
+          }
+        }}
         onSaveInitialFunding={(account, draft) => {
           const now = new Date().toISOString();
           const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
@@ -551,9 +600,10 @@ function AuthenticatedApp() {
   );
 }
 
-function OnboardingPage({ onComplete, onAddAccount, onSaveInitialFunding }: Readonly<{
+function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSaveInitialFunding }: Readonly<{
   onComplete: () => void;
   onAddAccount: (account: LocalAccount) => void;
+  onApplyDefaultTaxonomy: () => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
 }>) {
   const [accountName, setAccountName] = useState("");
@@ -584,6 +634,7 @@ function OnboardingPage({ onComplete, onAddAccount, onSaveInitialFunding }: Read
     }
 
     onAddAccount(account);
+    onApplyDefaultTaxonomy();
     onComplete();
   };
 
