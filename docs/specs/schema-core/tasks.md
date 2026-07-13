@@ -65,7 +65,7 @@ Expected verification:
   also protected by the canonical uniqueness constraint.
 - Account currency immutability covers both source ledger records and transfer
   destination history.
-- `npm run test` — 209 tests passed after the completed feature set.
+- `npm run test` — 211 tests passed after the completed feature set.
 - `npm run build` and `git diff --check` passed.
 
 ## Environment Boundary
