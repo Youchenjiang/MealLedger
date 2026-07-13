@@ -651,14 +651,16 @@ begin
     where id = record_id and user_id = request_user;
   end if;
 
-  transfer_row := jsonb_populate_record(null::public.transfer_details, p_transfer_details);
-  insert into public.transfer_details (ledger_record_id, destination_account_id, destination_amount_minor, destination_currency, fee_ledger_record_id)
-  values (transfer_row.ledger_record_id, transfer_row.destination_account_id, transfer_row.destination_amount_minor, transfer_row.destination_currency, transfer_row.fee_ledger_record_id)
-  on conflict (ledger_record_id) do update set
-    destination_account_id = excluded.destination_account_id,
-    destination_amount_minor = excluded.destination_amount_minor,
-    destination_currency = excluded.destination_currency,
-    fee_ledger_record_id = excluded.fee_ledger_record_id;
+  if p_transfer_details is not null and p_transfer_details <> '{}'::jsonb then
+    transfer_row := jsonb_populate_record(null::public.transfer_details, p_transfer_details);
+    insert into public.transfer_details (ledger_record_id, destination_account_id, destination_amount_minor, destination_currency, fee_ledger_record_id)
+    values (transfer_row.ledger_record_id, transfer_row.destination_account_id, transfer_row.destination_amount_minor, transfer_row.destination_currency, transfer_row.fee_ledger_record_id)
+    on conflict (ledger_record_id) do update set
+      destination_account_id = excluded.destination_account_id,
+      destination_amount_minor = excluded.destination_amount_minor,
+      destination_currency = excluded.destination_currency,
+      fee_ledger_record_id = excluded.fee_ledger_record_id;
+  end if;
 
   insert into public.refund_links (refund_record_id, original_record_id, amount_minor, currency, refund_subtype, difference_kind)
   select refund_record_id, original_record_id, amount_minor, currency, refund_subtype, difference_kind
