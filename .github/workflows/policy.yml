@@ -55,6 +55,18 @@ jobs:
               "workflow",
               "spec",
               "decisions",
+              "account",
+              "capture",
+              "cloud",
+              "e2e",
+              "export",
+              "import",
+              "invoice",
+              "meals",
+              "onboarding",
+              "schema",
+              "settings",
+              "ui",
             ];
             const typePattern = allowedTypes.join("|");
             const scopePattern = allowedScopes.join("|");
