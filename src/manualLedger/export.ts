@@ -209,7 +209,7 @@ function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedger
       const destination = summary.get(record.transferAccountId);
       if (destination) {
         destination.transfer_in_total = Number(destination.transfer_in_total)
-          + numericAmount(record.destinationAmount || record.amount, record.destinationCurrency || destination.currency);
+          + numericAmount(record.destinationAmount || record.amount, record.destinationCurrency || String(destination.currency));
         if (destination.account_id !== source.account_id) {
           destination.record_count = Number(destination.record_count) + 1;
         }
