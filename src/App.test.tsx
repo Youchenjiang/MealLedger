@@ -720,6 +720,7 @@ describe("App shell draft flow", () => {
     await goToCapture(user);
     await user.click(screen.getByRole("button", { name: "Add account" }));
     await user.type(screen.getByLabelText("New account name"), "Travel cash");
+    expect(screen.getByRole("button", { name: "Decrease Initial balance (optional) by 10" })).toBeDisabled();
     await user.type(screen.getByLabelText("Initial balance (optional)"), "2500");
     fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2026-07-14" } });
     await user.click(screen.getByRole("button", { name: "Add and select" }));

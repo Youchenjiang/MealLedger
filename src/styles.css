@@ -818,13 +818,13 @@ h2 {
 }
 
 .amount-steps {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
 }
 
 .amount-step {
-  min-width: 44px;
+  min-width: 0;
   min-height: 30px;
   padding: 0 7px;
   border: 1px solid #d7cec1;
@@ -833,6 +833,14 @@ h2 {
   background: #fffdf8;
   font: inherit;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.amount-step:disabled {
+  border-color: #e5dfd5;
+  color: #aaa49b;
+  background: #f5f2ec;
+  cursor: not-allowed;
 }
 
 .derived-value {
@@ -1520,6 +1528,10 @@ button.action-card.unavailable {
 }
 
 @media (max-width: 480px) {
+  .amount-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .export-actions {
     grid-template-columns: 1fr;
   }
