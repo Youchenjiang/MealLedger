@@ -17,10 +17,10 @@ export function classifyCloudError(error: CloudMutationError, table: string): Cl
   if (code === "23505" || code === "23514" || code === "22P02") {
     return { code: "validation", message: error.message, retryable: false, table };
   }
-  if (code === "version_conflict") {
+  if (code === "version_conflict" || code === "ME002") {
     return { code: "conflict", message: error.message, retryable: false, table };
   }
-  if (code === "idempotency_hash_mismatch") {
+  if (code === "idempotency_hash_mismatch" || code === "ME001") {
     return { code: "idempotency", message: error.message, retryable: false, table };
   }
   return { code: "transport", message: error.message, retryable: true, table };

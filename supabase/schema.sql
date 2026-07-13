@@ -341,7 +341,7 @@ as $$
 begin
   if old.currency is distinct from new.currency and exists (
     select 1 from public.ledger_records record
-    where record.account_id = old.id and record.deleted_at is null
+    where record.account_id = old.id
   ) then
     raise exception 'account currency cannot change after ledger records exist';
   end if;
@@ -384,6 +384,8 @@ declare
   source_record public.ledger_records;
   destination_owner uuid;
   destination_currency text;
+  fee_owner uuid;
+  fee_kind public.ledger_record_kind;
 begin
   select * into source_record from public.ledger_records where id = new.ledger_record_id;
   if source_record.id is null or source_record.kind <> 'transfer' then
@@ -397,6 +399,13 @@ begin
   end if;
   if destination_currency <> new.destination_currency then
     raise exception 'transfer destination currency must match destination account';
+  end if;
+  if new.fee_ledger_record_id is not null then
+    select user_id, kind into fee_owner, fee_kind
+    from public.ledger_records where id = new.fee_ledger_record_id;
+    if fee_owner is null or fee_owner <> source_record.user_id or fee_kind <> 'expense' then
+      raise exception 'transfer fee must be an expense owned by the same user';
+    end if;
   end if;
   return new;
 end;
@@ -424,7 +433,7 @@ end;
 $$;
 
 create trigger transfer_details_delete_guard
-before delete on public.transfer_details
+after delete on public.transfer_details
 for each row execute function public.prevent_transfer_details_delete();
 
 create or replace function public.require_transfer_details()
@@ -457,16 +466,20 @@ as $$
 declare
   refund_owner uuid;
   refund_kind public.ledger_record_kind;
+  refund_currency text;
   original_owner uuid;
   original_kind public.ledger_record_kind;
 begin
-  select user_id, kind into refund_owner, refund_kind from public.ledger_records where id = new.refund_record_id;
+  select user_id, kind, currency into refund_owner, refund_kind, refund_currency from public.ledger_records where id = new.refund_record_id;
   select user_id, kind into original_owner, original_kind from public.ledger_records where id = new.original_record_id;
   if refund_owner is null or refund_kind <> 'refund' then
     raise exception 'refund_links must belong to a refund record';
   end if;
   if original_owner is null or original_owner <> refund_owner or original_kind not in ('expense', 'unresolved-expense') then
     raise exception 'refund_links must point to an expense owned by the same user';
+  end if;
+  if new.currency <> upper(new.currency) or length(new.currency) not between 3 and 8 or new.currency <> refund_currency then
+    raise exception 'refund link currency must match the refund record currency';
   end if;
   return new;
 end;
@@ -565,7 +578,7 @@ begin
 
   if existing_hash is not null then
     if existing_hash <> request_hash then
-      raise exception 'idempotency key was reused with a different request hash' using errcode = 'MELEDGER';
+      raise exception 'idempotency key was reused with a different request hash' using errcode = 'ME001';
     end if;
     was_replayed := true;
   else
@@ -579,7 +592,7 @@ begin
   for update;
 
   if existing_version is not null and existing_version not in (desired_version, desired_version - 1) then
-    raise exception 'ledger record version conflict' using errcode = 'MELEDGER_CONFLICT';
+    raise exception 'ledger record version conflict' using errcode = 'ME002';
   end if;
 
   ledger_row := jsonb_populate_record(null::public.ledger_records, p_ledger_record);

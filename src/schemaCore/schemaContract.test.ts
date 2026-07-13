@@ -56,7 +56,9 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("create policy ledger_records_owner");
     expect(schemaSql).toContain("create trigger transfer_details_valid");
     expect(schemaSql).toContain("create trigger transfer_details_delete_guard");
+    expect(schemaSql).toContain("transfer fee must be an expense owned by the same user");
     expect(schemaSql).toContain("create trigger refund_links_valid");
+    expect(schemaSql).toContain("refund link currency must match the refund record currency");
     expect(schemaSql).toContain("create constraint trigger ledger_transfer_details_required");
     expect(schemaSql).toContain("create or replace function public.media_link_target_owned");
     expect(schemaSql).toContain("create or replace function public.persist_ledger_record_bundle");
@@ -68,6 +70,8 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("public.audit_event_target_owned(target_type, target_id, auth.uid())");
     expect(schemaSql).toContain("create or replace function public.idempotency_result_owned");
     expect(schemaSql).toContain("public.idempotency_result_owned(result_type, result_id, auth.uid())");
+    expect(schemaSql).toContain("errcode = 'ME001'");
+    expect(schemaSql).toContain("errcode = 'ME002'");
   });
 
   test("checks ownership on both sides of relational links", () => {
