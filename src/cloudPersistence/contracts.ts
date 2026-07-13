@@ -50,9 +50,20 @@ export type CloudMutationResult = {
   error: CloudMutationError | null;
 };
 
+export type CloudReadResult = {
+  data?: CloudRow | null;
+  error: CloudMutationError | null;
+};
+
+export type CloudFilter = {
+  eq(column: string, value: unknown): CloudFilter;
+  maybeSingle(): PromiseLike<CloudReadResult> | CloudReadResult;
+};
+
 export type CloudTable = {
   upsert(values: CloudRow | CloudRow[], options?: { onConflict?: string; ignoreDuplicates?: boolean }):
     PromiseLike<CloudMutationResult> | CloudMutationResult;
+  select(columns?: string): CloudFilter;
 };
 
 export type CloudPersistenceClient = {
