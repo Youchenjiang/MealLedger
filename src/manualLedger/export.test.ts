@@ -130,4 +130,16 @@ describe("clean ledger export", () => {
     expect(progress).toEqual([0, 25, 60, 100]);
     expect(bundle.manifest.export_mode).toBe("multi-table");
   });
+
+  test("writes decimal account summaries from exact minor-unit totals", () => {
+    const usdAccount: LocalAccount = { id: "usd", name: "USD wallet", currency: "USD" };
+    const usdRecords = [
+      { ...record, id: "usd-1", accountId: "usd", accountName: "USD wallet", currency: "USD", amount: "0.10" },
+      { ...record, id: "usd-2", accountId: "usd", accountName: "USD wallet", currency: "USD", amount: "0.20" },
+    ];
+    const bundle = createMultiTableExport([usdAccount], usdRecords, "2026-07-13T00:00:00.000Z");
+
+    expect(bundle.files["reports/account_summary.csv"]).toContain("0.3");
+    expect(bundle.files["reports/account_summary.csv"]).not.toContain("0.30000000000000004");
+  });
 });

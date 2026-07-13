@@ -114,9 +114,9 @@ export function enqueueMealSync(
 ): CloudSyncQueueItem[] {
   const idempotencyKey = `meal:${meal.id}`;
   const requestHash = `meal:${meal.id}:${JSON.stringify(meal)}`;
+  if (meal.status === "synced") return current;
   const refreshed = refreshExisting(current, "meal", meal.id, requestHash, idempotencyKey, now);
   if (refreshed) return refreshed;
-  if (meal.status === "synced") return current;
   return [...current, {
     id: queueId("meal", meal.id),
     target: "meal",
@@ -140,9 +140,9 @@ export function enqueueMediaSync(
 ): CloudSyncQueueItem[] {
   const idempotencyKey = `media:${media.id}`;
   const requestHash = `media:${media.id}:${JSON.stringify({ name: media.name, type: media.type, size: media.size, status: media.status, kind: media.kind })}`;
+  if (media.metadataStatus === "synced") return current;
   const refreshed = refreshExisting(current, "media", media.id, requestHash, idempotencyKey, now);
   if (refreshed) return refreshed;
-  if (media.metadataStatus === "synced") return current;
   return [...current, {
     id: queueId("media", media.id),
     target: "media",
@@ -166,9 +166,9 @@ export function enqueueScanSync(
 ): CloudSyncQueueItem[] {
   const idempotencyKey = `scan:${scan.id}`;
   const requestHash = `scan:${scan.id}:${JSON.stringify(scan)}`;
+  if (scan.cloudStatus === "synced") return current;
   const refreshed = refreshExisting(current, "scan", scan.id, requestHash, idempotencyKey, now);
   if (refreshed) return refreshed;
-  if (scan.cloudStatus === "synced") return current;
   return [...current, {
     id: queueId("scan", scan.id),
     target: "scan",

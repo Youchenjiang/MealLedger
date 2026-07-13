@@ -37,7 +37,7 @@ describe("cloud sync queue", () => {
     const meal = { id: "meal-1", occurredAt: "2026-07-13T12:30", note: "before", transactionIds: [], mediaAssetIds: [], status: "local-only" as const } satisfies MealEntry;
     const firstMeal = enqueueMealSync([], meal, now);
     const syncedMeal = markCloudSynced(firstMeal, firstMeal[0].id, now);
-    const changedMeal = enqueueMealSync(syncedMeal, { ...meal, note: "after", status: "synced" }, "2026-07-13T01:00:00.000Z");
+    const changedMeal = enqueueMealSync(syncedMeal, { ...meal, note: "after", status: "local-only" }, "2026-07-13T01:00:00.000Z");
 
     const scan = { id: "scan-1", intent: "scan-receipt" as const, fileName: "receipt.jpg", mimeType: "image/jpeg", byteSize: 10, state: "temporary" as const, cloudStatus: "local-only" as const, createdAt: now, expiresAt: "2026-07-14T00:00:00.000Z" } satisfies TemporaryScan;
     const firstScan = enqueueScanSync([], scan, now);
@@ -53,6 +53,21 @@ describe("cloud sync queue", () => {
     expect(changedMeal[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
     expect(changedScan[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
     expect(changedMedia[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
+  });
+
+  test("keeps successful meal, media, and scan sync items closed", () => {
+    const meal = { id: "meal-closed", occurredAt: "2026-07-13T12:30", note: "meal", transactionIds: [], mediaAssetIds: [], status: "local-only" as const } satisfies MealEntry;
+    const mealSynced = markCloudSynced(enqueueMealSync([], meal, now), "cloud-sync-meal-meal-closed", now);
+
+    const media = { id: "media-closed", name: "meal.jpg", type: "image/jpeg", size: 10, status: "queued", kind: "meal-photo", metadataStatus: "local-only" } satisfies UploadQueueItem;
+    const mediaSynced = markCloudSynced(enqueueMediaSync([], media, now), "cloud-sync-media-media-closed", now);
+
+    const scan = { id: "scan-closed", intent: "scan-receipt" as const, fileName: "receipt.jpg", mimeType: "image/jpeg", byteSize: 10, state: "temporary" as const, cloudStatus: "local-only" as const, createdAt: now, expiresAt: "2026-07-14T00:00:00.000Z" } satisfies TemporaryScan;
+    const scanSynced = markCloudSynced(enqueueScanSync([], scan, now), "cloud-sync-scan-scan-closed", now);
+
+    expect(enqueueMealSync(mealSynced, { ...meal, note: "same remote version", status: "synced" }, "2026-07-13T01:00:00.000Z")[0].state).toBe("synced");
+    expect(enqueueMediaSync(mediaSynced, { ...media, size: 20, metadataStatus: "synced" }, "2026-07-13T01:00:00.000Z")[0].state).toBe("synced");
+    expect(enqueueScanSync(scanSynced, { ...scan, state: "retained", cloudStatus: "synced", expiresAt: null }, "2026-07-13T01:00:00.000Z")[0].state).toBe("synced");
   });
 
   test("tracks attempt state and removes synced items from pending work", () => {

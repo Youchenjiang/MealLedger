@@ -104,4 +104,14 @@ describe("account report projections", () => {
       closingBalance: 4500,
     });
   });
+
+  test("aggregates decimal currencies in minor units before formatting totals", () => {
+    const usdAccounts: LocalAccount[] = [{ id: "usd", name: "USD wallet", currency: "USD" }];
+    const reports = calculateAccountReports(usdAccounts, [
+      record({ id: "usd-1", accountId: "usd", accountName: "USD wallet", amount: "0.10", currency: "USD" }),
+      record({ id: "usd-2", accountId: "usd", accountName: "USD wallet", amount: "0.20", currency: "USD" }),
+    ]);
+
+    expect(reports[0]).toMatchObject({ expenseTotal: 0.3, netSpendingTotal: 0.3, closingBalance: -0.3 });
+  });
 });

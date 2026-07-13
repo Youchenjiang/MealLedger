@@ -158,32 +158,61 @@ function recordsForKind(records: LocalLedgerRecord[], kind: LocalLedgerRecord["k
   return activeRecords(records).filter((record) => record.kind === kind);
 }
 
-function numericAmount(value: string, currency: string): number {
-  const minorUnits = parseMinorUnits(value, currency);
-  return minorUnits === null ? 0 : minorUnitsToMajorNumber(minorUnits, currency);
+type AccountSummaryAccumulator = {
+  row: AccountSummaryRow;
+  incomeMinor: bigint;
+  expenseMinor: bigint;
+  refundMinor: bigint;
+  fundAdditionMinor: bigint;
+  transferInMinor: bigint;
+  transferOutMinor: bigint;
+  adjustmentMinor: bigint;
+};
+
+function emptyAccountSummary(account: LocalAccount): AccountSummaryAccumulator {
+  return {
+    row: {
+      account_id: account.id,
+      account_name: account.name,
+      currency: account.currency,
+      opening_balance: 0,
+      income_total: 0,
+      expense_total: 0,
+      refund_total: 0,
+      fund_addition_total: 0,
+      transfer_in_total: 0,
+      transfer_out_total: 0,
+      adjustment_total: 0,
+      closing_balance: 0,
+      record_count: 0,
+    },
+    incomeMinor: 0n,
+    expenseMinor: 0n,
+    refundMinor: 0n,
+    fundAdditionMinor: 0n,
+    transferInMinor: 0n,
+    transferOutMinor: 0n,
+    adjustmentMinor: 0n,
+  };
+}
+
+function finalizeAccountSummary(summary: AccountSummaryAccumulator, closingBalance: number): AccountSummaryRow {
+  const currency = String(summary.row.currency);
+  return {
+    ...summary.row,
+    income_total: minorUnitsToMajorNumber(summary.incomeMinor, currency),
+    expense_total: minorUnitsToMajorNumber(summary.expenseMinor, currency),
+    refund_total: minorUnitsToMajorNumber(summary.refundMinor, currency),
+    fund_addition_total: minorUnitsToMajorNumber(summary.fundAdditionMinor, currency),
+    transfer_in_total: minorUnitsToMajorNumber(summary.transferInMinor, currency),
+    transfer_out_total: minorUnitsToMajorNumber(summary.transferOutMinor, currency),
+    adjustment_total: minorUnitsToMajorNumber(summary.adjustmentMinor, currency),
+    closing_balance: closingBalance,
+  };
 }
 
 function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedgerRecord[]): AccountSummaryRow[] {
-  const summary = new Map<string, AccountSummaryRow>(
-    accounts.map((account) => [
-      account.id,
-      {
-        account_id: account.id,
-        account_name: account.name,
-        currency: account.currency,
-        opening_balance: 0,
-        income_total: 0,
-        expense_total: 0,
-        refund_total: 0,
-        fund_addition_total: 0,
-        transfer_in_total: 0,
-        transfer_out_total: 0,
-        adjustment_total: 0,
-        closing_balance: 0,
-        record_count: 0,
-      },
-    ]),
-  );
+  const summary = new Map(accounts.map((account) => [account.id, emptyAccountSummary(account)]));
 
   for (const record of activeRecords(records)) {
     const source = summary.get(record.accountId);
@@ -191,41 +220,41 @@ function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedger
       continue;
     }
 
-    source.record_count = Number(source.record_count) + 1;
-    const amount = numericAmount(record.amount, record.currency);
+    source.row.record_count = Number(source.row.record_count) + 1;
+    const amount = parseMinorUnits(record.amount, record.currency);
+    if (amount === null) continue;
 
     if (record.kind === "income") {
-      source.income_total = Number(source.income_total) + amount;
+      source.incomeMinor += amount;
     } else if (record.kind === "expense" || record.kind === "unresolved-expense") {
-      source.expense_total = Number(source.expense_total) + amount;
+      source.expenseMinor += amount;
     } else if (record.kind === "refund") {
-      source.refund_total = Number(source.refund_total) + amount;
+      source.refundMinor += amount;
     } else if (record.kind === "fund-addition") {
-      source.fund_addition_total = Number(source.fund_addition_total) + amount;
+      source.fundAdditionMinor += amount;
     } else if (record.kind === "adjustment") {
-      source.adjustment_total = Number(source.adjustment_total) + amount;
+      source.adjustmentMinor += amount;
     } else if (record.kind === "transfer") {
-      source.transfer_out_total = Number(source.transfer_out_total) + amount;
+      source.transferOutMinor += amount;
       const destination = summary.get(record.transferAccountId);
       if (destination) {
-        destination.transfer_in_total = Number(destination.transfer_in_total)
-          + numericAmount(record.destinationAmount || record.amount, record.destinationCurrency || String(destination.currency));
-        if (destination.account_id !== source.account_id) {
-          destination.record_count = Number(destination.record_count) + 1;
+        const destinationAmount = parseMinorUnits(record.destinationAmount || record.amount, record.destinationCurrency || String(destination.row.currency));
+        if (destinationAmount !== null) {
+          destination.transferInMinor += destinationAmount;
+        }
+        if (destination.row.account_id !== source.row.account_id) {
+          destination.row.record_count = Number(destination.row.record_count) + 1;
         }
       }
     }
   }
 
   const balances = calculateAccountBalances(accounts, records);
-  for (const balance of balances) {
-    const row = summary.get(balance.id);
-    if (row) {
-      row.closing_balance = balance.balance;
-    }
-  }
-
-  return [...summary.values()];
+  const closingBalances = new Map(balances.map((balance) => [balance.id, balance.balance]));
+  return accounts.map((account) => {
+    const row = summary.get(account.id) ?? emptyAccountSummary(account);
+    return finalizeAccountSummary(row, closingBalances.get(account.id) ?? 0);
+  });
 }
 
 function crc32(bytes: Uint8Array): number {
