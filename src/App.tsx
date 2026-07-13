@@ -905,10 +905,7 @@ function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSa
           </fieldset>
           {balanceMode === "current" ? (
             <div className="onboarding-balance-fields">
-              <label>
-                <span>Current balance</span>
-                <input required type="number" min="0.01" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="0" />
-              </label>
+              <AmountField id="onboarding-current-balance" label="Current balance" required value={balance} onChange={setBalance} placeholder="0" />
               <label>
                 <span>As of date</span>
                 <input required type="date" value={balanceDate} onChange={(event) => setBalanceDate(event.target.value)} />
@@ -1588,10 +1585,7 @@ function RecordEditor({
       event.preventDefault();
       onSave({ amount, category, counterparty, itemName, reason, note });
     }}>
-      <label>
-        <span>Amount</span>
-        <input required inputMode="decimal" type="number" step="any" value={amount} onChange={(event) => setAmount(event.target.value)} />
-      </label>
+      <AmountField id="record-editor-amount" label="Amount" required value={amount} allowNegative={record.kind === "adjustment"} onChange={setAmount} />
       <label>
         <span>Category</span>
         <input value={category} onChange={(event) => setCategory(event.target.value)} />
@@ -1697,6 +1691,7 @@ function AmountField({
   value,
   required = false,
   allowNegative = false,
+  placeholder = "100",
   onChange,
 }: {
   id: string;
@@ -1704,6 +1699,7 @@ function AmountField({
   value: string;
   required?: boolean;
   allowNegative?: boolean;
+  placeholder?: string;
   onChange: (value: string) => void;
 }) {
   const steps = [-1000, -100, -10, 10, 100, 1000];
@@ -1724,7 +1720,7 @@ function AmountField({
           type="number"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="100"
+          placeholder={placeholder}
         />
         <div className="amount-steps" aria-label={`${label} quick amount changes`}>
           {steps.map((step) => (
@@ -1784,17 +1780,13 @@ function QuickAccountSetup({
           <option value="USD">USD</option>
         </select>
       </label>
-      <label>
-        <span>Initial balance (optional)</span>
-        <input
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={initialBalance}
-          onChange={(event) => onInitialBalanceChange(event.target.value)}
-          placeholder="Leave blank to start from zero"
-        />
-      </label>
+      <AmountField
+        id="quick-account-initial-balance"
+        label="Initial balance (optional)"
+        value={initialBalance}
+        onChange={onInitialBalanceChange}
+        placeholder="Leave blank to start from zero"
+      />
       {initialBalance.trim() ? (
         <label>
           <span>As of date</span>
@@ -2905,10 +2897,7 @@ function ManualDraftForm({
         </select>
       </label>
       <DraftKindFields accounts={accounts} form={form} updateForm={updateForm} />
-      <label>
-        <span>Amount</span>
-        <input required inputMode="decimal" min="0" step="any" type="number" value={form.amount} onChange={(event) => updateForm("amount", event.target.value)} placeholder="100" />
-      </label>
+      <AmountField id="draft-editor-amount" label="Amount" required value={form.amount} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
       <label>
         <span>Currency</span>
         <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
@@ -3053,10 +3042,7 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
           </fieldset>
           {balanceMode === "current" ? (
             <div className="onboarding-balance-fields">
-              <label>
-                <span>Current balance</span>
-                <input required type="number" min="0.01" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="0" />
-              </label>
+              <AmountField id="settings-current-balance" label="Current balance" required value={balance} onChange={setBalance} placeholder="0" />
               <label>
                 <span>As of date</span>
                 <input required type="date" value={balanceDate} onChange={(event) => setBalanceDate(event.target.value)} />

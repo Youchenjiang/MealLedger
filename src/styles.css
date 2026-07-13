@@ -741,6 +741,11 @@ h2 {
   gap: 6px;
 }
 
+.amount-field {
+  display: grid;
+  gap: 6px;
+}
+
 .amount-control input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
