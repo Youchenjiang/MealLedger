@@ -25,6 +25,18 @@ async function goToCapture(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Capture" }));
 }
 
+async function addCaptureAccount(user: ReturnType<typeof userEvent.setup>, name: string, currency = "TWD", trigger = "Add account") {
+  const firstAccountButton = screen.queryByRole("button", { name: "Create first account" });
+  if (firstAccountButton) {
+    await user.click(firstAccountButton);
+  } else {
+    await user.click(screen.getByRole("button", { name: trigger }));
+  }
+  await user.type(screen.getByLabelText("Account name"), name);
+  await user.selectOptions(screen.getByLabelText("Currency"), currency);
+  await user.click(screen.getByRole("button", { name: "Add and select" }));
+}
+
 async function addAccount(user: ReturnType<typeof userEvent.setup>, name: string, currency = "TWD") {
   await user.click(screen.getByRole("button", { name: "Settings" }));
   await user.clear(screen.getByLabelText("Account name"));
@@ -171,6 +183,25 @@ describe("App shell draft flow", () => {
     expect(screen.getByLabelText(/image bytes are not backed up/)).toBeInTheDocument();
   });
 
+  test("opens a real camera capture dialog for meal photos", async () => {
+    const user = userEvent.setup();
+    const stop = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) },
+    });
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: /Record meal/ }));
+    await user.click(screen.getByRole("button", { name: "Take photo" }));
+
+    expect(await screen.findByRole("dialog", { name: "Take meal photo" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
   test("keeps scanned sources separate from official ledger records", async () => {
     const user = userEvent.setup();
     renderWorkspace();
@@ -230,8 +261,8 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
     await goToCapture(user);
-    await user.selectOptions(screen.getByLabelText("Type"), "income");
     await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.selectOptions(screen.getByLabelText("Type"), "income");
     await user.selectOptions(screen.getByLabelText("Category"), "Allowance");
     await user.click(screen.getByRole("button", { name: "Add source" }));
     await user.type(screen.getByLabelText("New source"), "Parent");
@@ -410,7 +441,7 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(screen.getByText("Entry cancelled.")).toBeInTheDocument();
-    expect(screen.getByText("Select or add an account to continue")).toBeInTheDocument();
+    expect(screen.getByText("Select an account to continue")).toBeInTheDocument();
     expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
   });
 
@@ -457,9 +488,9 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
     await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     await user.selectOptions(screen.getByLabelText("Type"), "unresolved-expense");
     await user.click(screen.getByRole("radio", { name: "Day" }));
-    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     await user.clear(screen.getByLabelText("Date"));
     await user.type(screen.getByLabelText("Date"), "2026-07-12");
     await user.clear(screen.getByLabelText("Amount", { exact: true }));
@@ -608,8 +639,8 @@ describe("App shell draft flow", () => {
     await addAccount(user, "Daily wallet");
     await addAccount(user, "Savings");
     await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
-    await user.selectOptions(screen.getByLabelText("Source account"), "Daily wallet");
     await user.clear(screen.getByLabelText("Amount"));
     await user.type(screen.getByLabelText("Amount"), "1000");
     await user.click(screen.getByRole("button", { name: "Save record" }));
@@ -632,8 +663,8 @@ describe("App shell draft flow", () => {
     await addAccount(user, "Daily wallet");
     await addAccount(user, "Japan cash");
     await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
-    await user.selectOptions(screen.getByLabelText("Source account"), "Daily wallet");
     await user.click(screen.getByRole("radio", { name: "Cross currency" }));
 
     expect(screen.getByLabelText("Source account")).toBeInTheDocument();
@@ -665,8 +696,8 @@ describe("App shell draft flow", () => {
 
     expect(screen.getByText("JPY", { exact: true })).toBeInTheDocument();
 
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
-    await user.selectOptions(screen.getByLabelText("Source account"), "Daily wallet");
     expect(within(screen.getByLabelText("Destination account")).queryByRole("option", { name: "Japan cash (JPY)" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "Cross currency" }));
@@ -681,8 +712,8 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
     await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
-    await user.selectOptions(screen.getByLabelText("Source account"), "Daily wallet");
 
     const sameCurrency = screen.getByRole("radio", { name: "Same currency" });
     sameCurrency.focus();
@@ -698,14 +729,9 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await goToCapture(user);
 
-    expect(screen.getByLabelText("Account")).toBeDisabled();
     expect(screen.getByText("Account required")).toBeInTheDocument();
-    expect(screen.getByText("Create an account before saving a ledger record.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add an account first" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-
-    await user.type(screen.getByLabelText("New account name"), "Travel cash");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    expect(screen.queryByText("Create an account before saving a ledger record.")).not.toBeInTheDocument();
+    await addCaptureAccount(user, "Travel cash");
 
     expect(screen.getByLabelText("Account")).not.toBeDisabled();
     expect(screen.getByRole("option", { name: "Travel cash (TWD)" })).toBeInTheDocument();
@@ -718,11 +744,12 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Travel cash");
-    expect(screen.getByRole("button", { name: "Decrease Initial balance (optional) by 10" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Create first account" }));
+    await user.type(screen.getByLabelText("Account name"), "Travel cash");
+    expect(screen.getByRole("button", { name: "Increase Initial balance (optional) by 10" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Decrease Initial balance (optional) by 10" })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("Initial balance (optional)"), "2500");
-    fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2026-07-14" } });
+    fireEvent.change(screen.getByLabelText("Balance as of"), { target: { value: "2026-07-14" } });
     await user.click(screen.getByRole("button", { name: "Add and select" }));
 
     expect(screen.getByLabelText("Account")).toHaveValue("Travel cash");
@@ -740,9 +767,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await addCaptureAccount(user, "Daily wallet");
 
     const amount = screen.getByLabelText("Amount");
     await user.click(screen.getByRole("button", { name: "Increase Amount by 1000" }));
@@ -758,15 +783,15 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
+    await user.click(screen.getByRole("button", { name: "Create first account" }));
     await user.click(screen.getByRole("button", { name: "Add and select" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("Enter an account name");
 
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
+    await user.type(screen.getByLabelText("Account name"), "Daily wallet");
     await user.click(screen.getByRole("button", { name: "Add and select" }));
     await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "daily wallet");
+    await user.type(screen.getByLabelText("Account name"), "daily wallet");
     await user.click(screen.getByRole("button", { name: "Add and select" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("already exists");
@@ -778,9 +803,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await addCaptureAccount(user, "Daily wallet");
 
     const category = screen.getByLabelText("Category");
     await user.selectOptions(category, "AI");
@@ -799,9 +822,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await addCaptureAccount(user, "Daily wallet");
 
     await user.click(screen.getByRole("button", { name: "Add category" }));
     await user.click(screen.getByRole("button", { name: "Add and select" }));
@@ -829,12 +850,10 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await addCaptureAccount(user, "Daily wallet");
     await user.selectOptions(screen.getByLabelText("Type"), "transfer");
     await user.click(screen.getByRole("button", { name: "Add destination account" }));
-    await user.type(screen.getByLabelText("New account name"), "Japan cash");
+    await user.type(screen.getByLabelText("Account name"), "Japan cash");
     await user.selectOptions(screen.getByLabelText("Currency"), "JPY");
     await user.click(screen.getByRole("button", { name: "Add and select" }));
     await user.click(screen.getByRole("radio", { name: "Cross currency" }));
@@ -842,7 +861,7 @@ describe("App shell draft flow", () => {
     await user.type(screen.getByLabelText("Destination amount"), "46000");
     await user.click(screen.getByRole("checkbox", { name: "Add transfer fee" }));
     await user.click(screen.getByRole("button", { name: "Add fee account" }));
-    await user.type(screen.getByLabelText("New account name"), "Fee wallet");
+    await user.type(screen.getByLabelText("Account name"), "Fee wallet");
     await user.click(screen.getByRole("button", { name: "Add and select" }));
     await user.type(screen.getByLabelText("Fee amount"), "15");
     await user.type(screen.getByLabelText("Fee category"), "Fees");
@@ -895,9 +914,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await goToCapture(user);
 
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await addCaptureAccount(user, "Daily wallet");
 
     const merchant = screen.getByLabelText("Merchant");
     const itemName = screen.getByLabelText("Item name");
@@ -916,6 +933,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
+    await addCaptureAccount(user, "Daily wallet");
 
     const form = document.querySelector("form");
     if (!form) {
@@ -1126,6 +1144,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
+    await addCaptureAccount(user, "Daily wallet");
 
     const type = screen.getByLabelText("Type") as HTMLSelectElement;
     expect([...type.options].map((option) => option.value)).toEqual([
@@ -1150,9 +1169,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await goToCapture(user);
-    await user.click(screen.getByRole("button", { name: "Add account" }));
-    await user.type(screen.getByLabelText("New account name"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Add and select" }));
+    await addCaptureAccount(user, "Daily wallet");
     const type = screen.getByLabelText("Type");
 
     await user.selectOptions(type, "income");

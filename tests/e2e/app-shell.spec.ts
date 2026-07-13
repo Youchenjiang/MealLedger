@@ -81,8 +81,19 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
+  await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
   await page.getByRole("button", { name: "Capture" }).click();
   await page.getByRole("button", { name: /Record meal/ }).click();
+  const mealLabels = page.locator(".meal-form > label");
+  await expect(mealLabels).toHaveCount(2);
+  for (const label of await mealLabels.all()) {
+    const labelBox = await label.locator("span").boundingBox();
+    const controlBox = await label.locator("input, textarea").boundingBox();
+    expect(labelBox).not.toBeNull();
+    expect(controlBox).not.toBeNull();
+    expect(controlBox!.y).toBeGreaterThan(labelBox!.y + labelBox!.height);
+  }
+  await expect(page.getByRole("button", { name: "Take photo" })).toBeVisible();
   await page.getByLabel("Meal photos").setInputFiles([
     { name: "meal-1.jpg", mimeType: "image/jpeg", buffer: Buffer.from("one") },
     { name: "meal-2.jpg", mimeType: "image/jpeg", buffer: Buffer.from("two") },
@@ -170,6 +181,8 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await openWorkspace(page);
   await page.getByRole("button", { name: "Capture" }).click();
   await expect(page.getByRole("heading", { name: "Capture", exact: true })).toBeVisible();
+  await expect(page.locator(".capture-intent-button")).toHaveCount(5);
+  await expect(page.getByRole("heading", { name: "What are you saving?" })).toBeVisible();
   await page.getByRole("button", { name: "Ledger", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
   await expectHorizontallyWithinViewport(page, "aside[aria-label='MealLedger navigation'] .nav-item");
@@ -181,6 +194,28 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   expect(errors).toEqual([]);
 });
 
+test("keeps the first-account flow usable at 320px", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+  await page.setViewportSize({ width: 320, height: 900 });
+
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: "Create first account" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Add account" });
+  await expect(dialog).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const amountSteps = dialog.locator(".amount-step");
+  await expect(amountSteps).toHaveCount(3);
+  const positions = await amountSteps.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { top: box.top, bottom: box.bottom };
+  }));
+  expect(new Set(positions.map((position) => `${position.top}:${position.bottom}`)).size).toBe(1);
+  expect(errors).toEqual([]);
+});
+
 test("keeps compact navigation stable near its breakpoint", async ({ page }) => {
   const errors = collectBrowserErrors(page);
   await page.setViewportSize({ width: 720, height: 900 });
@@ -188,6 +223,7 @@ test("keeps compact navigation stable near its breakpoint", async ({ page }) => 
   await openWorkspace(page);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
