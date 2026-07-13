@@ -213,7 +213,8 @@ Goal:
 Deliverables:
 
 - Typed persistence boundary and local-to-canonical row mappers.
-- Idempotent account, record, draft, and metadata writes.
+- Idempotent account, record, draft, meal, media metadata, and source payload
+  writes.
 - Retryable queue state with bounded backoff and visible local-only status.
 - Version-conflict result without silent overwrite.
 
@@ -223,6 +224,8 @@ Exit criteria:
 - Minor-unit, transfer, refund, funding, void, and audit mappings are covered.
 - Replayed actions do not create duplicate rows.
 - Failed child writes are not reported as fully synced.
+- Meal/photo/source links are persisted as metadata only; image bytes remain
+  outside Supabase and clean ledger exports.
 - R2 bytes, provider invoice sync, bank sync, and multi-device merge remain
   outside this spec.
 

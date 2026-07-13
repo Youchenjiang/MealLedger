@@ -11,11 +11,13 @@
 ## Implementation
 
 - [x] Add typed persistence client boundary.
-- [x] Add local account, record, draft, and official metadata row mappers.
-- [x] Add idempotent account, draft, and record bundle persistence.
+- [x] Add local account, record, draft, meal, media, and source metadata row mappers.
+- [x] Add idempotent account, draft, record, meal, media, and source persistence.
 - [x] Add retry classification and bounded backoff policy.
-- [ ] Connect the adapter to the local queue without changing local-first commit.
-- [ ] Add authenticated Supabase integration tests when a test project exists.
+- [x] Re-queue edited, voided, and unresolved-converted records by version/hash.
+- [x] Preserve tags, ordinary refund links, and audit history in record mapping.
+- [x] Connect the adapter to the local queue without changing local-first commit.
+- [x] Add authenticated-style integration tests with a mocked Supabase client.
 
 ## Verification
 
@@ -23,9 +25,12 @@
 - [x] Unit tests for idempotency replay and request-hash mismatch.
 - [x] Unit tests for child-write failure and retry classification.
 - [x] Integration-style tests with a mocked Supabase client.
+- [x] Queue meal, media metadata, and temporary source payload writes independently.
 - [x] Existing local app, import/export, E2E, and build gates remain green.
 - [ ] Real RLS integration run is deferred until Supabase CLI/project
       credentials are intentionally enabled.
+- [ ] Atomic transfer RPC and compare-and-write RPC remain deferred; the
+      current adapter refuses to mark transfer bundles synced without them.
 
 ## Deferred
 
@@ -36,8 +41,21 @@
 
 ## Current Slice Boundary
 
-The adapter foundation is complete, but it is intentionally not wired into
-the App write path yet. That wiring requires a remote-reference bootstrap for
-local account/category IDs and a configured authenticated Supabase environment.
-Until that work is complete, the product remains local-first and never presents
-local records as cloud-synced.
+The local-first adapter is wired into the authenticated App path. It persists
+canonical ledger/draft rows plus meal, media metadata, and temporary source
+payload metadata when Supabase is configured. It never uploads image bytes,
+confirms scan drafts, or runs provider synchronization. Existing local data
+owned by another authenticated user remains blocked for explicit review rather
+than being claimed automatically.
+
+## Verification Evidence
+
+The current branch was verified after the meal/media/source queue slice:
+
+- `npm run test`: 34 files, 187 tests passed.
+- `npm run test:coverage`: 83.41% statements, 73.20% branches, 84.74% functions,
+  84.67% lines.
+- `npm run test:e2e`: 6 browser smoke tests passed.
+- `npm run build`: TypeScript and Vite build passed.
+- Real Supabase/RLS execution remains environment-gated; mocked authenticated
+  persistence tests cover the adapter contract.

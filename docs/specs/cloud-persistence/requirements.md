@@ -13,8 +13,10 @@ making cloud availability a prerequisite for recording locally.
 - Map transfer details, refund links, and audit events after their parent record
   is accepted.
 - Map pending local drafts to `public.drafts`.
-- Persist meal metadata and media metadata only when their local identifiers are
-  valid UUIDs and the corresponding cloud relationship is available.
+- Persist meal metadata, media metadata, and temporary scan source metadata when
+  the local queue contains the corresponding objects. Client-only identifiers
+  are converted to deterministic UUIDs at the cloud boundary; image bytes are
+  never placed in Supabase rows.
 - Use the local idempotency key as the stable action key for retries.
 - Keep failed writes in the local queue and expose a retryable error state.
 - Use Supabase RLS as the ownership boundary; the browser never uses a service
@@ -41,6 +43,8 @@ making cloud availability a prerequisite for recording locally.
    complete record bundle succeeds.
 5. A retry reuses the original idempotency key. It must not create a new key on
    reload, reconnect, or repeated button clicks.
+6. Meal, media metadata, and scan source writes have independent queue targets;
+   a scan remains a source/draft until the user confirms it.
 
 ## Write Order
 
@@ -55,6 +59,11 @@ For an official record bundle, the adapter writes in this order:
 The adapter must stop after the first failed dependency and return a typed
 failure. It must never report the parent as synced while a required child row
 is missing.
+
+Transfer records are an explicit atomic boundary: this client does not issue
+independent REST writes for a transfer parent and its deferred-required
+`transfer_details`. Until the atomic RPC is enabled, transfers remain
+local-only and are reported as a non-retryable cloud boundary error.
 
 ## Mapping Rules
 
@@ -71,14 +80,22 @@ is missing.
   `income`.
 - `refund` stores links to one or more original records. A payback remains a
   refund subtype and does not become income.
-- A transfer always writes both the source parent amount and destination
-  details. A transfer fee is a separate expense record linked to the transfer.
+- Ordinary refunds and paybacks both preserve their original-record links;
+  multiple links require explicit allocation amounts.
+- Record tags are persisted through `ledger_record_tags` after tag reference
+  bootstrap.
+- A transfer always requires both the source parent amount and destination
+  details. A transfer fee is a separate expense record linked to the transfer;
+  the atomic cloud write is deferred until the RPC boundary exists.
 - Local `recordState: voided` maps to `record_state: voided`; it is not hard
   deleted during synchronization.
 - Local drafts remain drafts. Draft confirmation is a separate operation and
   must not be inferred from a successful draft upload.
 - Meal records and media metadata never place image bytes in `ledger_records`
   or any clean ledger export.
+- A meal may link multiple media assets and transaction records. A scan source
+  may link its temporary media metadata through `media_links` without copying
+  the file bytes.
 
 ## Idempotency And Concurrency
 
@@ -87,8 +104,9 @@ is missing.
   a different hash is a hard error.
 - The server-side unique constraint `(user_id, idempotency_key)` is the final
   duplicate guard.
-- Updates include the local `version`. A stale version returns a conflict
-  result; the adapter does not use last-write-wins for official ledger data.
+- Updates include the local `version`. A preflight version mismatch returns a
+  conflict result; the adapter does not use last-write-wins for official ledger
+  data. Atomic compare-and-write remains part of the future RPC boundary.
 - Retryable transport failures use bounded exponential backoff. Validation,
   ownership, duplicate-key/hash mismatch, and version conflicts require user
   review rather than infinite retry.
@@ -101,6 +119,8 @@ is missing.
   RLS. Client-side IDs are not treated as proof of ownership.
 - The adapter persists metadata only. Temporary scan cleanup and signed media
   URL behavior remain in the capture-media boundary until the cloud media slice.
+- If the authenticated user differs from the local data owner, automatic claim
+  and sync are blocked until an explicit migration/review flow exists.
 
 ## Acceptance Criteria
 
@@ -110,5 +130,10 @@ is missing.
 - Replaying the same queue item is idempotent.
 - A failed child write leaves the item retryable and never reports a partial
   official bundle as synced.
+- A retry of a partial bundle reuses the idempotency key but still attempts the
+  missing child writes; an existing key with the same request hash is not an
+  early success signal.
 - A version conflict is visible and does not silently overwrite the cloud row.
+- Transfers without the atomic RPC boundary remain local-only rather than being
+  reported as synced.
 - Tests prove that clean exports remain unchanged and contain no media bytes.
