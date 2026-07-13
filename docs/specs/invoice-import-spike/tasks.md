@@ -50,3 +50,18 @@
 This spike is documentation-only. It requires link/source review and static
 spec consistency review. It does not run live Ministry of Finance calls, and it
 does not weaken the normal application gates for future implementation work.
+
+## External Actions Required Before `invoice-import`
+
+- [ ] Name the operating entity that would apply for the official API and
+      confirm that it can provide the required responsible-person information.
+- [ ] Confirm whether that entity can provide the required CNS 27001 or ISO
+      27001 evidence and legal-compliance checklist.
+- [ ] Submit or discuss the application with the Ministry of Finance service
+      center and ask whether a personal finance ledger is an eligible use case.
+- [ ] Request test credentials or an approved fixture procedure before writing
+      an integration test.
+- [ ] Ask whether any approved push/callback channel exists outside the
+      published polling API.
+- [ ] Record the answers and either approve the follow-up implementation spec
+      or mark official sync no-go/deferred.
