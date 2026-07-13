@@ -19,6 +19,7 @@ This sequence turns the current specs into a practical implementation order. It 
 5. Capture media.
 6. Import/export.
 7. Hardening and release readiness.
+8. Cloud persistence.
 
 ## 1. App Shell
 
@@ -197,6 +198,33 @@ Exit criteria:
 - Export and import fixtures pass.
 - Privacy checklist has no launch blockers.
 - Known limitations are documented.
+
+## 8. Cloud Persistence
+
+Spec:
+
+- [Cloud persistence](../specs/cloud-persistence/requirements.md)
+
+Goal:
+
+- Persist the local-first domain to Supabase when an authenticated, configured
+  client is available while keeping local recording available offline.
+
+Deliverables:
+
+- Typed persistence boundary and local-to-canonical row mappers.
+- Idempotent account, record, draft, and metadata writes.
+- Retryable queue state with bounded backoff and visible local-only status.
+- Version-conflict result without silent overwrite.
+
+Exit criteria:
+
+- Local-only mode behavior is unchanged.
+- Minor-unit, transfer, refund, funding, void, and audit mappings are covered.
+- Replayed actions do not create duplicate rows.
+- Failed child writes are not reported as fully synced.
+- R2 bytes, provider invoice sync, bank sync, and multi-device merge remain
+  outside this spec.
 
 ## Deferred Until V2 Or Spike
 
