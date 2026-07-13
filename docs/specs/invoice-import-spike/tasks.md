@@ -7,12 +7,19 @@
       endpoint requirements.
 - [x] Record header, detail, carrier, date-range, and pagination capabilities.
 - [x] Record official error codes and traffic-control limits.
-- [ ] Confirm application approval criteria for a personal finance product.
-- [ ] Confirm user authorization, validation-code lifecycle, and revocation UX.
+- [x] Record application package, developer eligibility, review timing,
+      authorization duration, and security-standard requirements.
+- [x] Record user-consent, six-month re-consent, deletion, audit-trail, and
+      cloud-donation obligations.
+- [x] Record that the reviewed API documents carrier validation rather than a
+      generic OAuth/redirect authorization flow.
+- [ ] Confirm whether the current project and operating entity qualify for
+      application approval as a personal finance product.
 - [ ] Confirm current test credentials or a safe official fixture process.
 - [ ] Confirm push/webhook support or document scheduled pull as the only
       supported delivery mode.
-- [ ] Review privacy, retention, and cross-border processing terms.
+- [x] Record official consent, retention, deletion, and disclosure obligations.
+- [ ] Review project-specific privacy and cross-border legal wording.
 
 ## Adapter Design
 
@@ -27,6 +34,8 @@
 ## Exit Criteria
 
 - [x] Research has an explicit conditional-go assessment.
+- [x] Official application and user-consent obligations are treated as launch
+      gates rather than implementation assumptions.
 - [x] No production sync code or provider credentials were added.
 - [x] No real invoice data is stored in the repository.
 - [ ] All blocking decision gates in `requirements.md` have evidence.
@@ -38,4 +47,3 @@
 This spike is documentation-only. It requires link/source review and static
 spec consistency review. It does not run live Ministry of Finance calls, and it
 does not weaken the normal application gates for future implementation work.
-

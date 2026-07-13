@@ -45,7 +45,8 @@ adapter contract without coupling the ledger core to the provider API.
 The spike is complete only when each gate has an evidence-backed answer.
 
 1. **Access**: An approved developer application can call the required consumer
-   endpoints, and the application terms allow a personal finance use case.
+   endpoints, the applicant is an eligible developer under the official rules,
+   and the application terms allow a personal finance use case.
 2. **User authorization**: The user can grant, rotate, and revoke access without
    exposing provider secrets to the browser. The documented API flow must be
    distinguishable from MealLedger's Supabase login.
@@ -64,7 +65,28 @@ The spike is complete only when each gate has an evidence-backed answer.
    procedure exists. If none exists, live integration remains a separately
    approved operation.
 8. **Privacy**: Retention, cross-border processing, user deletion, credential
-   revocation, and audit requirements are documented before implementation.
+   revocation, six-month re-consent, required disclosure, and audit requirements
+   are documented before implementation.
+
+## Official Rule Implications
+
+Before applying for production access, the product owner must explicitly accept
+these obligations:
+
+- The applicant must satisfy the official developer category and application
+  review requirements, including the required security-standard evidence.
+- A query product must provide cloud-invoice donation and mask the final three
+  characters of donated invoice numbers.
+- User consent must be recorded, renewed every six months, and support stopping
+  use or deleting invoice data and usage records.
+- If imported invoice data is used for MealLedger accounting beyond the official
+  invoice-service scope, the product must present additional notice and obtain
+  renewed consent before that use.
+- The service must define retention, audit, privacy, and data-location behavior
+  before any provider credential is stored.
+
+Until these are accepted and verified, the integration remains a research
+spike and the supported product paths remain manual scan and CSV import.
 
 ## Proposed Provider-Neutral Contract
 
@@ -111,4 +133,3 @@ idempotency rules.
 - **No-go**: the official service does not offer suitable personal read access,
   safe authorization, or acceptable testability. Keep manual scan and CSV
   import as the supported paths and do not add provider-specific schema.
-
