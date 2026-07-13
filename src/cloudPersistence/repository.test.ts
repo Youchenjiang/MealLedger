@@ -11,10 +11,11 @@ function bundle(): CloudRecordBundle {
   };
 }
 
-function client(options: { existing?: CloudRow | null; ledgerVersion?: number; failTable?: string } = {}): CloudPersistenceClient & { calls: string[] } {
+function client(options: { existing?: CloudRow | null; ledgerVersion?: number; failTable?: string; rpc?: boolean } = {}): CloudPersistenceClient & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
+    ...(options.rpc ? { rpc: vi.fn(async () => ({ data: { replayed: false }, error: null })) } : {}),
     from(table: string) {
       return {
         select() {
@@ -128,6 +129,18 @@ describe("cloud persistence repository", () => {
     });
 
     expect(result).toMatchObject({ ok: false, failure: { code: "validation", table: "transfer_details" } });
+    expect(mock.calls).toEqual([]);
+  });
+
+  test("uses the atomic RPC boundary for transfer bundles", async () => {
+    const mock = client({ rpc: true });
+    const result = await persistRecordBundle(mock, request, {
+      ...bundle(),
+      transferDetails: { ledger_record_id: "record-1", destination_account_id: "account-2" },
+    });
+
+    expect(result).toMatchObject({ ok: true, replayed: false, tables: expect.arrayContaining(["transfer_details"]) });
+    expect(mock.rpc).toHaveBeenCalledWith("persist_ledger_record_bundle", expect.objectContaining({ p_transfer_details: expect.any(Object) }));
     expect(mock.calls).toEqual([]);
   });
 });

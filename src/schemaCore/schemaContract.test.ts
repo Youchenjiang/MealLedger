@@ -56,6 +56,7 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("create trigger refund_links_valid");
     expect(schemaSql).toContain("create constraint trigger ledger_transfer_details_required");
     expect(schemaSql).toContain("create or replace function public.media_link_target_owned");
+    expect(schemaSql).toContain("create or replace function public.persist_ledger_record_bundle");
     expect(schemaSql).toContain("asset.user_id = auth.uid()");
     expect(schemaSql).toContain("public.media_link_target_owned(target_type, target_id, auth.uid())");
   });
