@@ -16,6 +16,7 @@
 - [x] Add retry classification and bounded backoff policy.
 - [x] Re-queue edited, voided, and unresolved-converted records by version/hash.
 - [x] Preserve tags, ordinary refund links, and audit history in record mapping.
+- [x] Add an authenticated atomic RPC for transfer bundles and version checks.
 - [x] Connect the adapter to the local queue without changing local-first commit.
 - [x] Add authenticated-style integration tests with a mocked Supabase client.
 
@@ -29,8 +30,6 @@
 - [x] Existing local app, import/export, E2E, and build gates remain green.
 - [ ] Real RLS integration run is deferred until Supabase CLI/project
       credentials are intentionally enabled.
-- [ ] Atomic transfer RPC and compare-and-write RPC remain deferred; the
-      current adapter refuses to mark transfer bundles synced without them.
 
 ## Deferred
 

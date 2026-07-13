@@ -60,10 +60,10 @@ The adapter must stop after the first failed dependency and return a typed
 failure. It must never report the parent as synced while a required child row
 is missing.
 
-Transfer records are an explicit atomic boundary: this client does not issue
-independent REST writes for a transfer parent and its deferred-required
-`transfer_details`. Until the atomic RPC is enabled, transfers remain
-local-only and are reported as a non-retryable cloud boundary error.
+Transfer records use `persist_ledger_record_bundle`, an authenticated atomic
+RPC that writes the parent and its deferred-required `transfer_details` in one
+transaction. A client without that RPC remains local-only and reports a
+non-retryable cloud boundary error.
 
 ## Mapping Rules
 
@@ -86,7 +86,7 @@ local-only and are reported as a non-retryable cloud boundary error.
   bootstrap.
 - A transfer always requires both the source parent amount and destination
   details. A transfer fee is a separate expense record linked to the transfer;
-  the atomic cloud write is deferred until the RPC boundary exists.
+  the transfer bundle uses the atomic RPC boundary.
 - Local `recordState: voided` maps to `record_state: voided`; it is not hard
   deleted during synchronization.
 - Local drafts remain drafts. Draft confirmation is a separate operation and
@@ -105,8 +105,9 @@ local-only and are reported as a non-retryable cloud boundary error.
 - The server-side unique constraint `(user_id, idempotency_key)` is the final
   duplicate guard.
 - Updates include the local `version`. A preflight version mismatch returns a
-  conflict result; the adapter does not use last-write-wins for official ledger
-  data. Atomic compare-and-write remains part of the future RPC boundary.
+  conflict result; transfer bundles additionally use atomic compare-and-write
+  inside the RPC. The adapter does not use last-write-wins for official ledger
+  data.
 - Retryable transport failures use bounded exponential backoff. Validation,
   ownership, duplicate-key/hash mismatch, and version conflicts require user
   review rather than infinite retry.
