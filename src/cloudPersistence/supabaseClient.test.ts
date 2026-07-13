@@ -2,21 +2,21 @@ import { describe, expect, test, vi } from "vitest";
 import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient, type RawSupabaseClient } from "./supabaseClient";
 
 function rawClient(): RawSupabaseClient & { upsert: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn> } {
-  const upsert = vi.fn(async () => ({ data: null, error: null }));
+  const upsert = vi.fn(() => Promise.resolve({ data: null, error: null }));
   const eq = vi.fn();
   const query = {
     eq: (column: string, value: unknown) => {
       eq(column, value);
       return query;
     },
-    maybeSingle: async () => ({ data: { request_hash: "hash-1" }, error: null }),
+    maybeSingle: () => Promise.resolve({ data: { request_hash: "hash-1" }, error: null }),
   };
   return {
     upsert,
     eq,
     from: vi.fn(() => ({
       upsert: () => ({
-        select: async () => ({ data: [{ id: "remote-1", name: "Daily" }], error: null }),
+        select: () => Promise.resolve({ data: [{ id: "remote-1", name: "Daily" }], error: null }),
         then: (resolve: (value: unknown) => unknown) => Promise.resolve(upsert()).then(resolve),
       }),
       select: () => query,

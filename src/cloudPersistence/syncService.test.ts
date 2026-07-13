@@ -23,12 +23,12 @@ function persistenceClient(failTable?: string): CloudPersistenceClient & { calls
     from(table: string) {
       return {
         select() {
-          const filter = { eq: () => filter, maybeSingle: async () => ({ data: null, error: null }) };
+          const filter = { eq: () => filter, maybeSingle: () => Promise.resolve({ data: null, error: null }) };
           return filter;
         },
-        upsert: vi.fn(async () => {
+        upsert: vi.fn(() => {
           calls.push(table);
-          return failTable === table ? { data: null, error: { message: `${table} failed`, code: "network" } } : { data: null, error: null };
+          return Promise.resolve(failTable === table ? { data: null, error: { message: `${table} failed`, code: "network" } } : { data: null, error: null });
         }),
       };
     },
@@ -42,7 +42,7 @@ function referenceClient(): ReferenceBootstrapClient {
         upsert(rows) {
           const batch = Array.isArray(rows) ? rows : [rows];
           return {
-            select: async () => ({
+            select: () => Promise.resolve({
               data: batch.map((row, index) => ({ id: `remote-${table}-${index}`, name: (row as CloudRow).name })),
               error: null,
             }),
@@ -99,9 +99,9 @@ describe("cloud sync service", () => {
       linkedRecordId: "transfer-1",
     };
     const client = persistenceClient();
-    client.rpc = async (name) => {
+    client.rpc = (name) => {
       client.calls.push(name);
-      return { data: { replayed: false }, error: null };
+      return Promise.resolve({ data: { replayed: false }, error: null });
     };
     const transferFirstQueue = enqueueRecordSync([], transfer, "2026-07-13T00:00:00.000Z");
     const queue = enqueueRecordSync(transferFirstQueue, fee, "2026-07-13T00:00:00.000Z");
@@ -151,7 +151,7 @@ describe("cloud sync service", () => {
   test("does not retry an incomplete reference bootstrap forever without changing local data", async () => {
     const result = await syncLocalChanges(input({
       referenceClient: {
-        from: () => ({ upsert: () => ({ select: async () => ({ data: [], error: null }) }) }),
+        from: () => ({ upsert: () => ({ select: () => Promise.resolve({ data: [], error: null }) }) }),
       },
     }));
 

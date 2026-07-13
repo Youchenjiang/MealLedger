@@ -15,23 +15,23 @@ function client(options: { existing?: CloudRow | null; ledgerVersion?: number; f
   const calls: string[] = [];
   return {
     calls,
-    ...(options.rpc ? { rpc: vi.fn(async () => ({ data: { replayed: false }, error: null })) } : {}),
+    ...(options.rpc ? { rpc: vi.fn(() => Promise.resolve({ data: { replayed: false }, error: null })) } : {}),
     from(table: string) {
       return {
         select() {
           return {
             eq() { return this; },
-            maybeSingle: vi.fn(async () => ({
+            maybeSingle: vi.fn(() => Promise.resolve({
               data: table === "idempotency_keys" ? options.existing ?? null : options.ledgerVersion === undefined ? null : { version: options.ledgerVersion },
               error: null,
             })),
           };
         },
-        upsert: vi.fn(async () => {
+        upsert: vi.fn(() => {
           calls.push(table);
-          return options.failTable === table
+          return Promise.resolve(options.failTable === table
             ? { data: null, error: { message: `${table} failed`, code: "network" } }
-            : { data: null, error: null };
+            : { data: null, error: null });
         }),
       };
     },

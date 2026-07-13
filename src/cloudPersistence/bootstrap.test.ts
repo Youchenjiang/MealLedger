@@ -15,17 +15,17 @@ function client(options: { omitTable?: string } = {}): ReferenceBootstrapClient 
     from(table: string) {
       return {
         upsert: vi.fn((rows: Array<Record<string, unknown>>, upsertOptions?: { onConflict?: string }) => ({
-          select: vi.fn(async () => {
+          select: vi.fn(() => {
             calls.push(table);
             conflicts.push(upsertOptions?.onConflict ?? "");
-            if (options.omitTable === table) return { data: [], error: null };
-            return {
+            if (options.omitTable === table) return Promise.resolve({ data: [], error: null });
+            return Promise.resolve({
               data: rows.map((row, index) => ({
                 id: `remote-${table}-${index}`,
                 name: row.name,
               })),
               error: null,
-            };
+            });
           }),
         })),
       };
