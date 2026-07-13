@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from "react";
 import {
   AlertCircle,
@@ -19,7 +19,7 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
-import { isLocalDevelopmentMode, isSupabaseConfigured } from "./lib/supabase";
+import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
@@ -40,6 +40,9 @@ import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captur
 import { createMealEntry, type MealEntry } from "./captureMedia/meals";
 import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retainTemporaryScan, type TemporaryScan } from "./captureMedia/media";
 import { queueUploadFiles, validateMediaBatch, type UploadQueueItem } from "./captureMedia/upload";
+import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient, type RawSupabaseClient } from "./cloudPersistence/supabaseClient";
+import { enqueueRecordSync, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
+import { enqueueLocalChanges, syncLocalChanges } from "./cloudPersistence/syncService";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -129,6 +132,8 @@ const aliasesStorageKey = "mealledger.taxonomy.aliases";
 const mealsStorageKey = "mealledger.capture.meals";
 const scansStorageKey = "mealledger.capture.temporary-scans";
 const uploadQueueStorageKey = "mealledger.capture.upload-queue";
+const cloudSyncQueueStorageKey = "mealledger.cloud-sync.queue";
+const localDataOwnerStorageKey = "mealledger.local-data-owner";
 
 function draftId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -244,6 +249,26 @@ function readStoredUploadQueue(): UploadQueueItem[] {
     return Array.isArray(parsed) ? parsed as UploadQueueItem[] : [];
   } catch {
     return [];
+  }
+}
+
+function readStoredCloudSyncQueue(): CloudSyncQueueItem[] {
+  try {
+    const stored = window.localStorage.getItem(cloudSyncQueueStorageKey);
+    if (!stored) return [];
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed as CloudSyncQueueItem[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function readLocalDataOwner(): string {
+  try {
+    return window.localStorage.getItem(localDataOwnerStorageKey) ?? "";
+  } catch {
+    return "";
   }
 }
 
@@ -496,7 +521,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, message: authMessage, signIn, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, signIn, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -508,6 +533,9 @@ function AuthenticatedApp() {
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
+  const [cloudSyncQueue, setCloudSyncQueue] = useState<CloudSyncQueueItem[]>(readStoredCloudSyncQueue);
+  const [localDataOwner, setLocalDataOwner] = useState(readLocalDataOwner);
+  const cloudSyncInFlight = useRef(false);
   const route = location.route;
   const draftCount = drafts.length;
   const recordCount = records.length;
@@ -529,10 +557,76 @@ function AuthenticatedApp() {
       window.localStorage.setItem(mealsStorageKey, JSON.stringify(meals));
       window.localStorage.setItem(scansStorageKey, JSON.stringify(scans));
       window.localStorage.setItem(uploadQueueStorageKey, JSON.stringify(uploadQueue));
+      window.localStorage.setItem(cloudSyncQueueStorageKey, JSON.stringify(cloudSyncQueue));
     } catch {
       setPersistenceWarning(true);
     }
-  }, [accounts, auditEvents, meals, onboardingCompleted, records, scans, uploadQueue]);
+  }, [accounts, auditEvents, cloudSyncQueue, meals, onboardingCompleted, records, scans, uploadQueue]);
+
+  useEffect(() => {
+    if (authState !== "signed-in" || !userId) return;
+    const hasLocalData = accounts.length > 0 || records.length > 0 || drafts.length > 0 || meals.length > 0;
+    if (!localDataOwner && (userId === "local-user" || !hasLocalData)) {
+      try {
+        window.localStorage.setItem(localDataOwnerStorageKey, userId);
+      } catch {
+        setPersistenceWarning(true);
+      }
+      setLocalDataOwner(userId);
+    }
+  }, [accounts.length, authState, drafts.length, localDataOwner, meals.length, records.length, userId]);
+
+  const cloudDataOwnerMatches = localDataOwner === userId;
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
+    const now = new Date().toISOString();
+    setCloudSyncQueue((current) => enqueueLocalChanges(current, records, drafts, now));
+  }, [authState, cloudDataOwnerMatches, drafts, records, userId]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline || cloudSyncInFlight.current) {
+      return;
+    }
+
+    if (cloudSyncQueue.every((item) => item.state === "synced")) return;
+
+    cloudSyncInFlight.current = true;
+    const rawClient = supabase as unknown as RawSupabaseClient;
+    const client = createSupabasePersistenceClient(rawClient);
+    const referenceClient = createSupabaseReferenceBootstrapClient(rawClient);
+    const now = new Date().toISOString();
+
+    const run = async () => {
+      const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
+      const tags = [...new Set(records.flatMap((record) => record.tags ?? []).map((value) => value.trim()).filter(Boolean))];
+      const events = [...new Set(records.map((record) => record.event ?? "").map((value) => value.trim()).filter(Boolean))];
+      const result = await syncLocalChanges({
+        client,
+        referenceClient,
+        userId,
+        accounts,
+        categories,
+        tags,
+        events,
+        records,
+        drafts,
+        queue: cloudSyncQueue,
+        now,
+      });
+      setRecords(result.records);
+      setCloudSyncQueue(result.queue);
+    };
+
+    void run().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : "Cloud synchronization failed.";
+      setCloudSyncQueue((current) => current.map((item) => item.state === "pending" || item.state === "retryable-error"
+        ? { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() }
+        : item));
+    }).finally(() => {
+      cloudSyncInFlight.current = false;
+    });
+  }, [accounts, authState, cloudDataOwnerMatches, cloudSyncQueue, drafts, isOnline, records, userId]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -554,13 +648,28 @@ function AuthenticatedApp() {
     window.scrollTo({ left: 0, top: 0 });
   }, [location]);
 
+  const queueRecordBundle = (bundleRecords: LocalLedgerRecord[]) => {
+    const now = new Date().toISOString();
+    setCloudSyncQueue((current) => bundleRecords.reduce(
+      (next, record) => enqueueRecordSync(next, record, now),
+      current,
+    ));
+  };
+
   const statusItems = useMemo(() => {
+    const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
+    const cloudDataBlocked = cloudSyncEnabled && !cloudDataOwnerMatches;
+    const pendingCloudCount = cloudSyncQueue.filter((item) => item.state !== "synced").length;
     const items = [
       {
-        label: isOnline ? "Sync not enabled" : "Offline",
-        detail: isOnline ? "This preview keeps changes on this device." : "Drafts stay visible on this device.",
-        icon: isOnline ? Wifi : WifiOff,
-        tone: "neutral",
+        label: cloudDataBlocked ? "Local data review required" : cloudSyncEnabled ? (pendingCloudCount > 0 ? `${pendingCloudCount} cloud sync pending` : "Cloud sync ready") : (isOnline ? "Sync not enabled" : "Offline"),
+        detail: cloudDataBlocked
+          ? "This signed-in workspace will not claim data from another local user automatically."
+          : cloudSyncEnabled
+          ? (pendingCloudCount > 0 ? "Local changes are queued for the configured Supabase workspace." : "Cloud writes use the authenticated workspace.")
+          : (isOnline ? "This preview keeps changes on this device." : "Drafts stay visible on this device."),
+        icon: cloudDataBlocked || (cloudSyncEnabled && pendingCloudCount > 0) ? CloudOff : (isOnline ? Wifi : WifiOff),
+        tone: cloudDataBlocked || (cloudSyncEnabled && pendingCloudCount > 0) ? "warn" : "neutral",
       },
       {
         label: draftCountLabel(draftCount),
@@ -610,7 +719,7 @@ function AuthenticatedApp() {
     }
 
     return items;
-  }, [draftCount, isOnline, persistenceWarning, recordCount, uploadQueue.length]);
+  }, [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, uploadQueue.length, userId]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -660,6 +769,7 @@ function AuthenticatedApp() {
 
           setRecords((current) => appendIdempotentRecords(current, bundle));
           setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+          queueRecordBundle(bundle.records);
           return true;
         }}
       />
@@ -672,7 +782,7 @@ function AuthenticatedApp() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
+        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, queueRecordBundle, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
       </section>
     </main>
   );
@@ -835,6 +945,7 @@ function renderRoute(
   records: LocalLedgerRecord[],
   setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>,
   setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>,
+  queueRecordBundle: (records: LocalLedgerRecord[]) => void,
   accounts: LocalAccount[],
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
@@ -918,6 +1029,7 @@ function renderRoute(
 
             setRecords((current) => appendIdempotentRecords(current, bundle));
             setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            queueRecordBundle(bundle.records);
             return true;
           }}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
@@ -955,6 +1067,7 @@ function renderRoute(
 
             setRecords((current) => appendIdempotentRecords(current, bundle));
             setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            queueRecordBundle(bundle.records);
             return true;
           }}
           onMergeImportDraft={(row, importId) => {

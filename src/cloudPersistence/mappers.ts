@@ -16,6 +16,19 @@ function isUuid(value: string): boolean {
   return uuidPattern.test(value);
 }
 
+function stableCloudUuid(value: string): string {
+  const seeds = [2166136261, 2246822519, 3266489917, 668265263];
+  const parts = seeds.map((seed) => {
+    let hash = seed;
+    for (const character of value) {
+      hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+    }
+    return hash.toString(16).padStart(8, "0");
+  });
+  const hex = parts.join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 function issue(code: CloudMappingIssue["code"], field: string, message: string): CloudMappingIssue {
   return { code, field, message };
 }
@@ -26,6 +39,18 @@ function reference(
   field: string,
 ): CloudMappingResult<string> {
   const remoteId = values?.[localId] ?? (isUuid(localId) ? localId : undefined);
+  return remoteId
+    ? { ok: true, value: remoteId }
+    : { ok: false, issues: [issue("missing-reference", field, `No cloud reference was resolved for ${localId}.`)] };
+}
+
+function ledgerReference(
+  values: Record<string, string> | undefined,
+  localId: string,
+  userId: string,
+  field: string,
+): CloudMappingResult<string> {
+  const remoteId = values?.[localId] ?? (isUuid(localId) ? localId : stableCloudUuid(`ledger:${userId}:${localId}`));
   return remoteId
     ? { ok: true, value: remoteId }
     : { ok: false, issues: [issue("missing-reference", field, `No cloud reference was resolved for ${localId}.`)] };
@@ -83,7 +108,7 @@ export function mapLedgerRecord(
   references: CloudReferenceMap,
   timezone = "Asia/Taipei",
 ): CloudMappingResult<CloudRecordBundle> {
-  const recordId = reference(references.ledgerRecordIds, record.id, "id");
+  const recordId = ledgerReference(references.ledgerRecordIds, record.id, userId, "id");
   const accountId = reference(references.accountIds, record.accountId, "account_id");
   const amount = money(record.amount, record.currency, "amount", record.kind !== "adjustment");
   const issues = collect([recordId, accountId, amount]);
@@ -162,7 +187,7 @@ export function mapLedgerRecord(
     const allocations = references.refundAllocations?.[record.id];
     if (allocations && allocations.length > 0) {
       for (const allocation of allocations) {
-        const originalId = reference(references.ledgerRecordIds, allocation.originalRecordId, "original_record_id");
+        const originalId = ledgerReference(references.ledgerRecordIds, allocation.originalRecordId, userId, "original_record_id");
         const linkedAmount = money(allocation.amount, allocation.currency, "refund_link.amount", true);
         const allocationIssues = collect([originalId, linkedAmount]);
         if (allocationIssues.length > 0 || !originalId.ok || !linkedAmount.ok) {
@@ -182,7 +207,7 @@ export function mapLedgerRecord(
       if (linkedIds.length !== 1) {
         issues.push(issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple payback links require explicit per-record amounts."));
       } else {
-        const originalId = reference(references.ledgerRecordIds, linkedIds[0], "original_record_id");
+        const originalId = ledgerReference(references.ledgerRecordIds, linkedIds[0], userId, "original_record_id");
         if (!originalId.ok) {
           issues.push(...originalId.issues);
         } else {

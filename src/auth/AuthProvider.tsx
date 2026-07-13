@@ -6,6 +6,7 @@ import { sendMagicLink } from "./authActions";
 
 type AuthContextValue = {
   state: AuthState;
+  userId: string;
   email: string;
   message: string;
   signIn: (email?: string) => Promise<void>;
@@ -20,6 +21,7 @@ function errorMessage(error: unknown): string {
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [state, setState] = useState<AuthState>(isLocalDevelopmentMode ? "signed-out" : "loading");
+  const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
 
@@ -36,11 +38,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setMessage(errorMessage(error));
         return;
       }
+      setUserId(data.session?.user.id ?? "");
       setState(data.session ? "signed-in" : "signed-out");
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) setState(session ? "signed-in" : "signed-out");
+      if (mounted) {
+        setUserId(session?.user.id ?? "");
+        setState(session ? "signed-in" : "signed-out");
+      }
     });
 
     return () => {
@@ -51,6 +57,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const value = useMemo<AuthContextValue>(() => ({
     state,
+    userId,
     email,
     message,
     signIn: async (requestedEmail = "") => {
@@ -59,6 +66,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setMessage("");
 
       if (isLocalDevelopmentMode || !supabase) {
+        setUserId("local-user");
         setState("signed-in");
         return;
       }
@@ -76,6 +84,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     },
     signOut: async () => {
       if (isLocalDevelopmentMode || !supabase) {
+        setUserId("local-user");
         setState("signed-out");
         return;
       }
@@ -86,9 +95,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setMessage(errorMessage(error));
         return;
       }
+      setUserId("");
       setState("signed-out");
     },
-  }), [email, message, state]);
+  }), [email, message, state, userId]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

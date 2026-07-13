@@ -75,7 +75,7 @@ export function enqueueDraftSync(
 export function pendingCloudSyncItems(items: CloudSyncQueueItem[], now: string): CloudSyncQueueItem[] {
   const currentTime = new Date(now).getTime();
   return items.filter((item) => (
-    (item.state === "pending" || item.state === "retryable-error")
+    (item.state === "pending" || item.state === "syncing" || item.state === "retryable-error")
     && (item.nextAttemptAt === null || new Date(item.nextAttemptAt).getTime() <= currentTime)
   ));
 }

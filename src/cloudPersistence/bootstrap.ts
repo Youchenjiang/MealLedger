@@ -92,7 +92,7 @@ export async function bootstrapReferences(
   return {
     ok: true,
     references: {
-      accountIds: accounts.ids,
+      accountIds: Object.fromEntries(input.accounts.map((account) => [account.id, accounts.ids[account.name]])),
       categoryIds: categories.ids,
       tagIds: tags.ids,
       eventIds: events.ids,
