@@ -11,7 +11,7 @@ MealLedger separates structured financial records from large media files. The ba
 | Media object storage | Cloudflare R2 | Original meal photos, receipt images, thumbnails, and future media backups |
 | Server-side integration layer | Supabase Edge Functions | R2 signed URLs, invoice import jobs, AI/OCR calls, provider adapters, and secrets handling |
 | AI provider layer | Edge Function adapters | OCR, natural-language parsing, transaction suggestions, and anomaly drafts |
-| Official invoice provider | Ministry of Finance e-invoice service adapter | Scheduled invoice synchronization and invoice-to-transaction draft generation |
+| Official invoice provider | Ministry of Finance e-invoice service adapter | Future scheduled invoice synchronization and invoice-to-transaction draft generation, only after the invoice spike gates pass |
 
 ## Storage Boundaries
 
@@ -45,6 +45,22 @@ Edge Functions are the only place that may hold service-role keys, R2 credential
 
 Frontend code may call Edge Functions but must not directly access R2 credentials or service-role Supabase keys.
 
+### Official Invoice Provider Boundary
+
+The official invoice integration is deferred behind the [invoice import
+spike](../specs/invoice-import-spike/requirements.md). An adapter may not be
+implemented merely because the API exposes invoice fields. Before production
+access, the project must confirm developer eligibility, required security
+evidence, user consent and six-month re-consent, deletion/stop-use handling,
+required cloud-invoice donation, retention, and data-location disclosures.
+
+Provider credentials and carrier validation secrets belong only in the
+server-side integration boundary. They are never Supabase client settings,
+PWA environment variables, local drafts, or ledger fields. The adapter must
+assume scheduled pull until an official push method is documented, and it must
+keep imported provider snapshots at the source/draft boundary until explicit
+user confirmation.
+
 ## Data Flow
 
 ### Manual Ledger Entry
@@ -73,12 +89,18 @@ Frontend code may call Edge Functions but must not directly access R2 credential
 
 ### Taiwan Cloud Invoice Import
 
-1. Edge Function invoice adapter authenticates with the official invoice provider.
-2. Scheduled sync writes an `invoice_import_runs` row.
-3. Imported invoice headers and line items are stored in invoice tables.
-4. Import logic creates transaction drafts, not official ledger transactions.
-5. User confirmation converts a draft into a `transactions` row and optional links to meals/media.
-6. If the official service later supports push delivery, the adapter can add a webhook-like entry point without changing core ledger tables.
+1. A separately approved server-side adapter authenticates with the official
+   invoice provider after all spike gates pass.
+2. Scheduled sync writes an `invoice_import_runs` row and records consent,
+   authorization, and provider status transitions.
+3. Imported invoice headers and optional line items are stored as immutable
+   provider snapshots.
+4. Import logic creates source payloads and transaction drafts, not official
+   ledger transactions.
+5. User confirmation converts a draft into a `transactions` row and optional
+   links to meals/media.
+6. Any future push entry point must be explicitly supported by the provider;
+   it cannot be inferred from the polling API.
 
 ### AI/OCR Collaboration
 
@@ -109,7 +131,8 @@ This separation keeps accounting exports small and portable while allowing media
 ## Provider Replacement Rules
 
 - Replace media storage by changing `storage_provider`, bucket, and object-key handling behind `media_assets`.
-- Replace invoice providers by adding a new adapter that writes the same invoice tables.
+- Replace invoice providers by adding a new adapter that writes the same
+  provider-neutral source/draft boundary and satisfies the same consent,
+  deletion, audit, and clean-export rules.
 - Replace AI providers by changing Edge Function adapters that still write `ai_imports`.
 - Do not let provider-specific response shapes leak into official ledger tables.
-

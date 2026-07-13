@@ -633,7 +633,7 @@ Batch import resource limits:
 - An offline-only/no-account mode is not promised in the first version because it changes sync, backup, and recovery architecture.
 - V1 scope should prioritize manual ledger correctness: accounts, categories, merchants, transactions, transfers, refunds, fund additions, adjustments, unresolved expenses, basic meal records, clean export, and temporary scan/import drafts.
 - V1 can support cloud AI/OCR as an optional draft helper, but local/offline AI models should be treated as V2+ unless a small reliable implementation is proven.
-- V1 should not include Ministry of Finance cloud invoice sync or bank/account statement API sync as production features. Those integrations should start as separate spike or V2 work because credentials, provider limits, and background sync failure modes are high-risk.
+- V1 should not include Ministry of Finance cloud invoice sync or bank/account statement API sync as production features. Those integrations should start as separate spike or V2 work because credentials, provider limits, and background sync failure modes are high-risk. The [invoice-import-spike](../specs/invoice-import-spike/requirements.md) must pass before provider-specific implementation begins.
 - V1 offline support should cover local capture, local drafts, and queued upload/sync for first-party app data. External provider sync while offline is outside V1.
 - Category defaults should start from the cleaned taxonomy, not every old spreadsheet label. Old labels should be preserved as import aliases unless they are clearly useful as first-class defaults.
 - The app should ship with a clean default taxonomy for new users, covering income categories, expense categories, transfer/funding semantics, common tags, and meal-period tags.
@@ -727,6 +727,20 @@ V1 invoice and statement scope:
 - V1 should not build complex invoice/statement deduplication dashboards or reconciliation workflows.
 - Ministry of Finance cloud invoice sync and bank/account statement API sync remain spike or V2 work.
 - V1 schema and naming should not block future provider sync, but V1 implementation should not build production provider credential flows.
+
+Future official invoice sync has additional product gates beyond API parsing:
+
+- The operating entity must qualify as an official API developer and satisfy
+  the required application and information-security evidence.
+- The product must obtain and periodically renew user consent, preserve consent
+  and usage trails, and support stop-use and deletion requests.
+- A product that provides invoice querying must also provide cloud-invoice
+  donation and mask the final three characters of donated invoice numbers.
+- Any use of imported invoice data for accounting beyond the official invoice
+  service must have separate notice and renewed consent before implementation.
+- Provider credentials and carrier validation secrets must remain server-side;
+  they must not enter browser storage, local drafts, exports, or core ledger
+  records.
 
 ## V1 Accepted Tradeoffs
 
