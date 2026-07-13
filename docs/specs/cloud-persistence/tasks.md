@@ -52,7 +52,7 @@ than being claimed automatically.
 The current branch was re-verified after the meal/media/source queue slice,
 invoice-import spike documentation, and Supabase configuration hardening:
 
-- `npm run test`: 35 files, 197 tests passed.
+- `npm run test`: 35 files, 198 tests passed.
 - `npm run test:coverage`: 83.29% statements, 73.45% branches, 84.45% functions,
   84.63% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
