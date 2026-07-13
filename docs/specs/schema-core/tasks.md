@@ -61,7 +61,9 @@ Expected verification:
 - Canonical SQL: `supabase/schema.sql` and `supabase/migrations/0001_schema_core.sql`.
 - Contract checks: `src/schemaCore/schemaContract.test.ts`.
 - TypeScript domain contracts: `src/schemaCore/contracts.ts`.
-- `npm run test` — 143 tests passed after the completed feature set.
+- Root and nested category names use a generated parent key so NULL roots are
+  also protected by the canonical uniqueness constraint.
+- `npm run test` — 205 tests passed after the completed feature set.
 - `npm run build` and `git diff --check` passed.
 
 ## Environment Boundary

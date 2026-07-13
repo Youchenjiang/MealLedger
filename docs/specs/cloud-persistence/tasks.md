@@ -17,6 +17,7 @@
 - [x] Re-queue edited, voided, and unresolved-converted local targets by version/hash;
       keep successfully synced meal, media, and scan targets closed.
 - [x] Preserve tags, ordinary refund links, and audit history in record mapping.
+- [x] Use the canonical generated category parent key for idempotent root-category upserts.
 - [x] Add an authenticated atomic RPC for transfer bundles and version checks.
 - [x] Connect the adapter to the local queue without changing local-first commit.
 - [x] Add authenticated-style integration tests with a mocked Supabase client.
@@ -52,7 +53,8 @@ than being claimed automatically.
 
 The current branch was re-verified after the meal/media/source queue slice,
 invoice-import spike documentation, Supabase configuration hardening, changed-
-local-target requeue fix, and exact minor-unit aggregation fix:
+local-target requeue fix, exact minor-unit aggregation fix, and category
+uniqueness hardening:
 
 - `npm run test`: 35 files, 205 tests passed.
 - `npm run test:coverage`: 82.96% statements, 73.15% branches, 84.42% functions,
