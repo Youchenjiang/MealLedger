@@ -197,7 +197,7 @@ export function mapMealEntry(
 
 function mapAuditEvent(event: LocalAuditEvent, targetId = event.targetId): CloudRow {
   return {
-    ...(isUuid(event.id) ? { id: event.id } : {}),
+    id: isUuid(event.id) ? event.id : stableCloudUuid(`audit:${event.userId}:${event.id}`),
     user_id: event.userId,
     event_type: event.eventType,
     target_type: event.targetType,

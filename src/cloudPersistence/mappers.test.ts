@@ -91,6 +91,18 @@ describe("cloud row mappers", () => {
     }
   });
 
+  test("maps non-UUID audit ids to stable cloud ids for retries", () => {
+    const first = mapLedgerRecord(record(), "user-1", references);
+    const second = mapLedgerRecord(record(), "user-1", references);
+
+    expect(first).toMatchObject({ ok: true });
+    expect(second).toMatchObject({ ok: true });
+    if (first.ok && second.ok) {
+      expect(first.value.auditEvents[0].id).toBe(second.value.auditEvents[0].id);
+      expect(first.value.auditEvents[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+  });
+
   test("maps a cross-currency transfer with destination amount", () => {
     const result = mapLedgerRecord(record({
       kind: "transfer",
