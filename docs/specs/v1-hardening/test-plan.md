@@ -48,12 +48,13 @@ V1 hardening cannot prove cloud object deletion or live signed-URL revocation be
 
 ## Final Verification Evidence
 
-Verified on 2026-07-13 after cloud-persistence, invoice-spike, sync-requeue,
-exact minor-unit aggregation, and refund-difference import mapping changes:
+Verified on 2026-07-14 after Capture intent-picker, direct meal camera capture, and Settings account-action
+polish, cloud-persistence, invoice-spike, sync-requeue, exact minor-unit
+aggregation, and refund-difference import mapping changes:
 
-- `npm run test`: 213 tests passed across 35 files.
-- `npm run test:coverage`: 83.08% statements, 73.67% branches, 84.37% functions, and 84.16% lines.
-- `npm run test:e2e`: 6 Playwright tests passed.
+- `npm run test`: 215 tests passed across 35 files.
+- `npm run test:coverage`: 81.64% statements, 73.43% branches, 82.58% functions, and 83.08% lines.
+- `npm run test:e2e`: 8 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
-- `git status --short`: clean.
+- `git status --short`: reviewed; the current UI and documentation closeout changes remain uncommitted pending user approval.

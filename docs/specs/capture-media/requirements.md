@@ -32,6 +32,18 @@ THE SYSTEM SHALL treat the image as a temporary ledger-source input by default.
 WHEN the user chooses record meal
 THE SYSTEM SHALL treat the image as a meal photo and allow more than one photo per meal.
 
+WHEN the user records a meal on a device with a camera
+THE SYSTEM SHALL provide a direct camera action with a live preview for one photo and a separate gallery action for selecting multiple photos.
+
+WHEN the browser cannot access a camera or the user denies permission
+THE SYSTEM SHALL explain the failure and keep Choose photos available as the fallback.
+
+WHEN the user adds photos through the camera or gallery action
+THE SYSTEM SHALL append them to the same meal instead of replacing previously selected photos.
+
+WHEN the user saves a meal with multiple photos in current V1
+THE SYSTEM SHALL create one local meal entry and one local media queue item per photo; it SHALL NOT create multiple meals or an official ledger record.
+
 WHEN the user chooses attach photo
 THE SYSTEM SHALL require the user to select or create a target record before the attachment becomes permanent.
 

@@ -85,3 +85,11 @@ Spec 1 ends at local draft review. It deliberately excludes accounting-field acc
 ## Final Verification Evidence
 
 The original app-shell verification is retained as historical evidence. The current branch's consolidated gate, including later specs and hardening reviews, is recorded in `docs/specs/v1-hardening/test-plan.md`.
+
+## Handoff Note
+
+App Shell stops at navigation, local status visibility, and draft review. The
+later `manual-ledger`, `schema-core`, `onboarding`, `capture-media`, and
+`v1-hardening` specs extend this shell without changing the historical App
+Shell boundary. Current UI closeout also keeps account sign-out in Settings,
+not in every page header.

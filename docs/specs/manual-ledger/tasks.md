@@ -2,7 +2,7 @@
 
 ## Current Implementation Boundary
 
-The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account reports, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, provide selectable inline-created income/funding sources, validate CSV files, preview legacy header mappings, classify rows and ambiguous category aliases for review, confirm valid CSV rows through the shared official-record boundary, and offer clean CSV/JSON plus multi-table ZIP exports without media bytes. Cloud sync, scheduled next-cycle generation, durable cross-device review state, media workflows, and advanced debt tracking remain outside this slice.
+The current branch implements the first local Manual Ledger slice. Valid manual entries create official local-only records, persist in browser storage, preserve audit events, expose stable idempotency keys, support local edit/void lifecycle actions, project per-account reports, represent explicitly unavailable expense merchant/item fields with fixed system labels, store recurrence intent with local pause/resume/cancel controls, convert unresolved expenses in place while preserving record identity, provide selectable inline-created income/funding sources, validate CSV files, preview legacy header mappings, classify rows and ambiguous category aliases for review, confirm valid CSV rows through the shared official-record boundary, and offer clean CSV/JSON plus multi-table ZIP exports without media bytes. The Capture shell now uses a compact intent picker, direct camera capture plus gallery multi-select for meals, and account sign-out is available from Settings rather than every page header. Cloud sync, scheduled next-cycle generation, durable cross-device review state, media workflows, and advanced debt tracking remain outside this slice.
 
 ## Task 1: Define Form State And Kind Configuration
 
@@ -135,13 +135,15 @@ Expected verification:
 - no console errors
 - accounting acceptance cases documented or automated
 
-Current slice evidence is recorded in the branch commits and must be rerun after the remaining Manual Ledger tasks are implemented.
+Current slice evidence is recorded below and must be rerun after any further Manual Ledger changes.
 
 Latest verification for the local ledger slice:
 
-- `npm run test`: 116 tests passed.
-- `npm run test:coverage`: 88.06% statements, 79.69% branches, 86.8% functions, and 88.18% lines.
-- `npm run test:e2e`: 4 browser smoke tests passed.
+- Verification date: 2026-07-14.
+- `npm run test`: 215 tests passed across 35 files.
+- `npm run test:coverage`: 81.64% statements, 73.43% branches, 82.58% functions, and 83.08% lines.
+- `npm run test:e2e`: 8 browser smoke tests passed.
 - `npm run build`: passed.
+- `git diff --check`: passed.
 
 The latest verification also covers explicit missing expense merchant/item fields from form validation through local official-record persistence, selectable inline-created income sources, recurrence safety and lifecycle controls, unresolved-expense conversion, CSV validation, legacy header mapping, kind-specific row review, ambiguous category alias suggestions, duplicate review actions, confirmed CSV row writes through the official-record boundary, multiple refund links, per-account multi-currency report projections, and clean CSV/JSON/multi-table ZIP export of active records while excluding voided records and media bytes/base64. ZIP export reports staged progress, and the ZIP manifest and account summary keep local-only opening balances explicit. The Playwright smoke selectors use exact labels so the missing-value checkboxes do not make input selectors ambiguous.

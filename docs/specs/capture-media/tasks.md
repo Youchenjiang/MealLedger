@@ -26,11 +26,12 @@ Expected verification:
 
 ## Task 4: Define Meal Photo Flow — Complete
 
-Specify meal creation with one or more photos.
+Specify meal creation with one or more photos, including a single-photo camera action and a multiple-photo gallery action.
 
 Expected verification:
 
-- One meal can link multiple photos.
+- Camera and gallery selections append to one meal.
+- One meal can link multiple photos without creating a ledger record.
 
 ## Task 5: Define Attachment Flow — Deferred
 
