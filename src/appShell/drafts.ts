@@ -162,6 +162,83 @@ function hasValidFeeAccount(form: DraftForm, accounts: DraftAccount[]): boolean 
   return Boolean(account && account.currency === form.feeCurrency);
 }
 
+function validateExpenseDraft(form: DraftForm): boolean {
+  return hasRequiredFields(form, ["date", "account", "amount", "currency", "category", "counterparty", "itemName"])
+    && isPositiveMoney(form.amount, form.currency)
+    && (!form.counterpartyMissing || form.counterparty === missingCounterpartyLabel)
+    && (!form.itemNameMissing || form.itemName === missingItemNameLabel);
+}
+
+function validateIncomeDraft(form: DraftForm): boolean {
+  return hasRequiredFields(form, ["date", "account", "amount", "currency", "category", "counterparty"])
+    && isPositiveMoney(form.amount, form.currency);
+}
+
+function validateTransferDraft(form: DraftForm, accounts: DraftAccount[]): boolean {
+  const destinationAccount = accountFor(accounts, form.transferAccount);
+  if (!hasCompleteFee(form) || !hasValidFeeAccount(form, accounts) || !destinationAccount || form.account === form.transferAccount) {
+    return false;
+  }
+
+  if (form.transferMode === "same-currency") {
+    return hasRequiredFields(form, ["date", "account", "transferAccount", "amount", "currency"])
+      && isPositiveMoney(form.amount, form.currency)
+      && destinationAccount.currency === form.currency;
+  }
+
+  return hasRequiredFields(form, [
+    "date",
+    "account",
+    "transferAccount",
+    "amount",
+    "currency",
+    "destinationAmount",
+    "destinationCurrency",
+  ])
+    && isPositiveMoney(form.amount, form.currency)
+    && isPositiveMoney(form.destinationAmount, form.destinationCurrency)
+    && destinationAccount.currency === form.destinationCurrency;
+}
+
+function validateRefundDraft(form: DraftForm): boolean {
+  return hasRequiredFields(form, ["date", "account", "amount", "currency", "category", "counterparty", "refundReason"])
+    && isPositiveMoney(form.amount, form.currency)
+    && (form.refundSubtype !== "payback" || Boolean(form.refundLinkedRecordIds?.length || form.refundLinkedRecordId));
+}
+
+function validateFundAdditionDraft(form: DraftForm): boolean {
+  return hasRequiredFields(form, ["date", "account", "amount", "currency", "counterparty"])
+    && isPositiveMoney(form.amount, form.currency);
+}
+
+function validateAdjustmentDraft(form: DraftForm): boolean {
+  return hasRequiredFields(form, ["date", "account", "amount", "currency", "reason"])
+    && isNonZeroMoney(form.amount, form.currency);
+}
+
+function validateUnresolvedExpenseDraft(form: DraftForm): boolean {
+  if (!hasRequiredFields(form, ["account", "amount", "currency", "timePrecision"]) || !isPositiveMoney(form.amount, form.currency)) {
+    return false;
+  }
+
+  if (form.timePrecision === "day") {
+    return Boolean(form.date);
+  }
+
+  return hasRequiredFields(form, ["periodStart", "periodEnd"])
+    && form.periodStart <= form.periodEnd;
+}
+
+const draftValidators: Record<DraftKind, (form: DraftForm, accounts: DraftAccount[]) => boolean> = {
+  expense: (form) => validateExpenseDraft(form),
+  income: (form) => validateIncomeDraft(form),
+  transfer: (form, accounts) => validateTransferDraft(form, accounts),
+  refund: (form) => validateRefundDraft(form),
+  "fund-addition": (form) => validateFundAdditionDraft(form),
+  adjustment: (form) => validateAdjustmentDraft(form),
+  "unresolved-expense": (form) => validateUnresolvedExpenseDraft(form),
+};
+
 export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]): boolean {
   const normalized = normalizeDraftForm(form);
 
@@ -173,63 +250,7 @@ export function canCreateManualDraft(form: DraftForm, accounts: DraftAccount[]):
     return false;
   }
 
-  switch (normalized.kind) {
-    case "expense":
-      return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty", "itemName"])
-        && isPositiveMoney(normalized.amount, normalized.currency)
-        && (!normalized.counterpartyMissing || normalized.counterparty === missingCounterpartyLabel)
-        && (!normalized.itemNameMissing || normalized.itemName === missingItemNameLabel);
-    case "income":
-      return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty"])
-        && isPositiveMoney(normalized.amount, normalized.currency);
-    case "transfer":
-      const destinationAccount = accountFor(accounts, normalized.transferAccount);
-      if (!hasCompleteFee(normalized) || !hasValidFeeAccount(normalized, accounts) || !destinationAccount || normalized.account === normalized.transferAccount) {
-        return false;
-      }
-
-      return normalized.transferMode === "same-currency"
-        ? hasRequiredFields(normalized, ["date", "account", "transferAccount", "amount", "currency"])
-          && isPositiveMoney(normalized.amount, normalized.currency)
-          && destinationAccount.currency === normalized.currency
-        : hasRequiredFields(normalized, [
-            "date",
-            "account",
-            "transferAccount",
-            "amount",
-            "currency",
-            "destinationAmount",
-            "destinationCurrency",
-          ])
-          && isPositiveMoney(normalized.amount, normalized.currency)
-          && isPositiveMoney(normalized.destinationAmount, normalized.destinationCurrency)
-          && destinationAccount.currency === normalized.destinationCurrency;
-    case "refund":
-      return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "category", "counterparty", "refundReason"])
-        && isPositiveMoney(normalized.amount, normalized.currency)
-        && (normalized.refundSubtype !== "payback" || Boolean(normalized.refundLinkedRecordIds?.length || normalized.refundLinkedRecordId));
-    case "fund-addition":
-      return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "counterparty"])
-        && isPositiveMoney(normalized.amount, normalized.currency);
-    case "adjustment":
-      return hasRequiredFields(normalized, ["date", "account", "amount", "currency", "reason"])
-        && isNonZeroMoney(normalized.amount, normalized.currency);
-    case "unresolved-expense":
-      if (!hasRequiredFields(normalized, ["account", "amount", "currency", "timePrecision"])) {
-        return false;
-      }
-
-      if (!isPositiveMoney(normalized.amount, normalized.currency)) {
-        return false;
-      }
-
-      if (normalized.timePrecision === "day") {
-        return Boolean(normalized.date);
-      }
-
-      return hasRequiredFields(normalized, ["periodStart", "periodEnd"])
-        && normalized.periodStart <= normalized.periodEnd;
-  }
+  return draftValidators[normalized.kind](normalized, accounts);
 }
 
 export function canAutoRecordNextCycle(form: DraftForm, accounts: DraftAccount[]): boolean {
