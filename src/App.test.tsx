@@ -410,7 +410,7 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     expect(screen.getByText("Entry cancelled.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Merchant")).toHaveValue("");
+    expect(screen.getByText("Select or add an account to continue")).toBeInTheDocument();
     expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
   });
 

@@ -2388,7 +2388,7 @@ function CapturePage({
               ))}
             </select>
           </label>
-          <fieldset className="entry-details" disabled={!hasSelectedAccount}>
+          {hasSelectedAccount ? <fieldset className="entry-details">
           {needsCategory ? (
             <div className="form-field">
               <label htmlFor="entry-category">
@@ -2688,8 +2688,13 @@ function CapturePage({
               <textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} />
             </label>
           ) : null}
-          </fieldset>
-          {supportsRecurrence ? (
+          </fieldset> : (
+            <div className="entry-details-locked full-span" role="status">
+              <strong>Select or add an account to continue</strong>
+              <span>Category, merchant, item, amount, and recurring settings will appear after an account is selected.</span>
+            </div>
+          )}
+          {supportsRecurrence && hasSelectedAccount ? (
             <fieldset className="recurrence-control full-span" aria-label="Recurrence">
               <legend>Next cycle</legend>
               <label htmlFor="entry-recurrence-choice">
