@@ -175,14 +175,33 @@ export async function persistRecordBundle(
   const replayed = existing?.ok === true && existing.replayed;
 
   if (bundle.transferDetails) {
+    if (!client.rpc) {
+      return {
+        ok: false,
+        failure: {
+          code: "validation",
+          message: "Transfer bundles require the atomic cloud RPC boundary and were kept local-only.",
+          retryable: false,
+          table: "transfer_details",
+        },
+      };
+    }
+
+    const rpcResult = await client.rpc("persist_ledger_record_bundle", {
+      p_request: request,
+      p_ledger_record: bundle.ledgerRecord,
+      p_transfer_details: bundle.transferDetails,
+      p_refund_links: bundle.refundLinks,
+      p_ledger_record_tags: bundle.ledgerRecordTags,
+      p_audit_events: bundle.auditEvents,
+    });
+    if (rpcResult.error) return failure(rpcResult.error, "persist_ledger_record_bundle");
     return {
-      ok: false,
-      failure: {
-        code: "validation",
-        message: "Transfer bundles require the atomic cloud RPC boundary and were kept local-only.",
-        retryable: false,
-        table: "transfer_details",
-      },
+      ok: true,
+      replayed: rpcResult.data && typeof rpcResult.data === "object" && "replayed" in rpcResult.data
+        ? Boolean(rpcResult.data.replayed)
+        : replayed,
+      tables: ["idempotency_keys", "ledger_records", "transfer_details", ...(bundle.refundLinks.length > 0 ? ["refund_links"] : []), ...(bundle.ledgerRecordTags.length > 0 ? ["ledger_record_tags"] : []), ...(bundle.auditEvents.length > 0 ? ["audit_events"] : [])],
     };
   }
 

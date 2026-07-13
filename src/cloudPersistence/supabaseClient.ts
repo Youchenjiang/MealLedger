@@ -24,6 +24,7 @@ type RawTable = {
 
 export type RawSupabaseClient = {
   from(table: string): RawTable;
+  rpc(name: string, args: Record<string, unknown>): PromiseLike<RawResult>;
 };
 
 function normalizeError(error: RawError): CloudMutationError | null {
@@ -62,6 +63,9 @@ export function createSupabasePersistenceClient(raw: RawSupabaseClient): CloudPe
           return filter;
         },
       };
+    },
+    async rpc(name, args) {
+      return normalizeResult(await raw.rpc(name, args));
     },
   };
 }

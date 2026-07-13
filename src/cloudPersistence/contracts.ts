@@ -75,4 +75,5 @@ export type CloudTable = {
 
 export type CloudPersistenceClient = {
   from(table: string): CloudTable;
+  rpc?(name: string, args: Record<string, unknown>): PromiseLike<CloudMutationResult> | CloudMutationResult;
 };
