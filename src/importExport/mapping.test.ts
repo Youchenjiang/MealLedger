@@ -25,6 +25,12 @@ describe("import header mapping", () => {
     expect(result.mapping).toMatchObject({ date: "日期", account: "原帳戶", amount: "金額", target_account: "後帳戶" });
   });
 
+  test("maps refund difference handling to its canonical field", () => {
+    const result = mapImportHeaders(["日期", "退款差額處理"]);
+
+    expect(result.mapping).toEqual({ date: "日期", refund_excess_handling: "退款差額處理" });
+  });
+
   test("reports unmapped and duplicate canonical columns", () => {
     const result = mapImportHeaders(["date", "日期", "金額", "未知欄位"]);
 
