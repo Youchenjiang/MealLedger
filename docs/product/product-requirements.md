@@ -76,7 +76,7 @@ Additional official-record requirements:
 
 ### Ledger Records
 
-`transactions` are the official accounting records. They hold amount, account, category, merchant, time, note, and transfer relationships. These records are the source of truth for ledger export and reports.
+`ledger_records` are the official accounting records in the canonical schema. Product copy may call them transactions. They hold amount, account, category, merchant, time, note, and transfer relationships. These records are the source of truth for ledger export and reports.
 
 Time fields should preserve both absolute and local context:
 
