@@ -60,4 +60,14 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("asset.user_id = auth.uid()");
     expect(schemaSql).toContain("public.media_link_target_owned(target_type, target_id, auth.uid())");
   });
+
+  test("checks ownership on both sides of relational links", () => {
+    expect(schemaSql).toContain("account.user_id = auth.uid()");
+    expect(schemaSql).toContain("original_record.user_id = auth.uid()");
+    expect(schemaSql).toContain("tag.user_id = auth.uid()");
+    expect(schemaSql).toContain("meal.user_id = auth.uid()");
+    expect(schemaSql).toContain("source.user_id = auth.uid()");
+    expect(schemaSql).toContain("target_record_id is null or exists (select 1 from public.ledger_records record");
+    expect(schemaSql).toContain("fee_ledger_record_id is null or exists (select 1 from public.ledger_records fee_record");
+  });
 });

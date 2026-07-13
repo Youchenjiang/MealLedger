@@ -623,16 +623,76 @@ alter table public.idempotency_keys enable row level security;
 create policy profiles_owner on public.profiles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy accounts_owner on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy categories_owner on public.categories for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy aliases_owner on public.category_aliases for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy aliases_owner on public.category_aliases for all
+using (
+  auth.uid() = user_id
+  and (category_id is null or exists (select 1 from public.categories category where category.id = category_id and category.user_id = auth.uid()))
+)
+with check (
+  auth.uid() = user_id
+  and (category_id is null or exists (select 1 from public.categories category where category.id = category_id and category.user_id = auth.uid()))
+);
 create policy merchants_owner on public.merchants for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy events_owner on public.events for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy tags_owner on public.tags for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy ledger_records_owner on public.ledger_records for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy transfer_details_owner on public.transfer_details for all using (exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())) with check (exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid()));
-create policy refund_links_owner on public.refund_links for all using (exists (select 1 from public.ledger_records record where record.id = refund_record_id and record.user_id = auth.uid())) with check (exists (select 1 from public.ledger_records record where record.id = refund_record_id and record.user_id = auth.uid()));
-create policy ledger_record_tags_owner on public.ledger_record_tags for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy ledger_records_owner on public.ledger_records for all
+using (
+  auth.uid() = user_id
+  and exists (select 1 from public.accounts account where account.id = account_id and account.user_id = auth.uid())
+  and (category_id is null or exists (select 1 from public.categories category where category.id = category_id and category.user_id = auth.uid()))
+  and (merchant_id is null or exists (select 1 from public.merchants merchant where merchant.id = merchant_id and merchant.user_id = auth.uid()))
+  and (event_id is null or exists (select 1 from public.events event_row where event_row.id = event_id and event_row.user_id = auth.uid()))
+)
+with check (
+  auth.uid() = user_id
+  and exists (select 1 from public.accounts account where account.id = account_id and account.user_id = auth.uid())
+  and (category_id is null or exists (select 1 from public.categories category where category.id = category_id and category.user_id = auth.uid()))
+  and (merchant_id is null or exists (select 1 from public.merchants merchant where merchant.id = merchant_id and merchant.user_id = auth.uid()))
+  and (event_id is null or exists (select 1 from public.events event_row where event_row.id = event_id and event_row.user_id = auth.uid()))
+);
+create policy transfer_details_owner on public.transfer_details for all
+using (
+  exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
+  and exists (select 1 from public.accounts account where account.id = destination_account_id and account.user_id = auth.uid())
+  and (fee_ledger_record_id is null or exists (select 1 from public.ledger_records fee_record where fee_record.id = fee_ledger_record_id and fee_record.user_id = auth.uid()))
+)
+with check (
+  exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
+  and exists (select 1 from public.accounts account where account.id = destination_account_id and account.user_id = auth.uid())
+  and (fee_ledger_record_id is null or exists (select 1 from public.ledger_records fee_record where fee_record.id = fee_ledger_record_id and fee_record.user_id = auth.uid()))
+);
+create policy refund_links_owner on public.refund_links for all
+using (
+  exists (select 1 from public.ledger_records refund_record where refund_record.id = refund_record_id and refund_record.user_id = auth.uid())
+  and exists (select 1 from public.ledger_records original_record where original_record.id = original_record_id and original_record.user_id = auth.uid())
+)
+with check (
+  exists (select 1 from public.ledger_records refund_record where refund_record.id = refund_record_id and refund_record.user_id = auth.uid())
+  and exists (select 1 from public.ledger_records original_record where original_record.id = original_record_id and original_record.user_id = auth.uid())
+);
+create policy ledger_record_tags_owner on public.ledger_record_tags for all
+using (
+  auth.uid() = user_id
+  and exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
+  and exists (select 1 from public.tags tag where tag.id = tag_id and tag.user_id = auth.uid())
+)
+with check (
+  auth.uid() = user_id
+  and exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
+  and exists (select 1 from public.tags tag where tag.id = tag_id and tag.user_id = auth.uid())
+);
 create policy meals_owner on public.meal_entries for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy meal_transaction_links_owner on public.meal_transaction_links for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy meal_transaction_links_owner on public.meal_transaction_links for all
+using (
+  auth.uid() = user_id
+  and exists (select 1 from public.meal_entries meal where meal.id = meal_id and meal.user_id = auth.uid())
+  and exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
+)
+with check (
+  auth.uid() = user_id
+  and exists (select 1 from public.meal_entries meal where meal.id = meal_id and meal.user_id = auth.uid())
+  and exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
+);
 create policy media_assets_owner on public.media_assets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy media_links_owner on public.media_links for all
 using (
@@ -646,6 +706,16 @@ with check (
   and public.media_link_target_owned(target_type, target_id, auth.uid())
 );
 create policy source_payloads_owner on public.source_payloads for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy drafts_owner on public.drafts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy drafts_owner on public.drafts for all
+using (
+  auth.uid() = user_id
+  and (source_payload_id is null or exists (select 1 from public.source_payloads source where source.id = source_payload_id and source.user_id = auth.uid()))
+  and (target_record_id is null or exists (select 1 from public.ledger_records record where record.id = target_record_id and record.user_id = auth.uid()))
+)
+with check (
+  auth.uid() = user_id
+  and (source_payload_id is null or exists (select 1 from public.source_payloads source where source.id = source_payload_id and source.user_id = auth.uid()))
+  and (target_record_id is null or exists (select 1 from public.ledger_records record where record.id = target_record_id and record.user_id = auth.uid()))
+);
 create policy audit_events_owner on public.audit_events for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy idempotency_keys_owner on public.idempotency_keys for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
