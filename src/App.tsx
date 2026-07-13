@@ -2964,21 +2964,6 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
   const [balance, setBalance] = useState("");
   const [balanceDate, setBalanceDate] = useState(localDate());
   const [accountError, setAccountError] = useState("");
-  const dataTools = [
-    {
-      title: "CSV import review",
-      detail: "Map spreadsheet columns, preview errors, and create drafts before ledger writes.",
-    },
-    {
-      title: "Clean ledger export",
-      detail: "Export CSV, JSON, or spreadsheet-style ZIP without bundling receipt or meal photo bytes.",
-    },
-    {
-      title: "Statement reconciliation",
-      detail: "Bank or wallet records can later match confirmed transactions.",
-    },
-  ];
-
   const handleAccountSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAccountError("");
@@ -3065,7 +3050,7 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
         ) : null}
       </Panel>
       <AccountSyncPanel />
-      <ImportExportPanel dataTools={dataTools} accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+      <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
     </section>
   );
 }
@@ -3087,8 +3072,7 @@ function AccountSyncPanel() {
   );
 }
 
-function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
-  dataTools: Array<{ title: string; detail: string }>;
+function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDraft }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
@@ -3266,24 +3250,7 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
       </div>
       {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
       </section>
-      <section className="portability-section" aria-labelledby="related-tools-heading">
-        <h3 id="related-tools-heading">Related tools</h3>
-        <DataToolList items={dataTools} />
-      </section>
     </Panel>
-  );
-}
-
-function DataToolList({ items }: Readonly<{ items: Array<{ title: string; detail: string }> }>) {
-  return (
-    <dl className="settings-list" aria-label="Data tool status">
-      {items.map((item) => (
-        <div key={item.title}>
-          <dt>{item.title}</dt>
-          <dd>{item.detail}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 
