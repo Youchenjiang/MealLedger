@@ -211,6 +211,30 @@ export function validateImportRows(rows: NormalizedImportRow[], accounts: Import
       }
     }
 
+    const feeFields = ["fee_account", "fee_amount", "fee_currency", "fee_category"] as const;
+    const hasFeeField = feeFields.some((field) => Boolean(text(normalized, field)));
+    if (hasFeeField) {
+      if (kind !== "transfer") {
+        errors.push("Transfer fee fields are only valid for transfer rows.");
+      }
+
+      const feeAccountName = required(normalized, "fee_account", "Fee account", errors);
+      const feeAccount = accountFor(accounts, feeAccountName);
+      if (feeAccountName && !feeAccount) {
+        errors.push(`Fee account '${feeAccountName}' does not exist.`);
+      }
+
+      const feeCurrency = text(normalized, "fee_currency") || feeAccount?.currency || "";
+      if (!text(normalized, "fee_currency") && feeAccount) normalized.fee_currency = feeAccount.currency;
+      const feeAmount = positiveAmount(text(normalized, "fee_amount"), "Fee amount", errors);
+      if (feeAmount) normalized.fee_amount = feeAmount;
+      if (feeCurrency && feeAmount) validatePrecision(feeAmount, feeCurrency, errors);
+      if (feeAccount && feeCurrency && feeAccount.currency !== feeCurrency) {
+        errors.push("Fee currency must match the fee account currency.");
+      }
+      required(normalized, "fee_category", "Fee category", errors);
+    }
+
     return { rowNumber: index + 2, ok: errors.length === 0, normalized, errors };
   });
 }

@@ -52,4 +52,26 @@ describe("imported record draft conversion", () => {
       refundLinkedRecordIds: ["expense-1", "expense-2"],
     });
   });
+
+  test("preserves grouping metadata from an imported row", () => {
+    const draft = toImportedTransactionDraft({
+      kind: "income",
+      date: "2026-07-13",
+      account: "Cash",
+      amount: "80",
+      currency: "TWD",
+      category: "Salary",
+      source: "Part-time job",
+      tags: "monthly|work",
+      event: "summer",
+      source_label: "statement",
+    }, "import-income-4");
+
+    expect(draft).toMatchObject({
+      tags: ["monthly", "work"],
+      event: "summer",
+      sourceLabel: "statement",
+      counterparty: "Part-time job",
+    });
+  });
 });
