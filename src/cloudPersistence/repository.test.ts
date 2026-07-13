@@ -6,11 +6,12 @@ function bundle(): CloudRecordBundle {
   return {
     ledgerRecord: { id: "record-1", user_id: "user-1", kind: "expense", amount_minor: "100" },
     refundLinks: [],
+    ledgerRecordTags: [],
     auditEvents: [{ id: "audit-1", user_id: "user-1" }],
   };
 }
 
-function client(options: { existing?: CloudRow | null; failTable?: string } = {}): CloudPersistenceClient & { calls: string[] } {
+function client(options: { existing?: CloudRow | null; ledgerVersion?: number; failTable?: string } = {}): CloudPersistenceClient & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
@@ -19,7 +20,10 @@ function client(options: { existing?: CloudRow | null; failTable?: string } = {}
         select() {
           return {
             eq() { return this; },
-            maybeSingle: vi.fn(async () => ({ data: options.existing ?? null, error: null })),
+            maybeSingle: vi.fn(async () => ({
+              data: table === "idempotency_keys" ? options.existing ?? null : options.ledgerVersion === undefined ? null : { version: options.ledgerVersion },
+              error: null,
+            })),
           };
         },
         upsert: vi.fn(async () => {
@@ -50,12 +54,23 @@ describe("cloud persistence repository", () => {
     expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events"]);
   });
 
+  test("persists record tags after the ledger parent", async () => {
+    const mock = client();
+    const result = await persistRecordBundle(mock, request, {
+      ...bundle(),
+      ledgerRecordTags: [{ user_id: "user-1", ledger_record_id: "record-1", tag_id: "tag-1" }],
+    });
+
+    expect(result).toMatchObject({ ok: true, tables: ["idempotency_keys", "ledger_records", "ledger_record_tags", "audit_events"] });
+    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "ledger_record_tags", "audit_events"]);
+  });
+
   test("replays the same idempotency key without writing again", async () => {
     const mock = client({ existing: { request_hash: "hash-1" } });
     const result = await persistRecordBundle(mock, request, bundle());
 
-    expect(result).toEqual({ ok: true, replayed: true, tables: ["idempotency_keys"] });
-    expect(mock.calls).toEqual([]);
+    expect(result).toMatchObject({ ok: true, replayed: true, tables: ["idempotency_keys", "ledger_records", "audit_events"] });
+    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events"]);
   });
 
   test("rejects a reused key with a different request hash", async () => {
@@ -92,5 +107,27 @@ describe("cloud persistence repository", () => {
     expect(sourceResult).toMatchObject({ ok: true, tables: ["source_payloads", "media_links"] });
     expect(mealResult).toMatchObject({ ok: true, tables: ["meal_entries", "meal_transaction_links", "media_links"] });
     expect(mock.calls).toEqual(["media_assets", "source_payloads", "media_links", "meal_entries", "meal_transaction_links", "media_links"]);
+  });
+
+  test("rejects a stale ledger version before overwriting the cloud row", async () => {
+    const mock = client({ ledgerVersion: 4 });
+    const result = await persistRecordBundle(mock, request, {
+      ...bundle(),
+      ledgerRecord: { ...bundle().ledgerRecord, version: 2 },
+    });
+
+    expect(result).toMatchObject({ ok: false, failure: { code: "conflict", table: "ledger_records" } });
+    expect(mock.calls).toEqual([]);
+  });
+
+  test("does not pretend a transfer is synced without an atomic RPC boundary", async () => {
+    const mock = client();
+    const result = await persistRecordBundle(mock, request, {
+      ...bundle(),
+      transferDetails: { ledger_record_id: "record-1", destination_account_id: "account-2" },
+    });
+
+    expect(result).toMatchObject({ ok: false, failure: { code: "validation", table: "transfer_details" } });
+    expect(mock.calls).toEqual([]);
   });
 });

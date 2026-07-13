@@ -133,6 +133,24 @@ describe("cloud row mappers", () => {
     if (result.ok) expect(result.value.refundLinks).toHaveLength(2);
   });
 
+  test("maps ordinary refunds and tags to canonical links", () => {
+    const result = mapLedgerRecord(record({
+      kind: "refund",
+      refundSubtype: "refund",
+      refundLinkedRecordId: "record-original-1",
+      tags: ["Subscription"],
+    }), "user-1", {
+      ...references,
+      tagIds: { Subscription: "77777777-7777-4777-8777-777777777777" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.refundLinks[0]).toMatchObject({ refund_subtype: "refund" });
+      expect(result.value.ledgerRecordTags[0]).toMatchObject({ tag_id: "77777777-7777-4777-8777-777777777777" });
+    }
+  });
+
   test("rejects ambiguous multiple payback links without allocations", () => {
     const result = mapLedgerRecord(record({
       kind: "refund",

@@ -61,6 +61,7 @@ function input(overrides: Partial<Parameters<typeof syncLocalChanges>[0]> = {}) 
     categories: ["Daily"],
     tags: [],
     events: [],
+    auditEvents: [],
     records: [baseRecord],
     drafts: [],
     meals: [] as MealEntry[],

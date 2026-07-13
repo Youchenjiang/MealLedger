@@ -15,6 +15,17 @@ describe("cloud sync queue", () => {
     expect(enqueueDraftSync(withDraft, draft, now)).toHaveLength(2);
   });
 
+  test("reopens a synced record when its version or updated time changes", () => {
+    const queued = enqueueRecordSync([], { ...record, status: "synced" }, now);
+    expect(queued).toEqual([]);
+
+    const local = enqueueRecordSync([], { ...record, status: "local-only" }, now);
+    const synced = markCloudSynced(local, local[0].id, now);
+    const edited = enqueueRecordSync(synced, { ...record, status: "synced", version: 2, updatedAt: "2026-07-13T01:00:00.000Z" }, now);
+
+    expect(edited[0]).toMatchObject({ state: "pending", requestHash: "record-1:2:2026-07-13T01:00:00.000Z", lastError: "" });
+  });
+
   test("tracks attempt state and removes synced items from pending work", () => {
     const queued = enqueueRecordSync([], record, now);
     const syncing = markCloudSyncing(queued, queued[0].id, now);
