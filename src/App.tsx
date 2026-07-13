@@ -917,7 +917,7 @@ function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSa
           ) : null}
           <div className="onboarding-actions">
             <button className="primary-action" type="submit">Create account</button>
-            <button className="quiet-action" type="button" onClick={onComplete}>Skip setup</button>
+            <button className="quiet-action" type="button" onClick={onComplete}>Browse workspace</button>
           </div>
           {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
         </form>
@@ -2225,7 +2225,13 @@ function CapturePage({
           })}
         </div>
       </Panel>
-      {captureIntent === "manual-ledger" ? <Panel title="Manual ledger record" eyebrow="Official local record">
+      {captureIntent === "manual-ledger" ? <Panel key="manual-ledger" title="Manual ledger record" eyebrow="Official local record">
+        {accounts.length === 0 ? (
+          <p className="account-required" role="status">
+            <strong>Account required</strong>
+            Create an account before saving a ledger record.
+          </p>
+        ) : null}
         <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
           {!isUnresolvedExpense ? (
             <label>
@@ -2673,7 +2679,7 @@ function CapturePage({
           </div>
         </form>
       </Panel> : captureIntent === "record-meal" ? (
-        <Panel title="Record meal" eyebrow="Optional meal record">
+        <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
           <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
           <form className="meal-form" onSubmit={handleMealSubmit}>
             <label>
@@ -2696,7 +2702,7 @@ function CapturePage({
           </form>
         </Panel>
       ) : captureIntent === "scan-invoice" || captureIntent === "scan-receipt" ? (
-        <Panel title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
+        <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
           <p className="panel-copy">Scans remain temporary until you explicitly keep or discard them. They do not create official ledger records.</p>
           <form className="meal-form" onSubmit={handleScanSubmit}>
             <label>
@@ -2724,7 +2730,7 @@ function CapturePage({
           </div>
         </Panel>
       ) : (
-        <Panel title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
+        <Panel key="capture-workspace" title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
           <p className="panel-copy">This source is kept separate from the official ledger. The workflow will ask for confirmation before any ledger record is created.</p>
           <p className="field-help">Select Manual ledger when you want to record an official transaction now.</p>
         </Panel>

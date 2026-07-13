@@ -16,7 +16,7 @@ function collectBrowserErrors(page: Page) {
 async function openWorkspace(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Open workspace" }).click();
-  const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const skipSetup = page.getByRole("button", { name: "Browse workspace" });
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
   }
@@ -145,7 +145,7 @@ test("keeps account option controls compact and aligned", async ({ page }) => {
     expect(control.height).toBeLessThanOrEqual(20);
   }
 
-  await page.getByRole("button", { name: "Skip setup" }).click();
+  await page.getByRole("button", { name: "Browse workspace" }).click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settingsControls = await page.locator(".draft-form input[type='checkbox'], .draft-form input[type='radio']").evaluateAll((elements) =>
     elements.map((element) => {

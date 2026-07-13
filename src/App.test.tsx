@@ -15,7 +15,7 @@ function testLocalDate() {
 
 async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /open workspace/i }));
-  const skipSetup = screen.queryByRole("button", { name: "Skip setup" });
+  const skipSetup = screen.queryByRole("button", { name: "Browse workspace" });
   if (skipSetup) {
     await user.click(skipSetup);
   }
@@ -699,6 +699,9 @@ describe("App shell draft flow", () => {
     await goToCapture(user);
 
     expect(screen.getByLabelText("Account")).toBeDisabled();
+    expect(screen.getByText("Account required")).toBeInTheDocument();
+    expect(screen.getByText("Create an account before saving a ledger record.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add an account first" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Add account" }));
 
     await user.type(screen.getByLabelText("New account name"), "Travel cash");

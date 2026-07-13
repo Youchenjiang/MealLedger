@@ -660,6 +660,21 @@ h2 {
   font-weight: 700;
 }
 
+.account-required {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid #e5c46d;
+  border-radius: 8px;
+  color: #66501f;
+  background: #fff9e9;
+}
+
+.account-required strong {
+  color: #3b3120;
+}
+
 .draft-form .checkbox-field {
   display: flex;
   align-items: center;
