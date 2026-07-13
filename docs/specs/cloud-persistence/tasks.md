@@ -21,6 +21,8 @@
 - [x] Preserve tags, ordinary refund links, and audit history in record mapping.
 - [x] Preserve transfer-fee ledger links and enqueue fee records before their
       transfer parent.
+- [x] Reorder already-persisted pending queues at execution time so an older
+      queue cannot process a transfer before its linked fee record.
 - [x] Use the canonical generated category parent key for idempotent root-category upserts.
 - [x] Map temporary receipt and invoice links to the canonical media-link enum values.
 - [x] Add an authenticated atomic RPC for transfer bundles and version checks.
@@ -79,7 +81,8 @@ keeps production deployments fail-closed when cloud authentication is missing.
   edited-record requeue, missing tags/refund/audit mappings, and transfer
   atomicity.
 - Cloud sync hardening also covers version-scoped record idempotency keys and
-  transfer-fee dependency ordering; both paths have regression tests.
+  transfer-fee dependency ordering, including recovery for already-persisted
+  queues; all paths have regression tests.
 - Exact minor-unit aggregation prevents decimal report/export drift, and
   successful meal/media/source sync items no longer reopen on a later queue
   pass.

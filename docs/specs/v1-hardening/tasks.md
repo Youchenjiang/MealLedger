@@ -62,6 +62,7 @@ Three read-only reviews were requested before closeout:
 | Follow-up UX / sync | Draft review had no completion path; failed/conflict sync states lacked a user-facing action; edited synced records could still look synced | Fixed with Continue in Capture, Confirm to ledger, Sync attention with retry, conflict visibility, and local-only status on edits |
 | Follow-up QA / sync | Successful meal, media, and scan writes could be reopened when their local status hash changed after sync | Fixed by keeping synced targets closed and adding regression coverage for all three target types |
 | Schema / cloud follow-up | Record edits reused create idempotency keys; transfer fees were not linked or ordered before their parent | Fixed with version-scoped action keys, fee-link mapping, dependency ordering, and sync regressions |
+| Persisted queue follow-up | An older local queue could still contain a transfer before its linked fee | Fixed by ordering pending items again at sync execution time and adding a persisted-queue regression |
 
 Non-blocking follow-ups remain outside this hardening pass:
 
