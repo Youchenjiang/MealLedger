@@ -52,6 +52,7 @@ jobs:
               "ops",
               "test",
               "privacy",
+              "quality",
               "workflow",
               "spec",
               "decisions",
