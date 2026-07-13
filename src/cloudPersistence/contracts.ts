@@ -30,6 +30,12 @@ export type CloudRecordBundle = {
   auditEvents: CloudRow[];
 };
 
+export type CloudMealBundle = {
+  mealEntry: CloudRow;
+  transactionLinks: CloudRow[];
+  mediaLinks: CloudRow[];
+};
+
 export type CloudPersistenceInput = {
   userId: string;
   timezone?: string;

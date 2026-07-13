@@ -565,7 +565,7 @@ function AuthenticatedApp() {
 
   useEffect(() => {
     if (authState !== "signed-in" || !userId) return;
-    const hasLocalData = accounts.length > 0 || records.length > 0 || drafts.length > 0 || meals.length > 0;
+    const hasLocalData = accounts.length > 0 || records.length > 0 || drafts.length > 0 || meals.length > 0 || scans.length > 0 || uploadQueue.length > 0;
     if (!localDataOwner && (userId === "local-user" || !hasLocalData)) {
       try {
         window.localStorage.setItem(localDataOwnerStorageKey, userId);
@@ -574,15 +574,15 @@ function AuthenticatedApp() {
       }
       setLocalDataOwner(userId);
     }
-  }, [accounts.length, authState, drafts.length, localDataOwner, meals.length, records.length, userId]);
+  }, [accounts.length, authState, drafts.length, localDataOwner, meals.length, records.length, scans.length, uploadQueue.length, userId]);
 
   const cloudDataOwnerMatches = localDataOwner === userId;
 
   useEffect(() => {
     if (!isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
     const now = new Date().toISOString();
-    setCloudSyncQueue((current) => enqueueLocalChanges(current, records, drafts, now));
-  }, [authState, cloudDataOwnerMatches, drafts, records, userId]);
+    setCloudSyncQueue((current) => enqueueLocalChanges(current, records, drafts, meals, uploadQueue, scans, now));
+  }, [authState, cloudDataOwnerMatches, drafts, meals, records, scans, uploadQueue, userId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline || cloudSyncInFlight.current) {
@@ -611,10 +611,16 @@ function AuthenticatedApp() {
         events,
         records,
         drafts,
+        meals,
+        media: uploadQueue,
+        scans,
         queue: cloudSyncQueue,
         now,
       });
       setRecords(result.records);
+      setMeals(result.meals);
+      setUploadQueue(result.media);
+      setScans(result.scans);
       setCloudSyncQueue(result.queue);
     };
 
@@ -626,7 +632,7 @@ function AuthenticatedApp() {
     }).finally(() => {
       cloudSyncInFlight.current = false;
     });
-  }, [accounts, authState, cloudDataOwnerMatches, cloudSyncQueue, drafts, isOnline, records, userId]);
+  }, [accounts, authState, cloudDataOwnerMatches, cloudSyncQueue, drafts, isOnline, meals, records, scans, uploadQueue, userId]);
 
   useEffect(() => {
     const handlePopState = () => setLocation(routeFromLocation());
@@ -1939,10 +1945,11 @@ function CapturePage({
     }
     setMealError("");
     const mealId = `meal-${crypto.randomUUID()}`;
+    const queuedMedia = queueUploadFiles(mealPhotoFiles, mealId, "meal-photo");
     const meal = createMealEntry({
       occurredAt: mealOccurredAt,
       note: mealNote,
-      mediaAssetIds: mealPhotoFiles.map((file, index) => `local-photo-${index}-${file.name}`),
+      mediaAssetIds: queuedMedia.map((item) => item.id),
     }, mealId);
 
     if (!meal) {
@@ -1951,7 +1958,7 @@ function CapturePage({
     }
 
     onSaveMeal(meal);
-    onQueueUploads(queueUploadFiles(mealPhotoFiles, mealId));
+    onQueueUploads(queuedMedia);
     setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
     setMealNote("");
     setMealPhotoFiles([]);
@@ -1972,17 +1979,22 @@ function CapturePage({
       return;
     }
 
+    const queuedMedia = queueUploadFiles(
+      scanFiles,
+      `scan-${crypto.randomUUID()}`,
+      captureIntent === "scan-invoice" ? "invoice-scan" : "receipt-scan",
+    );
     const nextScans = scanFiles
       .map((file, index) => createTemporaryScan({
         intent: captureIntent,
         fileName: file.name,
         mimeType: file.type,
         byteSize: file.size,
-      }, `scan-${crypto.randomUUID()}-${index}`))
+      }, queuedMedia[index].id))
       .filter((scan): scan is TemporaryScan => Boolean(scan));
 
     onSaveScans(nextScans);
-    onQueueUploads(queueUploadFiles(scanFiles, "scan"));
+    onQueueUploads(queuedMedia);
     setScanFiles([]);
     setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
   };

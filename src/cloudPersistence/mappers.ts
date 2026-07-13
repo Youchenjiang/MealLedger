@@ -2,7 +2,11 @@ import { parseMinorUnits } from "../manualLedger/money";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalAuditEvent, LocalLedgerRecord } from "../manualLedger/records";
 import type { TransactionDraft } from "../appShell/drafts";
+import type { MealEntry } from "../captureMedia/meals";
+import type { TemporaryScan } from "../captureMedia/media";
+import type { UploadMediaKind, UploadQueueItem } from "../captureMedia/upload";
 import type {
+  CloudMealBundle,
   CloudMappingIssue,
   CloudMappingResult,
   CloudRecordBundle,
@@ -16,7 +20,7 @@ function isUuid(value: string): boolean {
   return uuidPattern.test(value);
 }
 
-function stableCloudUuid(value: string): string {
+export function stableCloudUuid(value: string): string {
   const seeds = [2166136261, 2246822519, 3266489917, 668265263];
   const parts = seeds.map((seed) => {
     let hash = seed;
@@ -86,6 +90,108 @@ export function mapDraft(draft: TransactionDraft, userId: string): CloudRow {
     draft_type: "manual",
     state: "pending",
     candidate_json: draft,
+  };
+}
+
+export function mapMediaAsset(item: UploadQueueItem, userId: string, now: string): CloudRow {
+  const kind: UploadMediaKind = item.kind ?? "attachment";
+  const mediaId = stableCloudUuid(`media:${userId}:${item.id}`);
+  const temporary = kind === "receipt-scan" || kind === "invoice-scan";
+  return {
+    id: mediaId,
+    user_id: userId,
+    storage_provider: "r2",
+    bucket: "pending",
+    object_key: `pending/${userId}/${mediaId}/${encodeURIComponent(item.name)}`,
+    content_type: item.type || "application/octet-stream",
+    byte_size: item.size,
+    captured_at: now,
+    media_kind: kind,
+    retention_kind: temporary ? "temporary-scan" : "permanent",
+    expires_at: temporary ? new Date(new Date(now).getTime() + 24 * 60 * 60 * 1000).toISOString() : null,
+    upload_status: item.status === "failed" ? "failed" : item.status === "uploaded" ? "uploaded" : "queued",
+  };
+}
+
+export function mapTemporaryScan(scan: TemporaryScan, userId: string): CloudRow {
+  const sourceId = stableCloudUuid(`source:${userId}:${scan.id}`);
+  return {
+    id: sourceId,
+    user_id: userId,
+    source_type: scan.intent === "scan-invoice" ? "invoice-scan" : "receipt-scan",
+    source_state: scan.state === "retained" ? "retained" : scan.state,
+    payload_json: {
+      file_name: scan.fileName,
+      mime_type: scan.mimeType,
+      byte_size: scan.byteSize,
+      intent: scan.intent,
+    },
+    expires_at: scan.expiresAt,
+    ...(scan.state === "discarded" ? { discarded_at: scan.createdAt } : {}),
+  };
+}
+
+export function mapTemporaryScanMediaLink(scan: TemporaryScan, userId: string): CloudRow {
+  return {
+    user_id: userId,
+    media_asset_id: stableCloudUuid(`media:${userId}:${scan.id}`),
+    target_type: "source-payload",
+    target_id: stableCloudUuid(`source:${userId}:${scan.id}`),
+    link_intent: "ledger-source",
+  };
+}
+
+export function mapMealEntry(
+  meal: MealEntry,
+  userId: string,
+  references: CloudReferenceMap,
+  timezone = "Asia/Taipei",
+): CloudMappingResult<CloudMealBundle> {
+  const mealDate = new Date(meal.occurredAt);
+  if (!Number.isFinite(mealDate.getTime())) {
+    return { ok: false, issues: [issue("invalid-date", "meal.occurredAt", "Meal time is not a valid date.")] };
+  }
+
+  const mealId = stableCloudUuid(`meal:${userId}:${meal.id}`);
+  const transactionLinks: CloudRow[] = [];
+  const linkIssues: CloudMappingIssue[] = [];
+  for (const transactionId of meal.transactionIds) {
+    const remoteId = ledgerReference(references.ledgerRecordIds, transactionId, userId, "meal_transaction_links.ledger_record_id");
+    if (!remoteId.ok) {
+      linkIssues.push(...remoteId.issues);
+    } else {
+      transactionLinks.push({
+        user_id: userId,
+        meal_id: mealId,
+        ledger_record_id: remoteId.value,
+        link_reason: "manual",
+        confirmed_at: meal.status === "synced" ? meal.occurredAt : null,
+      });
+    }
+  }
+
+  const mediaLinks: CloudRow[] = meal.mediaAssetIds.map((mediaAssetId) => ({
+    user_id: userId,
+    media_asset_id: stableCloudUuid(`media:${userId}:${mediaAssetId}`),
+    target_type: "meal",
+    target_id: mealId,
+    link_intent: "meal-photo",
+  }));
+
+  if (linkIssues.length > 0) return { ok: false, issues: linkIssues };
+  return {
+    ok: true,
+    value: {
+      mealEntry: {
+        id: mealId,
+        user_id: userId,
+        meal_at: mealDate.toISOString(),
+        timezone,
+        description: meal.note || null,
+      },
+      transactionLinks,
+      mediaLinks,
+    },
   };
 }
 

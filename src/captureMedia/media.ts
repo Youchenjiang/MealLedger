@@ -8,6 +8,7 @@ export type TemporaryScan = {
   mimeType: string;
   byteSize: number;
   state: TemporaryScanState;
+  cloudStatus?: "local-only" | "synced";
   createdAt: string;
   expiresAt: string | null;
 };
@@ -36,6 +37,7 @@ export function createTemporaryScan(input: TemporaryScanInput, id: string, now =
     mimeType: input.mimeType.trim() || "application/octet-stream",
     byteSize: input.byteSize,
     state: "temporary",
+    cloudStatus: "local-only",
     createdAt,
     expiresAt,
   };

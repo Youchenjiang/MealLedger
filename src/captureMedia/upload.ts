@@ -7,9 +7,13 @@ export type UploadFileLike = {
   size: number;
 };
 
+export type UploadMediaKind = "meal-photo" | "receipt-scan" | "invoice-scan" | "attachment";
+
 export type UploadQueueItem = UploadFileLike & {
   id: string;
   status: "queued" | "local-only" | "uploaded" | "failed";
+  kind?: UploadMediaKind;
+  metadataStatus?: "local-only" | "synced";
 };
 
 export type UploadBatchValidation = {
@@ -31,8 +35,13 @@ export function validateMediaBatch(files: readonly UploadFileLike[]): UploadBatc
   return { ok: true, totalBytes };
 }
 
-export function queueUploadFiles(files: readonly UploadFileLike[], prefix: string): UploadQueueItem[] {
-  return files.map((file, index) => ({ ...file, id: `${prefix}-${index}-${file.name}`, status: "queued" }));
+export function queueUploadFiles(files: readonly UploadFileLike[], prefix: string, kind?: UploadMediaKind): UploadQueueItem[] {
+  return files.map((file, index) => ({
+    ...file,
+    id: `${prefix}-${index}-${file.name}`,
+    status: "queued",
+    ...(kind ? { kind } : {}),
+  }));
 }
 
 export type SignedUploadClient = {

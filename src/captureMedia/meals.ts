@@ -4,7 +4,7 @@ export type MealEntry = {
   note: string;
   transactionIds: string[];
   mediaAssetIds: string[];
-  status: "local-only";
+  status: "local-only" | "synced";
 };
 
 export type MealEntryInput = {

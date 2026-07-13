@@ -1,5 +1,6 @@
 import type {
   CloudPersistenceClient,
+  CloudMealBundle,
   CloudRecordBundle,
   CloudRow,
   CloudMutationError,
@@ -91,6 +92,52 @@ export async function persistDraft(
 ): Promise<CloudPersistenceResult> {
   const error = await upsert(client, "drafts", row, "id");
   return error ?? { ok: true, replayed: false, tables: ["drafts"] };
+}
+
+export async function persistMediaAsset(
+  client: CloudPersistenceClient,
+  row: CloudRow,
+): Promise<CloudPersistenceResult> {
+  const error = await upsert(client, "media_assets", row, "id");
+  return error ?? { ok: true, replayed: false, tables: ["media_assets"] };
+}
+
+export async function persistSourcePayload(
+  client: CloudPersistenceClient,
+  row: CloudRow,
+  mediaLinks: CloudRow[] = [],
+): Promise<CloudPersistenceResult> {
+  const error = await upsert(client, "source_payloads", row, "id");
+  if (error) return error;
+  if (mediaLinks.length > 0) {
+    const mediaError = await upsert(client, "media_links", mediaLinks, "media_asset_id,target_type,target_id,link_intent");
+    if (mediaError) return mediaError;
+    return { ok: true, replayed: false, tables: ["source_payloads", "media_links"] };
+  }
+  return { ok: true, replayed: false, tables: ["source_payloads"] };
+}
+
+export async function persistMealBundle(
+  client: CloudPersistenceClient,
+  bundle: CloudMealBundle,
+): Promise<CloudPersistenceResult> {
+  const mealError = await upsert(client, "meal_entries", bundle.mealEntry, "id");
+  if (mealError) return mealError;
+  const tables = ["meal_entries"];
+
+  if (bundle.transactionLinks.length > 0) {
+    const transactionError = await upsert(client, "meal_transaction_links", bundle.transactionLinks, "meal_id,ledger_record_id");
+    if (transactionError) return transactionError;
+    tables.push("meal_transaction_links");
+  }
+
+  if (bundle.mediaLinks.length > 0) {
+    const mediaError = await upsert(client, "media_links", bundle.mediaLinks, "media_asset_id,target_type,target_id,link_intent");
+    if (mediaError) return mediaError;
+    tables.push("media_links");
+  }
+
+  return { ok: true, replayed: false, tables };
 }
 
 export async function persistRecordBundle(

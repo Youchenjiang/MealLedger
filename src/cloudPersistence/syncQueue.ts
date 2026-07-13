@@ -1,8 +1,11 @@
 import type { TransactionDraft } from "../appShell/drafts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
+import type { MealEntry } from "../captureMedia/meals";
+import type { TemporaryScan } from "../captureMedia/media";
+import type { UploadQueueItem } from "../captureMedia/upload";
 import { nextRetryAt } from "./retry";
 
-export type CloudSyncTarget = "record" | "draft";
+export type CloudSyncTarget = "record" | "draft" | "meal" | "media" | "scan";
 export type CloudSyncState = "pending" | "syncing" | "retryable-error" | "failed" | "conflict" | "synced";
 
 export type CloudSyncQueueItem = {
@@ -63,6 +66,72 @@ export function enqueueDraftSync(
     actionType: "draft-create",
     idempotencyKey: `draft:${draft.id}`,
     requestHash: `draft:${draft.id}`,
+    state: "pending",
+    attempts: 0,
+    nextAttemptAt: now,
+    lastError: "",
+    createdAt: now,
+    updatedAt: now,
+  }];
+}
+
+export function enqueueMealSync(
+  current: CloudSyncQueueItem[],
+  meal: MealEntry,
+  now: string,
+): CloudSyncQueueItem[] {
+  if (existing(current, "meal", meal.id)) return current;
+  return [...current, {
+    id: queueId("meal", meal.id),
+    target: "meal",
+    targetId: meal.id,
+    actionType: "meal-create",
+    idempotencyKey: `meal:${meal.id}`,
+    requestHash: `meal:${meal.id}:${meal.occurredAt}:${meal.note}`,
+    state: "pending",
+    attempts: 0,
+    nextAttemptAt: now,
+    lastError: "",
+    createdAt: now,
+    updatedAt: now,
+  }];
+}
+
+export function enqueueMediaSync(
+  current: CloudSyncQueueItem[],
+  media: UploadQueueItem,
+  now: string,
+): CloudSyncQueueItem[] {
+  if (existing(current, "media", media.id)) return current;
+  return [...current, {
+    id: queueId("media", media.id),
+    target: "media",
+    targetId: media.id,
+    actionType: "media-metadata",
+    idempotencyKey: `media:${media.id}`,
+    requestHash: `media:${media.id}:${media.size}:${media.type}`,
+    state: "pending",
+    attempts: 0,
+    nextAttemptAt: now,
+    lastError: "",
+    createdAt: now,
+    updatedAt: now,
+  }];
+}
+
+export function enqueueScanSync(
+  current: CloudSyncQueueItem[],
+  scan: TemporaryScan,
+  now: string,
+): CloudSyncQueueItem[] {
+  if (existing(current, "scan", scan.id)) return current;
+  return [...current, {
+    id: queueId("scan", scan.id),
+    target: "scan",
+    targetId: scan.id,
+    actionType: "source-payload",
+    idempotencyKey: `scan:${scan.id}`,
+    requestHash: `scan:${scan.id}:${scan.state}:${scan.expiresAt ?? ""}`,
     state: "pending",
     attempts: 0,
     nextAttemptAt: now,
