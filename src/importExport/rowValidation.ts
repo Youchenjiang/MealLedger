@@ -38,7 +38,7 @@ function required(row: NormalizedImportRow, field: NormalizedImportField, label:
 }
 
 function normalizeDate(value: string): string | null {
-  const match = /^(\d{4})[-/](\d{2})[-/](\d{2})$/.exec(value.trim());
+  const match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(value.trim());
   if (!match) {
     return null;
   }
@@ -51,7 +51,7 @@ function normalizeDate(value: string): string | null {
     return null;
   }
 
-  return `${match[1]}-${match[2]}-${match[3]}`;
+  return `${match[1]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function normalizeAmount(value: string): string | null {

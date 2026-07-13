@@ -16,6 +16,14 @@ describe("import row validation", () => {
     expect(result.normalized).toMatchObject({ date: "2026-07-13", amount: "1000", currency: "TWD" });
   });
 
+  test("pads single-digit imported month and day values", () => {
+    const [result] = validateImportRows([
+      { kind: "expense", date: "2026/7/5", account: "Cash", amount: "10", category: "Daily", merchant: "Store", item_name: "Tea" },
+    ], accounts);
+
+    expect(result).toMatchObject({ ok: true, normalized: { date: "2026-07-05" } });
+  });
+
   test("requires kind and kind-specific fields instead of guessing", () => {
     const [result] = validateImportRows([{ date: "2026-07-13", account: "Cash", amount: "70" }], accounts);
 
