@@ -51,8 +51,8 @@ V1 hardening cannot prove cloud object deletion or live signed-URL revocation be
 Verified on 2026-07-13 after cloud-persistence, invoice-spike, sync-requeue,
 exact minor-unit aggregation, and refund-difference import mapping changes:
 
-- `npm run test`: 212 tests passed across 35 files.
-- `npm run test:coverage`: 83.11% statements, 73.64% branches, 84.60% functions, and 84.23% lines.
+- `npm run test`: 213 tests passed across 35 files.
+- `npm run test:coverage`: 83.08% statements, 73.67% branches, 84.37% functions, and 84.16% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
