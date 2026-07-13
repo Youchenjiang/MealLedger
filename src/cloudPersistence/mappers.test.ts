@@ -207,7 +207,12 @@ describe("cloud row mappers", () => {
     expect(result).toMatchObject({ user_id: "user-1", source_type: "receipt-scan", source_state: "temporary" });
     expect(result.payload_json).toEqual(expect.objectContaining({ file_name: "receipt.jpg", byte_size: 1024 }));
     expect(JSON.stringify(result)).not.toContain("ledger_records");
-    expect(mapTemporaryScanMediaLink(scan, "user-1")).toMatchObject({ target_type: "source-payload", link_intent: "ledger-source" });
+    expect(mapTemporaryScanMediaLink(scan, "user-1")).toMatchObject({ target_type: "source-payload", link_intent: "receipt-evidence" });
+
+    expect(mapTemporaryScanMediaLink({ ...scan, intent: "scan-invoice" }, "user-1")).toMatchObject({
+      target_type: "source-payload",
+      link_intent: "invoice-scan",
+    });
   });
 
   test("maps a meal with multiple photos and transaction links", () => {

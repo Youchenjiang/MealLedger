@@ -137,7 +137,7 @@ export function mapTemporaryScanMediaLink(scan: TemporaryScan, userId: string): 
     media_asset_id: stableCloudUuid(`media:${userId}:${scan.id}`),
     target_type: "source-payload",
     target_id: stableCloudUuid(`source:${userId}:${scan.id}`),
-    link_intent: "ledger-source",
+    link_intent: scan.intent === "scan-invoice" ? "invoice-scan" : "receipt-evidence",
   };
 }
 

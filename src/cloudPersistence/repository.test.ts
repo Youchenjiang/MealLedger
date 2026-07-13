@@ -95,7 +95,7 @@ describe("cloud persistence repository", () => {
     const sourceResult = await persistSourcePayload(
       mock,
       { id: "source-1", user_id: "user-1", source_state: "temporary" },
-      [{ media_asset_id: "media-1", target_type: "source-payload", target_id: "source-1", link_intent: "ledger-source", user_id: "user-1" }],
+      [{ media_asset_id: "media-1", target_type: "source-payload", target_id: "source-1", link_intent: "receipt-evidence", user_id: "user-1" }],
     );
     const meal: CloudMealBundle = {
       mealEntry: { id: "meal-1", user_id: "user-1", meal_at: "2026-07-13T04:30:00.000Z" },
