@@ -34,9 +34,10 @@ function uniqueNames(names: string[] | undefined): string[] {
   return [...new Set((names ?? []).map((name) => name.trim()).filter(Boolean))];
 }
 
-function rowsForNames(userId: string, names: string[]): CloudRow[] {
+function rowsForNames(userId: string, names: string[], includeRootParent = false): CloudRow[] {
   return names.map((name) => ({
     user_id: userId,
+    ...(includeRootParent ? { parent_id: null } : {}),
     name,
     kind_scope: "both",
   }));
@@ -46,10 +47,11 @@ async function upsertAndMap(
   client: ReferenceBootstrapClient,
   table: string,
   rows: CloudRow[],
+  onConflict = "user_id,name",
 ): Promise<{ ok: true; ids: Record<string, string> } | ReferenceBootstrapFailure> {
   if (rows.length === 0) return { ok: true, ids: {} };
 
-  const result = await client.from(table).upsert(rows, { onConflict: "user_id,name" }).select("id,name");
+  const result = await client.from(table).upsert(rows, { onConflict }).select("id,name");
   if (result.error) {
     return { ok: false, table, message: result.error.message };
   }
@@ -80,7 +82,12 @@ export async function bootstrapReferences(
   const accounts = await upsertAndMap(client, "accounts", accountRows);
   if (!accounts.ok) return accounts;
 
-  const categories = await upsertAndMap(client, "categories", rowsForNames(input.userId, uniqueNames(input.categories)));
+  const categories = await upsertAndMap(
+    client,
+    "categories",
+    rowsForNames(input.userId, uniqueNames(input.categories), true),
+    "user_id,parent_key,name",
+  );
   if (!categories.ok) return categories;
 
   const tags = await upsertAndMap(client, "tags", rowsForNames(input.userId, uniqueNames(input.tags)));

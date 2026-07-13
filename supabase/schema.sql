@@ -45,6 +45,7 @@ create table public.categories (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   parent_id uuid references public.categories(id) on delete set null,
+  parent_key uuid generated always as (coalesce(parent_id, '00000000-0000-0000-0000-000000000000'::uuid)) stored,
   name text not null check (length(trim(name)) > 0),
   kind_scope public.kind_scope not null default 'expense',
   is_system_default boolean not null default false,
@@ -53,7 +54,7 @@ create table public.categories (
   deleted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (user_id, parent_id, name)
+  unique (user_id, parent_key, name)
 );
 
 create table public.category_aliases (

@@ -6,15 +6,18 @@ const accounts: LocalAccount[] = [
   { id: "account-local-1", name: "Cash", currency: "TWD" },
 ];
 
-function client(options: { omitTable?: string } = {}): ReferenceBootstrapClient & { calls: string[] } {
+function client(options: { omitTable?: string } = {}): ReferenceBootstrapClient & { calls: string[]; conflicts: string[] } {
   const calls: string[] = [];
+  const conflicts: string[] = [];
   return {
     calls,
+    conflicts,
     from(table: string) {
       return {
-        upsert: vi.fn((rows: Array<Record<string, unknown>>, _options?: { onConflict?: string }) => ({
+        upsert: vi.fn((rows: Array<Record<string, unknown>>, upsertOptions?: { onConflict?: string }) => ({
           select: vi.fn(async () => {
             calls.push(table);
+            conflicts.push(upsertOptions?.onConflict ?? "");
             if (options.omitTable === table) return { data: [], error: null };
             return {
               data: rows.map((row, index) => ({
@@ -27,7 +30,7 @@ function client(options: { omitTable?: string } = {}): ReferenceBootstrapClient 
         })),
       };
     },
-  } as ReferenceBootstrapClient & { calls: string[] };
+  } as ReferenceBootstrapClient & { calls: string[]; conflicts: string[] };
 }
 
 describe("cloud reference bootstrap", () => {
@@ -51,6 +54,7 @@ describe("cloud reference bootstrap", () => {
       },
     });
     expect(mock.calls).toEqual(["accounts", "categories", "tags", "events"]);
+    expect(mock.conflicts).toEqual(["user_id,name", "user_id,parent_key,name", "user_id,name", "user_id,name"]);
   });
 
   test("does not continue when a reference response is incomplete", async () => {

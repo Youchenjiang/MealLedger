@@ -41,6 +41,8 @@ describe("schema core contract", () => {
 
     expect(schemaSql).toContain("amount_minor bigint not null");
     expect(schemaSql).toContain("time_precision in ('day', 'month', 'period')");
+    expect(schemaSql).toContain("parent_key uuid generated always as");
+    expect(schemaSql).toContain("unique (user_id, parent_key, name)");
     expect(schemaSql).toContain("create table public.transfer_details");
     expect(schemaSql).toContain("create table public.refund_links");
   });
