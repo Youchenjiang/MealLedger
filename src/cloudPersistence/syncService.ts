@@ -48,13 +48,24 @@ export type SyncLocalChangesResult = {
   queue: CloudSyncQueueItem[];
 };
 
+function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedgerRecord[]): CloudSyncQueueItem[] {
+  const recordById = new Map(records.map((record) => [record.id, record]));
+  return [...items].sort((left, right) => {
+    const leftRecord = left.target === "record" ? recordById.get(left.targetId) : undefined;
+    const rightRecord = right.target === "record" ? recordById.get(right.targetId) : undefined;
+    const leftIsFee = Boolean(leftRecord?.linkedRecordId);
+    const rightIsFee = Boolean(rightRecord?.linkedRecordId);
+    return Number(rightIsFee) - Number(leftIsFee);
+  });
+}
+
 export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<SyncLocalChangesResult> {
   let nextRecords = input.records;
   let nextMeals = input.meals;
   let nextMedia = input.media;
   let nextScans = input.scans;
   let nextQueue = input.queue;
-  const pending = pendingCloudSyncItems(input.queue, input.now);
+  const pending = orderPendingSyncItems(pendingCloudSyncItems(input.queue, input.now), input.records);
   if (pending.length === 0) return { records: nextRecords, meals: nextMeals, media: nextMedia, scans: nextScans, queue: nextQueue };
 
   const bootstrap = await bootstrapReferences(input.referenceClient, {

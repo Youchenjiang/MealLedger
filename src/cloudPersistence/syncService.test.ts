@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import type { CloudPersistenceClient, CloudRow } from "./contracts";
 import { enqueueLocalChanges, syncLocalChanges } from "./syncService";
+import { enqueueRecordSync } from "./syncQueue";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
 import type { MealEntry } from "../captureMedia/meals";
@@ -79,6 +80,40 @@ describe("cloud sync service", () => {
 
     expect(result.records[0].status).toBe("synced");
     expect(result.queue[0].state).toBe("synced");
+  });
+
+  test("reorders a persisted transfer queue behind its linked fee record", async () => {
+    const transfer: LocalLedgerRecord = {
+      ...baseRecord,
+      id: "transfer-1",
+      kind: "transfer",
+      transferAccountId: "account-2",
+      transferAccountName: "Bank",
+      destinationAmount: "100",
+      destinationCurrency: "TWD",
+    };
+    const fee: LocalLedgerRecord = {
+      ...baseRecord,
+      id: "fee-1",
+      amount: "5",
+      linkedRecordId: "transfer-1",
+    };
+    const client = persistenceClient();
+    client.rpc = async (name) => {
+      client.calls.push(name);
+      return { data: { replayed: false }, error: null };
+    };
+    const transferFirstQueue = enqueueRecordSync([], transfer, "2026-07-13T00:00:00.000Z");
+    const queue = enqueueRecordSync(transferFirstQueue, fee, "2026-07-13T00:00:00.000Z");
+    const result = await syncLocalChanges(input({
+      client,
+      accounts: [account, { id: "account-2", name: "Bank", currency: "TWD" }],
+      records: [transfer, fee],
+      queue,
+    }));
+
+    expect(client.calls.indexOf("ledger_records")).toBeLessThan(client.calls.indexOf("persist_ledger_record_bundle"));
+    expect(result.records.every((record) => record.status === "synced")).toBe(true);
   });
 
   test("resyncs an edited record with a version-scoped idempotency key", async () => {
