@@ -40,8 +40,8 @@ Verification snapshot on 2026-07-13 after the cloud-persistence slice,
 invoice-import spike documentation, auth configuration hardening, and the
 changed-local-target requeue fix:
 
-- `npm run test`: 201 tests passed across 35 files.
-- `npm run test:coverage`: 83.39% statements, 73.60% branches, 84.47% functions, and 84.74% lines.
+- `npm run test`: 202 tests passed across 35 files.
+- `npm run test:coverage`: 83.52% statements, 73.06% branches, 84.38% functions, and 84.86% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
@@ -60,6 +60,7 @@ Three read-only reviews were requested before closeout:
 | UX / first-use | Local media queue stored metadata only; storage failures were silent; local-only scope was easy to over-read | Fixed with visible media metadata and storage warnings; scope documented as local-only |
 | QA / accounting | Income and fund-addition export mismatch; precision used floating-point arithmetic; relationship constraints were incomplete | Fixed with source round-trip fixtures, minor-unit arithmetic, and schema triggers/policies |
 | Responsive / privacy | Media links did not validate parent ownership; Edge Function column differed from schema; cloud cleanup was not implemented | Fixed ownership and column mismatch; cloud upload/deletion explicitly deferred |
+| Follow-up UX / sync | Draft review had no completion path; failed/conflict sync states lacked a user-facing action; edited synced records could still look synced | Fixed with Continue in Capture, Confirm to ledger, Sync attention with retry, conflict visibility, and local-only status on edits |
 
 Non-blocking follow-ups remain outside this hardening pass:
 
