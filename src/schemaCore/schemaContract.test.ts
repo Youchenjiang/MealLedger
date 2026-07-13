@@ -59,6 +59,9 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("create or replace function public.persist_ledger_record_bundle");
     expect(schemaSql).toContain("asset.user_id = auth.uid()");
     expect(schemaSql).toContain("public.media_link_target_owned(target_type, target_id, auth.uid())");
+    expect(schemaSql).toContain("create trigger categories_parent_owned");
+    expect(schemaSql).toContain("create or replace function public.audit_event_target_owned");
+    expect(schemaSql).toContain("public.audit_event_target_owned(target_type, target_id, auth.uid())");
   });
 
   test("checks ownership on both sides of relational links", () => {

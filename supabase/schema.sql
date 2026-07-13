@@ -300,6 +300,27 @@ begin
 end;
 $$;
 
+create or replace function public.validate_category_parent()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if new.parent_id is not null and not exists (
+    select 1 from public.categories parent
+    where parent.id = new.parent_id and parent.user_id = new.user_id
+  ) then
+    raise exception 'category parent must belong to the same user';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger categories_parent_owned
+before insert or update of parent_id, user_id on public.categories
+for each row execute function public.validate_category_parent();
+
 do $$
 declare
   table_name text;
@@ -444,6 +465,27 @@ as $$
     when 'ledger-record' then exists (select 1 from public.ledger_records where id = p_target_id and user_id = p_user_id)
     when 'draft' then exists (select 1 from public.drafts where id = p_target_id and user_id = p_user_id)
     when 'source-payload' then exists (select 1 from public.source_payloads where id = p_target_id and user_id = p_user_id)
+    else false
+  end;
+$$;
+
+create or replace function public.audit_event_target_owned(p_target_type text, p_target_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security invoker
+set search_path = public
+as $$
+  select case p_target_type
+    when 'account' then exists (select 1 from public.accounts where id = p_target_id and user_id = p_user_id)
+    when 'category' then exists (select 1 from public.categories where id = p_target_id and user_id = p_user_id)
+    when 'merchant' then exists (select 1 from public.merchants where id = p_target_id and user_id = p_user_id)
+    when 'event' then exists (select 1 from public.events where id = p_target_id and user_id = p_user_id)
+    when 'tag' then exists (select 1 from public.tags where id = p_target_id and user_id = p_user_id)
+    when 'ledger-record' then exists (select 1 from public.ledger_records where id = p_target_id and user_id = p_user_id)
+    when 'meal' then exists (select 1 from public.meal_entries where id = p_target_id and user_id = p_user_id)
+    when 'media-asset' then exists (select 1 from public.media_assets where id = p_target_id and user_id = p_user_id)
+    when 'source-payload' then exists (select 1 from public.source_payloads where id = p_target_id and user_id = p_user_id)
+    when 'draft' then exists (select 1 from public.drafts where id = p_target_id and user_id = p_user_id)
     else false
   end;
 $$;
@@ -717,5 +759,7 @@ with check (
   and (source_payload_id is null or exists (select 1 from public.source_payloads source where source.id = source_payload_id and source.user_id = auth.uid()))
   and (target_record_id is null or exists (select 1 from public.ledger_records record where record.id = target_record_id and record.user_id = auth.uid()))
 );
-create policy audit_events_owner on public.audit_events for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy audit_events_owner on public.audit_events for all
+using (auth.uid() = user_id and public.audit_event_target_owned(target_type, target_id, auth.uid()))
+with check (auth.uid() = user_id and public.audit_event_target_owned(target_type, target_id, auth.uid()));
 create policy idempotency_keys_owner on public.idempotency_keys for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
