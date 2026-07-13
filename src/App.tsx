@@ -464,7 +464,7 @@ function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (ite
   );
 }
 
-function WorkspaceHeader({ route, statusItems, onSignOut }: Readonly<{ route: AppRoute; statusItems: StatusItem[]; onSignOut: () => Promise<void> }>) {
+function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -472,10 +472,6 @@ function WorkspaceHeader({ route, statusItems, onSignOut }: Readonly<{ route: Ap
           <p className="eyebrow">Personal finance workspace</p>
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
-        <button className="secondary-action" type="button" onClick={() => { void onSignOut(); }}>
-          <LogOut size={18} aria-hidden="true" />
-          Sign out
-        </button>
       </header>
       <StatusStrip items={statusItems} />
     </section>
@@ -817,8 +813,8 @@ function AuthenticatedApp() {
       <Sidebar route={route} navigate={navigate} />
 
       <section className="workspace">
-        <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, draftToEdit, setDraftToEdit, records, setRecords, setAuditEvents, queueRecordBundle, cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"), (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())), accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
+        <WorkspaceHeader route={route} statusItems={statusItems} />
+        {renderRoute(route, drafts, setDrafts, draftToEdit, setDraftToEdit, records, setRecords, setAuditEvents, queueRecordBundle, cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"), (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())), accounts, setAccounts, navigate, () => setOnboardingOpen(true), signOut, (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
       </section>
     </main>
   );
@@ -987,6 +983,7 @@ function renderRoute(
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
   onReopenOnboarding: () => void,
+  onSignOut: () => Promise<void>,
   onSaveMeal: (meal: MealEntry) => void,
   scans: TemporaryScan[],
   onSaveScans: (scans: TemporaryScan[]) => void,
@@ -1178,6 +1175,7 @@ function renderRoute(
             return true;
           }}
           onReopenOnboarding={onReopenOnboarding}
+          onSignOut={onSignOut}
         />
       );
     default:
@@ -1703,6 +1701,7 @@ function AmountField({
   onChange: (value: string) => void;
 }) {
   const steps = [-1000, -100, -10, 10, 100, 1000];
+  const visibleSteps = value.trim() || allowNegative ? steps : steps.filter((step) => step > 0);
   const currentAmount = Number(value);
 
   return (
@@ -1722,8 +1721,8 @@ function AmountField({
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
         />
-        <div className="amount-steps" aria-label={`${label} quick amount changes`}>
-          {steps.map((step) => (
+        <div className={`amount-steps ${visibleSteps.length === 3 ? "positive-only" : ""}`} aria-label={`${label} quick amount changes`}>
+          {visibleSteps.map((step) => (
             <button
               key={step}
               className="amount-step"
@@ -1744,11 +1743,15 @@ function AmountField({
 function QuickAccountSetup({
   accountName,
   currency,
+  accountType = "cash",
+  allowNegativeBalance = true,
   initialBalance,
   initialBalanceDate,
   error,
   onAccountNameChange,
   onCurrencyChange,
+  onAccountTypeChange = () => undefined,
+  onAllowNegativeBalanceChange = () => undefined,
   onInitialBalanceChange,
   onInitialBalanceDateChange,
   onConfirm,
@@ -1756,20 +1759,32 @@ function QuickAccountSetup({
 }: {
   accountName: string;
   currency: string;
+  accountType?: string;
+  allowNegativeBalance?: boolean;
   initialBalance: string;
   initialBalanceDate: string;
   error: string;
   onAccountNameChange: (value: string) => void;
   onCurrencyChange: (value: string) => void;
+  onAccountTypeChange?: (value: string) => void;
+  onAllowNegativeBalanceChange?: (value: boolean) => void;
   onInitialBalanceChange: (value: string) => void;
   onInitialBalanceDateChange: (value: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
-    <section className="quick-account" aria-label="Quick account setup">
+    <div className="quick-account-backdrop">
+    <section className="quick-account" aria-label="Add account" role="dialog" aria-modal="true">
+      <header className="quick-account-heading">
+        <div>
+          <span className="eyebrow">New account</span>
+          <h3>Add an account</h3>
+        </div>
+        <p>Set the account details before using it in this record.</p>
+      </header>
       <label>
-        <span>New account name</span>
+        <span>Account name</span>
         <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" />
       </label>
       <label>
@@ -1780,6 +1795,20 @@ function QuickAccountSetup({
           <option value="USD">USD</option>
         </select>
       </label>
+      <label>
+        <span>Account type</span>
+        <select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}>
+          <option value="cash">Cash</option>
+          <option value="bank">Bank account</option>
+          <option value="card">Credit card</option>
+          <option value="wallet">Stored-value wallet</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} />
+        <span>Allow negative balance</span>
+      </label>
       <AmountField
         id="quick-account-initial-balance"
         label="Initial balance (optional)"
@@ -1789,7 +1818,7 @@ function QuickAccountSetup({
       />
       {initialBalance.trim() ? (
         <label>
-          <span>As of date</span>
+          <span>Balance as of</span>
           <input type="date" required value={initialBalanceDate} onChange={(event) => onInitialBalanceDateChange(event.target.value)} />
         </label>
       ) : null}
@@ -1799,6 +1828,7 @@ function QuickAccountSetup({
       </div>
       {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
     </section>
+    </div>
   );
 }
 
@@ -1845,6 +1875,8 @@ function CapturePage({
   const [quickAccountField, setQuickAccountField] = useState<"account" | "transferAccount" | "feeAccount" | null>(null);
   const [quickAccountName, setQuickAccountName] = useState("");
   const [quickAccountCurrency, setQuickAccountCurrency] = useState("TWD");
+  const [quickAccountType, setQuickAccountType] = useState("cash");
+  const [quickAccountAllowNegative, setQuickAccountAllowNegative] = useState(true);
   const [quickAccountBalance, setQuickAccountBalance] = useState("");
   const [quickAccountBalanceDate, setQuickAccountBalanceDate] = useState(localDate());
   const [quickAccountError, setQuickAccountError] = useState("");
@@ -1863,6 +1895,10 @@ function CapturePage({
   const [mealPhotoFiles, setMealPhotoFiles] = useState<File[]>([]);
   const [mealError, setMealError] = useState("");
   const [mealSavedMessage, setMealSavedMessage] = useState("");
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [scanError, setScanError] = useState("");
   const [scanSavedMessage, setScanSavedMessage] = useState("");
@@ -1892,6 +1928,7 @@ function CapturePage({
     "record-meal": ImagePlus,
     "attach-photo": Upload,
   } satisfies Record<CaptureIntent, LucideIcon>;
+  const selectedCaptureAction = captureIntents.find((action) => action.id === captureIntent) ?? captureIntents[0];
 
   const updateForm = (field: keyof DraftForm, value: string) => {
     setFormError(null);
@@ -1982,6 +2019,8 @@ function CapturePage({
   const beginQuickAccountSetup = (field: "account" | "transferAccount" | "feeAccount") => {
     setQuickAccountField(field);
     setQuickAccountName("");
+    setQuickAccountType("cash");
+    setQuickAccountAllowNegative(true);
     setQuickAccountBalance("");
     setQuickAccountBalanceDate(localDate());
     setQuickAccountError("");
@@ -2115,6 +2154,95 @@ function CapturePage({
     setShowCancelChoices(false);
   };
 
+  const appendMealPhotos = (files: FileList | File[] | null) => {
+    const incoming = Array.from(files ?? []);
+    if (incoming.length === 0) {
+      return;
+    }
+
+    setMealPhotoFiles((current) => {
+      const existing = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      return [...current, ...incoming.filter((file) => !existing.has(`${file.name}:${file.size}:${file.lastModified}`))];
+    });
+    setMealError("");
+  };
+
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  useEffect(() => {
+    if (!isCameraOpen || !cameraStreamRef.current || !cameraVideoRef.current) {
+      return;
+    }
+
+    try {
+      cameraVideoRef.current.srcObject = cameraStreamRef.current;
+    } catch {
+      setCameraError("Camera preview could not start. You can still use Choose photos.");
+      return;
+    }
+
+    if (typeof cameraVideoRef.current.play === "function") {
+      const playResult = cameraVideoRef.current.play();
+      if (playResult && typeof playResult.catch === "function") {
+        void playResult.catch(() => {
+          setCameraError("Camera preview could not start. You can still use Choose photos.");
+        });
+      }
+    }
+  }, [isCameraOpen]);
+
+  const openCamera = async () => {
+    setCameraError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("This browser does not support direct camera capture. Use Choose photos instead.");
+      return;
+    }
+
+    try {
+      cameraStreamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: "environment" } },
+      });
+      setIsCameraOpen(true);
+    } catch {
+      cameraStreamRef.current = null;
+      setCameraError("Camera permission was denied or the camera is unavailable. Use Choose photos instead.");
+    }
+  };
+
+  const captureCameraPhoto = () => {
+    const video = cameraVideoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError("The camera preview is not ready yet. Try again in a moment.");
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCameraError("The photo could not be created. Use Choose photos instead.");
+        return;
+      }
+
+      appendMealPhotos([new File([blob], `meal-${Date.now()}.jpg`, { type: "image/jpeg" })]);
+      stopCamera();
+    }, "image/jpeg", 0.92);
+  };
+
   const keepEntryAsDraft = () => {
     onSaveDraft({ ...normalizeDraftForm(form), id: draftId() });
     resetEntry();
@@ -2188,7 +2316,7 @@ function CapturePage({
       return;
     }
 
-    const account = createLocalAccount(quickAccountName, quickAccountCurrency, crypto.randomUUID());
+    const account = createLocalAccount(quickAccountName, quickAccountCurrency, crypto.randomUUID(), quickAccountType, quickAccountAllowNegative);
 
     if (!account) {
       setQuickAccountError("Enter an account name before adding it.");
@@ -2224,6 +2352,8 @@ function CapturePage({
     }
     setQuickAccountField(null);
     setQuickAccountName("");
+    setQuickAccountType("cash");
+    setQuickAccountAllowNegative(true);
     setQuickAccountBalance("");
     setQuickAccountBalanceDate(localDate());
     setQuickAccountError("");
@@ -2254,49 +2384,49 @@ function CapturePage({
 
   return (
     <section className="capture-layout">
-      <Panel title="Choose how to start" eyebrow="Input sources">
-        <p className="panel-copy">
-          Manual entries are saved as official local ledger records. Scans, meal photos, and attachments
-          stay in their own source workflow and never silently become ledger records.
-        </p>
-        <div className="planned-actions" role="list" aria-label="Capture intent">
+      <section className="capture-start" aria-labelledby="capture-start-title">
+        <div className="capture-start-heading">
+          <div>
+            <p className="eyebrow">Quick capture</p>
+            <h2 id="capture-start-title">What are you saving?</h2>
+          </div>
+          <p className="capture-start-detail">{selectedCaptureAction.detail}</p>
+        </div>
+        <div className="capture-intent-picker" role="toolbar" aria-label="Capture type">
           {captureIntents.map((action) => {
             const Icon = actionIcons[action.id];
             const selected = captureIntent === action.id;
             return (
               <button
                 aria-pressed={selected}
-                className={`action-card ${selected ? "primary-card" : ""}`}
+                className={`capture-intent-button ${selected ? "selected" : ""}`}
                 type="button"
                 key={action.id}
                 onClick={() => setCaptureIntent(action.id)}
               >
-                <Icon size={22} aria-hidden="true" />
-                <span>
-                  <strong>{action.label}</strong>
-                  <small>{action.detail}</small>
-                  <em>{selected ? "Selected" : "Choose"}</em>
-                </span>
+                <Icon size={18} aria-hidden="true" />
+                <span>{action.label}</span>
               </button>
             );
           })}
         </div>
-      </Panel>
+      </section>
       {captureIntent === "manual-ledger" ? <Panel key="manual-ledger" title="Manual ledger record" eyebrow="Official local record">
         {accounts.length === 0 ? (
-          <p className="account-required" role="status">
-            <strong>Account required</strong>
-            Create an account before saving a ledger record.
-          </p>
-        ) : null}
-        <form className="draft-form" id="manual-draft-form" onSubmit={handleSubmit}>
-          {!isUnresolvedExpense ? (
-            <label>
+          <section className="manual-empty-state" aria-label="Account required" role="status">
+            <span className="eyebrow">Account required</span>
+            <h3>Create your first account</h3>
+            <p>Your ledger needs a wallet, bank account, card, or other balance source before a record can be saved.</p>
+            <button className="primary-action align-start" type="button" onClick={() => beginQuickAccountSetup("account")}>Create first account</button>
+          </section>
+        ) : <form className={`draft-form ${hasSelectedAccount ? "has-selected-account" : "needs-account"}`} id="manual-draft-form" onSubmit={handleSubmit}>
+          {hasSelectedAccount && !isUnresolvedExpense ? (
+            <label className="entry-date-field">
               <span>Date</span>
               <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
             </label>
           ) : null}
-          {isUnresolvedExpense ? (
+          {hasSelectedAccount && isUnresolvedExpense ? (
             <section className="full-span time-precision-fields" aria-label="Unresolved expense timing">
               <fieldset className="segmented-fieldset">
                 <legend>Time precision</legend>
@@ -2338,7 +2468,7 @@ function CapturePage({
               ) : null}
             </section>
           ) : null}
-          <div className="form-field">
+          <div className={`form-field entry-account-field ${isTransfer ? "" : "entry-account-last"}`}>
             <label htmlFor="entry-account">
               <span>{isTransfer ? "Source account" : "Account"}</span>
             </label>
@@ -2366,11 +2496,15 @@ function CapturePage({
               <QuickAccountSetup
                 accountName={quickAccountName}
                 currency={quickAccountCurrency}
+                accountType={quickAccountType}
+                allowNegativeBalance={quickAccountAllowNegative}
                 initialBalance={quickAccountBalance}
                 initialBalanceDate={quickAccountBalanceDate}
                 error={quickAccountError}
                 onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
                 onCurrencyChange={setQuickAccountCurrency}
+                onAccountTypeChange={setQuickAccountType}
+                onAllowNegativeBalanceChange={setQuickAccountAllowNegative}
                 onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
                 onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
                 onConfirm={addQuickAccount}
@@ -2378,16 +2512,18 @@ function CapturePage({
               />
             ) : null}
           </div>
-          <label>
-            <span>Type</span>
-            <select value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
-              {draftKinds.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kindLabel(kind)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {hasSelectedAccount ? (
+            <label className="entry-kind-field">
+              <span>Type</span>
+              <select value={form.kind} onChange={(event) => setRecordKind(event.target.value as DraftForm["kind"])}>
+                {draftKinds.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {kindLabel(kind)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {hasSelectedAccount ? <fieldset className="entry-details">
           {needsCategory ? (
             <div className="form-field">
@@ -2563,15 +2699,19 @@ function CapturePage({
                   </button>
                 </div>
                 {quickAccountField === "transferAccount" ? (
-                  <QuickAccountSetup
-                    accountName={quickAccountName}
-                    currency={quickAccountCurrency}
-                    initialBalance={quickAccountBalance}
+              <QuickAccountSetup
+                accountName={quickAccountName}
+                currency={quickAccountCurrency}
+                accountType={quickAccountType}
+                allowNegativeBalance={quickAccountAllowNegative}
+                initialBalance={quickAccountBalance}
                     initialBalanceDate={quickAccountBalanceDate}
                     error={quickAccountError}
-                    onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
-                    onCurrencyChange={setQuickAccountCurrency}
-                    onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
+                onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
+                onCurrencyChange={setQuickAccountCurrency}
+                onAccountTypeChange={setQuickAccountType}
+                onAllowNegativeBalanceChange={setQuickAccountAllowNegative}
+                onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
                     onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
                     onConfirm={addQuickAccount}
                     onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
@@ -2629,15 +2769,19 @@ function CapturePage({
                   </button>
                 </div>
                 {quickAccountField === "feeAccount" ? (
-                  <QuickAccountSetup
-                    accountName={quickAccountName}
-                    currency={quickAccountCurrency}
-                    initialBalance={quickAccountBalance}
+                <QuickAccountSetup
+                  accountName={quickAccountName}
+                  currency={quickAccountCurrency}
+                  accountType={quickAccountType}
+                  allowNegativeBalance={quickAccountAllowNegative}
+                  initialBalance={quickAccountBalance}
                     initialBalanceDate={quickAccountBalanceDate}
                     error={quickAccountError}
-                    onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
-                    onCurrencyChange={setQuickAccountCurrency}
-                    onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
+                  onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
+                  onCurrencyChange={setQuickAccountCurrency}
+                  onAccountTypeChange={setQuickAccountType}
+                  onAllowNegativeBalanceChange={setQuickAccountAllowNegative}
+                  onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
                     onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
                     onConfirm={addQuickAccount}
                     onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
@@ -2689,9 +2833,9 @@ function CapturePage({
             </label>
           ) : null}
           </fieldset> : (
-            <div className="entry-details-locked full-span" role="status">
-              <strong>Select or add an account to continue</strong>
-              <span>Category, merchant, item, amount, and recurring settings will appear after an account is selected.</span>
+            <div className="entry-details-locked full-span" role="status" aria-live="polite">
+              <strong>Select an account to continue</strong>
+              <span>Choose an existing account or use the plus button above. The record fields will appear next.</span>
             </div>
           )}
           {supportsRecurrence && hasSelectedAccount ? (
@@ -2735,23 +2879,44 @@ function CapturePage({
           ) : null}
           {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
           {savedMessage ? <p className="form-success full-span" role="status">{savedMessage}</p> : null}
-          {showCancelChoices ? (
-            <section className="cancel-choice full-span" aria-label="Cancel entry" role="dialog">
-              <strong>What should happen to this entry?</strong>
-              <div className="quick-account-actions">
-                <button className="danger-action" type="button" onClick={resetEntry}>Discard changes</button>
-                <button className="secondary-action" type="button" onClick={keepEntryAsDraft}>Keep as draft</button>
-                <button className="quiet-action" type="button" onClick={() => setShowCancelChoices(false)}>Continue editing</button>
+          {hasSelectedAccount ? (
+            <>
+              {showCancelChoices ? (
+                <section className="cancel-choice full-span" aria-label="Cancel entry" role="dialog">
+                  <strong>What should happen to this entry?</strong>
+                  <div className="quick-account-actions">
+                    <button className="danger-action" type="button" onClick={resetEntry}>Discard changes</button>
+                    <button className="secondary-action" type="button" onClick={keepEntryAsDraft}>Keep as draft</button>
+                    <button className="quiet-action" type="button" onClick={() => setShowCancelChoices(false)}>Continue editing</button>
+                  </div>
+                </section>
+              ) : null}
+              <div className="quick-account-actions full-span">
+                <button className="quiet-action" type="button" onClick={() => hasUnsavedChanges ? setShowCancelChoices(true) : resetEntry()}>Cancel entry</button>
+                <button className="primary-action" type="submit">Save record</button>
               </div>
-            </section>
+            </>
           ) : null}
-          <div className="quick-account-actions full-span">
-            <button className="quiet-action" type="button" onClick={() => hasUnsavedChanges ? setShowCancelChoices(true) : resetEntry()}>Cancel entry</button>
-            <button className="primary-action" disabled={!hasSelectedAccount} type="submit">
-              {hasSelectedAccount ? "Save record" : "Add an account first"}
-            </button>
-          </div>
-        </form>
+        </form>}
+        {accounts.length === 0 && quickAccountField === "account" ? (
+          <QuickAccountSetup
+            accountName={quickAccountName}
+            currency={quickAccountCurrency}
+            accountType={quickAccountType}
+            allowNegativeBalance={quickAccountAllowNegative}
+            initialBalance={quickAccountBalance}
+            initialBalanceDate={quickAccountBalanceDate}
+            error={quickAccountError}
+            onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
+            onCurrencyChange={setQuickAccountCurrency}
+            onAccountTypeChange={setQuickAccountType}
+            onAllowNegativeBalanceChange={setQuickAccountAllowNegative}
+            onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
+            onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
+            onConfirm={addQuickAccount}
+            onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
+          />
+        ) : null}
       </Panel> : captureIntent === "record-meal" ? (
         <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
           <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
@@ -2764,11 +2929,31 @@ function CapturePage({
               <span>Meal note</span>
               <textarea value={mealNote} onChange={(event) => setMealNote(event.target.value)} placeholder="Optional" />
             </label>
-            <label>
-              <span>Meal photos</span>
-              <input accept="image/*" multiple type="file" onChange={(event) => setMealPhotoFiles(Array.from(event.target.files ?? []))} />
-            </label>
-            {mealPhotoFiles.length > 0 ? <p className="field-help">Selected {mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"}.</p> : null}
+            <div className="meal-photo-picker">
+              <span className="meal-field-label">Meal photos</span>
+              <div className="meal-photo-actions">
+                <button className="meal-file-action" type="button" onClick={() => void openCamera()}>
+                  <Camera size={18} aria-hidden="true" />
+                  <span>Take photo</span>
+                </button>
+                <label className="meal-file-action" htmlFor="meal-photos">
+                  <ImagePlus size={18} aria-hidden="true" />
+                  <span>Choose photos</span>
+                  <input id="meal-photos" aria-label="Meal photos" accept="image/*" multiple type="file" onChange={(event) => appendMealPhotos(event.target.files)} />
+                </label>
+              </div>
+            </div>
+            {isCameraOpen ? (
+              <div className="camera-capture-dialog" role="dialog" aria-modal="true" aria-label="Take meal photo">
+                <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
+                <div className="camera-capture-actions">
+                  <button className="primary-action" type="button" onClick={captureCameraPhoto}>Capture photo</button>
+                  <button className="secondary-action" type="button" onClick={stopCamera}>Cancel</button>
+                </div>
+              </div>
+            ) : null}
+            {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
+            {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
             <button className="primary-action align-start" type="submit">Save meal</button>
             {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
             {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
@@ -2952,7 +3137,7 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
   );
 }
 
-function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding }: Readonly<{
+function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding, onSignOut }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onAddAccount: (account: LocalAccount) => void;
@@ -2960,6 +3145,7 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
   onReopenOnboarding: () => void;
+  onSignOut: () => Promise<void>;
 }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
@@ -3054,13 +3240,13 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
           </ul>
         ) : null}
       </Panel>
-      <AccountSyncPanel />
+      <AccountSyncPanel onSignOut={onSignOut} />
       <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
     </section>
   );
 }
 
-function AccountSyncPanel() {
+function AccountSyncPanel({ onSignOut }: Readonly<{ onSignOut: () => Promise<void> }>) {
   return (
     <Panel title="Account and sync" eyebrow="Settings">
       <dl className="settings-list">
@@ -3073,6 +3259,10 @@ function AccountSyncPanel() {
           <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
         </div>
       </dl>
+      <button className="secondary-action align-start" type="button" onClick={() => { void onSignOut(); }}>
+        <LogOut size={18} aria-hidden="true" />
+        Sign out
+      </button>
     </Panel>
   );
 }
