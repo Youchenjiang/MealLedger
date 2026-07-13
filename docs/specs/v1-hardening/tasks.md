@@ -32,9 +32,18 @@ Verified offline local records, failed CSV import isolation, and browser storage
 
 Verification: React integration tests and Playwright console smoke.
 
-### Task 6: Documentation and review closeout — In progress
+### Task 6: Documentation and review closeout — Complete
 
-Update the Capture and App Shell scope notes, record the read-only review dispositions, run the complete gate, and leave the branch ready for user review without pushing or opening a PR.
+Updated the Capture and App Shell scope notes, recorded the read-only review dispositions, ran the complete gate, and left the branch ready for user review without pushing or opening a PR.
+
+Final verification on 2026-07-13:
+
+- `npm run test`: 159 tests passed across 27 files.
+- `npm run test:coverage`: 85.61% statements, 77.10% branches, 85.63% functions, and 86.04% lines.
+- `npm run test:e2e`: 6 Playwright tests passed.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- `git status --short`: clean.
 
 ## Third-party Review Evidence
 

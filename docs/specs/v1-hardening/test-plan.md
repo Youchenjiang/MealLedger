@@ -45,3 +45,14 @@ The schema contract test verifies migration equality, required tables, accountin
 ## Known Limits
 
 V1 hardening cannot prove cloud object deletion or live signed-URL revocation because no cloud upload worker is enabled. It must therefore verify that the UI and docs do not claim those behaviors are already available.
+
+## Final Verification Evidence
+
+Verified on 2026-07-13:
+
+- `npm run test`: 159 tests passed across 27 files.
+- `npm run test:coverage`: 85.61% statements, 77.10% branches, 85.63% functions, and 86.04% lines.
+- `npm run test:e2e`: 6 Playwright tests passed.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- `git status --short`: clean.
