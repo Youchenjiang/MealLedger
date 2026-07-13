@@ -20,6 +20,7 @@ This sequence turns the current specs into a practical implementation order. It 
 6. Import/export.
 7. Hardening and release readiness.
 8. Cloud persistence.
+9. Invoice import spike.
 
 ## 1. App Shell
 
@@ -231,7 +232,9 @@ Exit criteria:
 
 ## Deferred Until V2 Or Spike
 
-- Ministry of Finance cloud invoice sync.
+- Ministry of Finance cloud invoice sync until the [invoice import
+  spike](../specs/invoice-import-spike/requirements.md) passes its decision
+  gates.
 - Bank or account statement API sync.
 - Full media backup export.
 - Strong multi-day native offline guarantee with Capacitor/SQLite.

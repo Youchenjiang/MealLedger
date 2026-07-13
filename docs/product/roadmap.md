@@ -32,7 +32,9 @@ MealLedger uses lightweight agile planning with risk-driven testing. The long-te
 
 ## Phase 4: Taiwan Cloud Invoice Import
 
-- Run a spike against official Ministry of Finance e-invoice documentation and access requirements.
+- Run the [invoice import spike](../specs/invoice-import-spike/requirements.md)
+  against official Ministry of Finance e-invoice documentation and access
+  requirements before adding provider-specific schema or sync code.
 - Design an invoice import adapter so the core ledger is not tightly coupled to one provider.
 - Add invoice import domains:
   - `invoice_import_accounts`
