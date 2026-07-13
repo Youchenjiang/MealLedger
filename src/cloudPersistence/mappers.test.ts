@@ -125,6 +125,18 @@ describe("cloud row mappers", () => {
     }
   });
 
+  test("keeps a transfer fee linked to its expense record", () => {
+    const result = mapLedgerRecord(record({
+      kind: "transfer",
+      transferAccountId: "account-local-2",
+      destinationAmount: "100",
+      destinationCurrency: "USD",
+    }), "user-1", references, "Asia/Taipei", [], "fee-record-1");
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) expect(result.value.transferDetails).toMatchObject({ fee_ledger_record_id: expect.any(String) });
+  });
+
   test("maps one refund to explicit multiple payback allocations", () => {
     const result = mapLedgerRecord(record({
       kind: "refund",

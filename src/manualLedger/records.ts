@@ -271,6 +271,10 @@ function auditEvent(
   };
 }
 
+function nextRecordActionKey(record: LocalLedgerRecord, version: number): string {
+  return `record:${record.id}:v${version}`;
+}
+
 export function updateOfficialRecord(
   record: LocalLedgerRecord,
   patch: Partial<EditableRecordFields>,
@@ -284,6 +288,7 @@ export function updateOfficialRecord(
     ...patch,
     status: "local-only" as const,
     version: record.version + 1,
+    idempotencyKey: nextRecordActionKey(record, record.version + 1),
     updatedAt,
   };
 
@@ -352,6 +357,7 @@ export function convertUnresolvedExpense(
     itemNameMissing: draft.itemNameMissing,
     status: "local-only",
     version: record.version + 1,
+    idempotencyKey: nextRecordActionKey(record, record.version + 1),
     updatedAt,
   };
 
@@ -370,6 +376,7 @@ export function voidOfficialRecord(
     recordState: "voided" as const,
     status: "local-only" as const,
     version: record.version + 1,
+    idempotencyKey: nextRecordActionKey(record, record.version + 1),
     updatedAt,
   };
 

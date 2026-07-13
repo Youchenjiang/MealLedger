@@ -81,6 +81,30 @@ describe("cloud sync service", () => {
     expect(result.queue[0].state).toBe("synced");
   });
 
+  test("resyncs an edited record with a version-scoped idempotency key", async () => {
+    const first = await syncLocalChanges(input());
+    const editedRecord: LocalLedgerRecord = {
+      ...baseRecord,
+      amount: "125",
+      status: "local-only",
+      version: 2,
+      idempotencyKey: "record:record-1:v2",
+      updatedAt: "2026-07-13T01:00:00.000Z",
+    };
+    const second = await syncLocalChanges(input({
+      records: [editedRecord],
+      queue: enqueueLocalChanges(first.queue, [editedRecord], [], [], [], [], "2026-07-13T01:00:00.000Z"),
+      now: "2026-07-13T01:00:00.000Z",
+    }));
+
+    expect(second.records[0]).toMatchObject({ status: "synced", amount: "125", version: 2 });
+    expect(second.queue[0]).toMatchObject({
+      state: "synced",
+      idempotencyKey: "record:record-1:v2",
+      requestHash: "record-1:2:2026-07-13T01:00:00.000Z",
+    });
+  });
+
   test("keeps the local record and retryable queue state on transport failure", async () => {
     const failedClient = persistenceClient("ledger_records");
     const result = await syncLocalChanges(input({ client: failedClient }));

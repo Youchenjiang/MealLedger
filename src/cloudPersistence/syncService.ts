@@ -154,7 +154,10 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
       continue;
     }
 
-    const mapped = mapLedgerRecord(record, input.userId, bootstrap.references, "Asia/Taipei", input.auditEvents);
+    const feeRecord = record.kind === "transfer"
+      ? input.records.find((candidate) => candidate.kind === "expense" && candidate.linkedRecordId === record.id)
+      : undefined;
+    const mapped = mapLedgerRecord(record, input.userId, bootstrap.references, "Asia/Taipei", input.auditEvents, feeRecord?.id);
     if (!mapped.ok) {
       nextQueue = markCloudSyncFailure(nextQueue, item.id, mapped.issues.map((entry) => entry.message).join(" "), false, input.now);
       continue;
@@ -191,7 +194,12 @@ export function enqueueLocalChanges(
   for (const item of media) {
     next = enqueueMediaSync(next, item, now);
   }
-  for (const record of records) next = enqueueRecordSync(next, record, now);
+  const orderedRecords = [...records].sort((left, right) => {
+    const leftIsFee = Boolean(left.linkedRecordId);
+    const rightIsFee = Boolean(right.linkedRecordId);
+    return Number(rightIsFee) - Number(leftIsFee);
+  });
+  for (const record of orderedRecords) next = enqueueRecordSync(next, record, now);
   for (const draft of drafts) next = enqueueDraftSync(next, draft, now);
   for (const scan of scans) next = enqueueScanSync(next, scan, now);
   for (const meal of meals) next = enqueueMealSync(next, meal, now);

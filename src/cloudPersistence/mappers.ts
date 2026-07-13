@@ -214,6 +214,7 @@ export function mapLedgerRecord(
   references: CloudReferenceMap,
   timezone = "Asia/Taipei",
   auditEvents: LocalAuditEvent[] = [],
+  feeLedgerRecordId?: string,
 ): CloudMappingResult<CloudRecordBundle> {
   const recordId = ledgerReference(references.ledgerRecordIds, record.id, userId, "id");
   const accountId = reference(references.accountIds, record.accountId, "account_id");
@@ -290,6 +291,10 @@ export function mapLedgerRecord(
       true,
     );
     const transferIssues = collect([destinationId, destinationAmount]);
+    const feeId = feeLedgerRecordId
+      ? ledgerReference(references.ledgerRecordIds, feeLedgerRecordId, userId, "fee_ledger_record_id")
+      : { ok: true as const, value: undefined };
+    transferIssues.push(...collect([feeId]));
     if (transferIssues.length > 0 || !destinationId.ok || !destinationAmount.ok) {
       return { ok: false, issues: [...issues, ...transferIssues] };
     }
@@ -298,6 +303,7 @@ export function mapLedgerRecord(
       destination_account_id: destinationId.value,
       destination_amount_minor: destinationAmount.value,
       destination_currency: (record.destinationCurrency || record.currency).toUpperCase(),
+      fee_ledger_record_id: feeId.ok ? feeId.value ?? null : null,
     };
   }
 

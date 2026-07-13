@@ -18,6 +18,14 @@ describe("cloud sync queue", () => {
     expect(enqueueDraftSync(withDraft, draft, now)).toHaveLength(2);
   });
 
+  test("queues linked transfer fees before their transfer parent", async () => {
+    const { enqueueLocalChanges } = await import("./syncService");
+    const transfer = { ...record, id: "transfer-1", kind: "transfer" } as LocalLedgerRecord;
+    const fee = { ...record, id: "fee-1", linkedRecordId: "transfer-1" } as LocalLedgerRecord;
+
+    expect(enqueueLocalChanges([], [transfer, fee], [], [], [], [], now).map((item) => item.targetId)).toEqual(["fee-1", "transfer-1"]);
+  });
+
   test("reopens a synced record when its version or updated time changes", () => {
     const queued = enqueueRecordSync([], { ...record, status: "synced" }, now);
     expect(queued).toEqual([]);
