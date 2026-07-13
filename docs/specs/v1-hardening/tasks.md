@@ -38,10 +38,9 @@ Updated the Capture and App Shell scope notes, recorded the read-only review dis
 
 Verification snapshot on 2026-07-13 after the cloud-persistence slice,
 invoice-import spike documentation, auth configuration hardening, changed-
-local-target requeue fix, and exact minor-unit aggregation fix:
 
 - `npm run test`: 205 tests passed across 35 files.
-- `npm run test:coverage`: 82.96% statements, 73.15% branches, 84.42% functions, and 84.08% lines.
+- `npm run test:coverage`: 82.96% statements, 73.23% branches, 84.42% functions, and 84.08% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
@@ -62,6 +61,7 @@ Three read-only reviews were requested before closeout:
 | Responsive / privacy | Media links did not validate parent ownership; Edge Function column differed from schema; cloud cleanup was not implemented | Fixed ownership and column mismatch; cloud upload/deletion explicitly deferred |
 | Follow-up UX / sync | Draft review had no completion path; failed/conflict sync states lacked a user-facing action; edited synced records could still look synced | Fixed with Continue in Capture, Confirm to ledger, Sync attention with retry, conflict visibility, and local-only status on edits |
 | Follow-up QA / sync | Successful meal, media, and scan writes could be reopened when their local status hash changed after sync | Fixed by keeping synced targets closed and adding regression coverage for all three target types |
+| Schema / cloud follow-up | Record edits reused create idempotency keys; transfer fees were not linked or ordered before their parent | Fixed with version-scoped action keys, fee-link mapping, dependency ordering, and sync regressions |
 
 Non-blocking follow-ups remain outside this hardening pass:
 

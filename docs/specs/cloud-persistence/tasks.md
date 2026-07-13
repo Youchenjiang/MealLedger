@@ -16,7 +16,11 @@
 - [x] Add retry classification and bounded backoff policy.
 - [x] Re-queue edited, voided, and unresolved-converted local targets by version/hash;
       keep successfully synced meal, media, and scan targets closed.
+- [x] Scope edited, voided, and unresolved-converted record actions to their
+      record version so a changed row cannot reuse the original create action.
 - [x] Preserve tags, ordinary refund links, and audit history in record mapping.
+- [x] Preserve transfer-fee ledger links and enqueue fee records before their
+      transfer parent.
 - [x] Use the canonical generated category parent key for idempotent root-category upserts.
 - [x] Map temporary receipt and invoice links to the canonical media-link enum values.
 - [x] Add an authenticated atomic RPC for transfer bundles and version checks.
@@ -74,6 +78,8 @@ keeps production deployments fail-closed when cloud authentication is missing.
 - QA review blocking findings were fixed: partial-bundle retry completion,
   edited-record requeue, missing tags/refund/audit mappings, and transfer
   atomicity.
+- Cloud sync hardening also covers version-scoped record idempotency keys and
+  transfer-fee dependency ordering; both paths have regression tests.
 - Exact minor-unit aggregation prevents decimal report/export drift, and
   successful meal/media/source sync items no longer reopen on a later queue
   pass.
