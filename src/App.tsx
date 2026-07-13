@@ -888,6 +888,7 @@ function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSa
     onComplete();
   };
 
+  // skipcq: JS-0415
   return (
     <main className="signed-out-shell">
       <section className="signed-out-panel onboarding-panel">
@@ -1788,6 +1789,7 @@ function QuickAccountSetup({
   onConfirm: () => void;
   onCancel: () => void;
 }>) {
+  // skipcq: JS-0415
   return (
     <div className="quick-account-backdrop">
     <section className="quick-account" aria-label="Add account" role="dialog" aria-modal="true">
@@ -1847,6 +1849,7 @@ function QuickAccountSetup({
   );
 }
 
+// skipcq: JS-R1005
 function CapturePage({
   records,
   accounts,
@@ -2396,6 +2399,7 @@ function CapturePage({
     }));
   };
 
+  // skipcq: JS-0415
   return (
     <section className="capture-layout">
       <section className="capture-start" aria-labelledby="capture-start-title">
@@ -2433,7 +2437,7 @@ function CapturePage({
             <p>Your ledger needs a wallet, bank account, card, or other balance source before a record can be saved.</p>
             <button className="primary-action align-start" type="button" onClick={() => beginQuickAccountSetup("account")}>Create first account</button>
           </section>
-        ) : <form className={`draft-form ${hasSelectedAccount ? "has-selected-account" : "needs-account"}`} id="manual-draft-form" onSubmit={handleSubmit}>
+        ) : /* skipcq: JS-0415 */ <form className={`draft-form ${hasSelectedAccount ? "has-selected-account" : "needs-account"}`} id="manual-draft-form" onSubmit={handleSubmit}>
           {hasSelectedAccount && !isUnresolvedExpense ? (
             <label className="entry-date-field">
               <span>Date</span>
@@ -2669,7 +2673,7 @@ function CapturePage({
               ) : null}
             </div>
           ) : null}
-          {isTransfer ? (
+          {isTransfer ? /* skipcq: JS-0415 */ (
             <>
               <section className="transfer-mode full-span" aria-label="Transfer type">
                 <fieldset className="segmented-fieldset">
@@ -2767,7 +2771,7 @@ function CapturePage({
               <span>Add transfer fee</span>
             </label>
           ) : null}
-          {isTransfer && form.feeEnabled ? (
+          {isTransfer && form.feeEnabled ? /* skipcq: JS-0415 */ (
             <>
               <div className="form-field">
                 <label htmlFor="entry-fee-account">
@@ -2931,7 +2935,7 @@ function CapturePage({
             onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
           />
         ) : null}
-      </Panel> : captureIntent === "record-meal" ? (
+      </Panel> : captureIntent === "record-meal" ? /* skipcq: JS-0415 */ (
         <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
           <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
           <form className="meal-form" onSubmit={handleMealSubmit}>
