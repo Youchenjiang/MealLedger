@@ -4,7 +4,9 @@
 
 ### Task 1: Accounting regressions — Complete
 
-Covered minor-unit parsing, currency precision, transfer legs, fund additions, refunds, adjustments, unresolved expenses, and voided records.
+Covered minor-unit parsing, currency precision, transfer legs, cross-currency
+refund classification, fund additions, refunds, adjustments, unresolved
+expenses, and voided records.
 
 Verification: `npm run test`, `npm run test:coverage`.
 
@@ -39,8 +41,8 @@ Updated the Capture and App Shell scope notes, recorded the read-only review dis
 Verification snapshot on 2026-07-13 after the cloud-persistence slice,
 invoice-import spike documentation, auth configuration hardening, changed-
 
-- `npm run test`: 209 tests passed across 35 files.
-- `npm run test:coverage`: 83.09% statements, 73.51% branches, 84.55% functions, and 84.20% lines.
+- `npm run test`: 211 tests passed across 35 files.
+- `npm run test:coverage`: 83.11% statements, 73.64% branches, 84.60% functions, and 84.23% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
@@ -63,6 +65,7 @@ Three read-only reviews were requested before closeout:
 | Follow-up QA / sync | Successful meal, media, and scan writes could be reopened when their local status hash changed after sync | Fixed by keeping synced targets closed and adding regression coverage for all three target types |
 | Schema / cloud follow-up | Record edits reused create idempotency keys; transfer fees were not linked or ordered before their parent | Fixed with version-scoped action keys, fee-link mapping, dependency ordering, and sync regressions |
 | Persisted queue follow-up | An older local queue could still contain a transfer before its linked fee | Fixed by ordering pending items again at sync execution time and adding a persisted-queue regression |
+| Cross-currency refund follow-up | Refund comparison added amounts from different currencies | Fixed by comparing only same-currency links and requiring explicit `exchange_difference` classification |
 
 Non-blocking follow-ups remain outside this hardening pass:
 

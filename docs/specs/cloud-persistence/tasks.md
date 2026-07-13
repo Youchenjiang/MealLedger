@@ -65,9 +65,9 @@ uniqueness hardening. Pending queue execution also reorders legacy transfer
 items behind linked fee records. Temporary scan links now use `receipt-evidence` or
 `invoice-scan`, matching the canonical enum:
 
-- `npm run test`: 35 files, 209 tests passed.
-- `npm run test:coverage`: 83.09% statements, 73.51% branches, 84.55% functions,
-  84.20% lines.
+- `npm run test`: 35 files, 211 tests passed.
+- `npm run test:coverage`: 83.11% statements, 73.64% branches, 84.60% functions,
+  84.23% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
