@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     storage_provider: "r2",
     bucket: R2_BUCKET,
     object_key: objectKey,
-    thumbnail_key: thumbnailKey,
+    thumbnail_object_key: thumbnailKey,
     content_type: contentType,
     captured_at: capturedAt,
   });

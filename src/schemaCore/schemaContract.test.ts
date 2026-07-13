@@ -52,6 +52,11 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("create index media_assets_cleanup_idx");
     expect(schemaSql).toContain("alter table public.ledger_records enable row level security");
     expect(schemaSql).toContain("create policy ledger_records_owner");
-    expect(schemaSql).toContain("auth.uid() = user_id");
+    expect(schemaSql).toContain("create trigger transfer_details_valid");
+    expect(schemaSql).toContain("create trigger refund_links_valid");
+    expect(schemaSql).toContain("create constraint trigger ledger_transfer_details_required");
+    expect(schemaSql).toContain("create or replace function public.media_link_target_owned");
+    expect(schemaSql).toContain("asset.user_id = auth.uid()");
+    expect(schemaSql).toContain("public.media_link_target_owned(target_type, target_id, auth.uid())");
   });
 });

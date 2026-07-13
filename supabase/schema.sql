@@ -352,6 +352,102 @@ create trigger ledger_currency_matches_account
 before insert or update on public.ledger_records
 for each row execute function public.validate_ledger_currency();
 
+create or replace function public.validate_transfer_details()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  source_record public.ledger_records;
+  destination_owner uuid;
+  destination_currency text;
+begin
+  select * into source_record from public.ledger_records where id = new.ledger_record_id;
+  if source_record.id is null or source_record.kind <> 'transfer' then
+    raise exception 'transfer_details must belong to a transfer record';
+  end if;
+
+  select user_id, currency into destination_owner, destination_currency
+  from public.accounts where id = new.destination_account_id;
+  if destination_owner is null or destination_owner <> source_record.user_id then
+    raise exception 'transfer destination account must belong to the same user';
+  end if;
+  if destination_currency <> new.destination_currency then
+    raise exception 'transfer destination currency must match destination account';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger transfer_details_valid
+before insert or update on public.transfer_details
+for each row execute function public.validate_transfer_details();
+
+create or replace function public.require_transfer_details()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if new.kind = 'transfer' and not exists (
+    select 1 from public.transfer_details details where details.ledger_record_id = new.id
+  ) then
+    raise exception 'transfer records require transfer_details';
+  end if;
+  return new;
+end;
+$$;
+
+create constraint trigger ledger_transfer_details_required
+after insert or update of kind on public.ledger_records
+deferrable initially deferred
+for each row execute function public.require_transfer_details();
+
+create or replace function public.validate_refund_link()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  refund_owner uuid;
+  refund_kind public.ledger_record_kind;
+  original_owner uuid;
+  original_kind public.ledger_record_kind;
+begin
+  select user_id, kind into refund_owner, refund_kind from public.ledger_records where id = new.refund_record_id;
+  select user_id, kind into original_owner, original_kind from public.ledger_records where id = new.original_record_id;
+  if refund_owner is null or refund_kind <> 'refund' then
+    raise exception 'refund_links must belong to a refund record';
+  end if;
+  if original_owner is null or original_owner <> refund_owner or original_kind not in ('expense', 'unresolved-expense') then
+    raise exception 'refund_links must point to an expense owned by the same user';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger refund_links_valid
+before insert or update on public.refund_links
+for each row execute function public.validate_refund_link();
+
+create or replace function public.media_link_target_owned(p_target_type text, p_target_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security invoker
+set search_path = public
+as $$
+  select case p_target_type
+    when 'meal' then exists (select 1 from public.meal_entries where id = p_target_id and user_id = p_user_id)
+    when 'ledger-record' then exists (select 1 from public.ledger_records where id = p_target_id and user_id = p_user_id)
+    when 'draft' then exists (select 1 from public.drafts where id = p_target_id and user_id = p_user_id)
+    when 'source-payload' then exists (select 1 from public.source_payloads where id = p_target_id and user_id = p_user_id)
+    else false
+  end;
+$$;
+
 create index accounts_user_active_idx on public.accounts (user_id, disabled_at, deleted_at, sort_order);
 create index categories_user_parent_idx on public.categories (user_id, parent_id, disabled_at, deleted_at);
 create index category_aliases_user_alias_idx on public.category_aliases (user_id, alias);
@@ -403,7 +499,17 @@ create policy ledger_record_tags_owner on public.ledger_record_tags for all usin
 create policy meals_owner on public.meal_entries for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy meal_transaction_links_owner on public.meal_transaction_links for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy media_assets_owner on public.media_assets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy media_links_owner on public.media_links for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy media_links_owner on public.media_links for all
+using (
+  auth.uid() = user_id
+  and exists (select 1 from public.media_assets asset where asset.id = media_asset_id and asset.user_id = auth.uid())
+  and public.media_link_target_owned(target_type, target_id, auth.uid())
+)
+with check (
+  auth.uid() = user_id
+  and exists (select 1 from public.media_assets asset where asset.id = media_asset_id and asset.user_id = auth.uid())
+  and public.media_link_target_owned(target_type, target_id, auth.uid())
+);
 create policy source_payloads_owner on public.source_payloads for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy drafts_owner on public.drafts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy audit_events_owner on public.audit_events for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
