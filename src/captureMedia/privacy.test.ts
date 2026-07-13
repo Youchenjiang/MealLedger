@@ -6,9 +6,12 @@ describe("media privacy and cleanup boundaries", () => {
   const now = new Date("2026-07-13T00:00:00.000Z");
 
   test("only unretained temporary scans become expired", () => {
-    const temporary = createTemporaryScan({ intent: "scan-receipt", fileName: "receipt.jpg", mimeType: "image/jpeg", byteSize: 20 }, "scan-temporary", now)!;
-    const retained = retainTemporaryScan(createTemporaryScan({ intent: "scan-invoice", fileName: "invoice.jpg", mimeType: "image/jpeg", byteSize: 20 }, "scan-retained", now)!);
-    const discarded = discardTemporaryScan(createTemporaryScan({ intent: "scan-receipt", fileName: "discard.jpg", mimeType: "image/jpeg", byteSize: 20 }, "scan-discarded", now)!);
+    const temporary = createTemporaryScan({ intent: "scan-receipt", fileName: "receipt.jpg", mimeType: "image/jpeg", byteSize: 20 }, "scan-temporary", now);
+    const retainedSource = createTemporaryScan({ intent: "scan-invoice", fileName: "invoice.jpg", mimeType: "image/jpeg", byteSize: 20 }, "scan-retained", now);
+    const discardedSource = createTemporaryScan({ intent: "scan-receipt", fileName: "discard.jpg", mimeType: "image/jpeg", byteSize: 20 }, "scan-discarded", now);
+    if (!temporary || !retainedSource || !discardedSource) throw new Error("Expected valid temporary scans.");
+    const retained = retainTemporaryScan(retainedSource);
+    const discarded = discardTemporaryScan(discardedSource);
 
     const expired = expireTemporaryScans([temporary, retained, discarded], new Date("2026-07-14T00:00:01.000Z"));
 

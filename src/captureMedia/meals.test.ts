@@ -10,7 +10,8 @@ describe("meal entries", () => {
   });
 
   test("links transactions and media without duplicating ids", () => {
-    const meal = createMealEntry({ occurredAt: "2026-07-13T12:30" }, "meal-1")!;
+    const meal = createMealEntry({ occurredAt: "2026-07-13T12:30" }, "meal-1");
+    if (!meal) throw new Error("Expected a valid meal entry.");
     const linked = linkMealTransaction(linkMealMedia(meal, "photo-1"), "record-1");
 
     expect(linkMealMedia(linked, "photo-1").mediaAssetIds).toEqual(["photo-1"]);
@@ -18,7 +19,9 @@ describe("meal entries", () => {
   });
 
   test("marks linked synced meals local-only again", () => {
-    const synced = { ...createMealEntry({ occurredAt: "2026-07-13T12:30" }, "meal-1")!, status: "synced" as const };
+    const meal = createMealEntry({ occurredAt: "2026-07-13T12:30" }, "meal-1");
+    if (!meal) throw new Error("Expected a valid meal entry.");
+    const synced = { ...meal, status: "synced" as const };
 
     expect(linkMealMedia(synced, "photo-1").status).toBe("local-only");
     expect(linkMealTransaction(synced, "record-1").status).toBe("local-only");

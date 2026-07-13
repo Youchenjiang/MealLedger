@@ -477,6 +477,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByRole("button", { name: "Resume recurring" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Resume recurring" }));
     await user.click(screen.getByRole("button", { name: "Cancel recurring" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
     expect(screen.queryByRole("button", { name: "Pause recurring" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel recurring" })).not.toBeInTheDocument();
   });
@@ -977,7 +978,6 @@ describe("App shell draft flow", () => {
 
   test("edits and voids a local official record while retaining audit history", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal("confirm", vi.fn(() => true));
     renderWorkspace();
 
     await openWorkspace(user);
@@ -991,6 +991,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("TWD 500")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
     expect(screen.getByText("Voided")).toBeInTheDocument();
 
     const storedRecords = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]") as Array<{ recordState: string; version: number }>;

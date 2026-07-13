@@ -35,6 +35,35 @@ function kindOf(row: NormalizedImportRow): ManualRecordKind | "" {
   return (row.kind?.trim() ?? "") as ManualRecordKind | "";
 }
 
+type RecordMatcher = (row: NormalizedImportRow, record: LocalLedgerRecord) => string | null;
+
+const recordMatchers: Partial<Record<ManualRecordKind, RecordMatcher>> = {
+  expense: (row, record) => anySame([
+    [row.merchant, record.counterparty],
+    [row.item_name, record.itemName],
+  ]) ? "same date, account, amount, and merchant/item" : null,
+  income: (row, record) => anySame([[row.source, record.counterparty]]) ? "same date, account, amount, and source" : null,
+  "fund-addition": (row, record) => anySame([[row.source, record.counterparty]]) ? "same date, account, amount, and source" : null,
+  transfer: (row, record) => {
+    const sameTransfer = same([row.target_account, record.transferAccountName], [row.target_currency, record.destinationCurrency])
+      && sameAmount([row.target_amount || row.amount, record.destinationAmount || record.amount]);
+    return sameTransfer ? "same source, target, date, and transfer amounts" : null;
+  },
+  refund: (row, record) => {
+    const rowLinkedIds = row.refund_linked_record_ids || row.refund_linked_record_id;
+    const recordLinkedIds = record.refundLinkedRecordIds?.join("|") || record.refundLinkedRecordId;
+    const sameRefund = anySame([[row.merchant, record.counterparty]])
+      && same([row.refund_subtype, record.refundSubtype], [rowLinkedIds, recordLinkedIds]);
+    return sameRefund ? "same date, account, amount, source, and refund details" : null;
+  },
+  adjustment: (row, record) => same([row.reason, record.reason]) ? "same date, account, amount, and reason" : null,
+  "unresolved-expense": (row, record) => {
+    const sameTime = same([row.time_precision, record.timePrecision], [row.period_start, record.periodStart], [row.period_end, record.periodEnd])
+      || (value(row.time_precision) === "day" && value(row.date) === value(record.localDate));
+    return sameTime ? "same unresolved-expense time, account, and amount" : null;
+  },
+};
+
 function matchesRecord(row: NormalizedImportRow, record: LocalLedgerRecord): string | null {
   if (record.recordState !== "active" || kindOf(row) !== record.kind) {
     return null;
@@ -46,32 +75,7 @@ function matchesRecord(row: NormalizedImportRow, record: LocalLedgerRecord): str
     return null;
   }
 
-  switch (record.kind) {
-    case "expense":
-      return anySame([
-        [row.merchant, record.counterparty],
-        [row.item_name, record.itemName],
-      ]) ? "same date, account, amount, and merchant/item" : null;
-    case "income":
-    case "fund-addition":
-      return anySame([[row.source, record.counterparty]]) ? "same date, account, amount, and source" : null;
-    case "transfer":
-      return same([row.target_account, record.transferAccountName], [row.target_currency, record.destinationCurrency])
-        && sameAmount([row.target_amount || row.amount, record.destinationAmount || record.amount])
-        ? "same source, target, date, and transfer amounts" : null;
-    case "refund":
-      const rowLinkedIds = row.refund_linked_record_ids || row.refund_linked_record_id;
-      const recordLinkedIds = record.refundLinkedRecordIds?.join("|") || record.refundLinkedRecordId;
-      return anySame([[row.merchant, record.counterparty]])
-        && same([row.refund_subtype, record.refundSubtype], [rowLinkedIds, recordLinkedIds])
-        ? "same date, account, amount, source, and refund details" : null;
-    case "adjustment":
-      return same([row.reason, record.reason]) ? "same date, account, amount, and reason" : null;
-    case "unresolved-expense":
-      return same([row.time_precision, record.timePrecision], [row.period_start, record.periodStart], [row.period_end, record.periodEnd])
-        || (value(row.time_precision) === "day" && value(row.date) === value(record.localDate))
-        ? "same unresolved-expense time, account, and amount" : null;
-  }
+  return recordMatchers[record.kind]?.(row, record) ?? null;
 }
 
 export function detectImportDuplicates(

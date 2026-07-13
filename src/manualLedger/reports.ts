@@ -145,6 +145,8 @@ export function calculateAccountReports(
         }
         break;
       }
+      default:
+        break;
     }
   }
 

@@ -31,7 +31,8 @@ describe("initial funding", () => {
 
     expect(account).not.toBeNull();
     expect(draft).not.toBeNull();
-    expect(createOfficialRecordBundle(draft!, [account!], {
+    if (!account || !draft) throw new Error("Expected valid initial funding data.");
+    expect(createOfficialRecordBundle(draft, [account], {
       userId: "local-user",
       recordId: "record-fund-1",
       idempotencyKey: "onboarding:fund-1",

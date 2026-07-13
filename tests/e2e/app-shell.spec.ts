@@ -89,9 +89,8 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
   for (const label of await mealLabels.all()) {
     const labelBox = await label.locator("span").boundingBox();
     const controlBox = await label.locator("input, textarea").boundingBox();
-    expect(labelBox).not.toBeNull();
-    expect(controlBox).not.toBeNull();
-    expect(controlBox!.y).toBeGreaterThan(labelBox!.y + labelBox!.height);
+    if (!labelBox || !controlBox) throw new Error("Expected meal form controls to be measurable.");
+    expect(controlBox.y).toBeGreaterThan(labelBox.y + labelBox.height);
   }
   await expect(page.getByRole("button", { name: "Take photo" })).toBeVisible();
   await page.getByLabel("Meal photos").setInputFiles([

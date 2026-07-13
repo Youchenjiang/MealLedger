@@ -146,7 +146,7 @@ export function validateCsvBytes(bytes: Uint8Array): CsvValidationResult {
     return blankResult(["CSV file must be valid UTF-8."]);
   }
 
-  const { rows, errors } = parseCsv(decoded.replace(/^\ufeff/, ""));
+  const { rows, errors } = parseCsv(decoded.replace(/^\ufeff/u, ""));
   if (rows.length === 0) {
     return blankResult(["CSV file must contain one header row.", ...errors]);
   }

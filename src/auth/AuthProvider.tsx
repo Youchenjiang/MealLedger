@@ -35,15 +35,16 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
 
     let mounted = true;
-    void supabase.auth.getSession().then(({ data, error }) => {
-      if (!mounted) return;
-      if (error) {
-        setState("auth-error");
-        setMessage(errorMessage(error));
-        return;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (mounted) {
+        if (error) {
+          setState("auth-error");
+          setMessage(errorMessage(error));
+        } else {
+          setUserId(data.session?.user.id ?? "");
+          setState(data.session ? "signed-in" : "signed-out");
+        }
       }
-      setUserId(data.session?.user.id ?? "");
-      setState(data.session ? "signed-in" : "signed-out");
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {

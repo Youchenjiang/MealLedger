@@ -652,7 +652,7 @@ function AuthenticatedApp() {
       setCloudSyncQueue(result.queue);
     };
 
-    void run().catch((error: unknown) => {
+    run().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Cloud synchronization failed.";
       setCloudSyncQueue((current) => current.map((item) => item.state === "pending" || item.state === "retryable-error"
         ? { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() }
@@ -967,14 +967,14 @@ function SignedOutShell({ authState, authMessage, configurationError, onSignIn }
 
   if (!configurationError && isLocalDevelopmentMode) {
     authControl = (
-      <button className="primary-action" type="button" onClick={() => { void onSignIn(); }}>
+      <button className="primary-action" type="button" onClick={() => { onSignIn().catch(() => undefined); }}>
         <LogIn size={18} aria-hidden="true" />
         Open workspace
       </button>
     );
   } else if (!configurationError) {
     authControl = (
-      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); void onSignIn(email); }}>
+      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email).catch(() => undefined); }}>
         <label htmlFor="auth-email">Email</label>
         <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
         <button className="primary-action" type="submit" disabled={authState === "loading"}>
@@ -1309,6 +1309,26 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
   );
 }
 
+function ConfirmActionButton({ label, message, onConfirm }: Readonly<{
+  label: string;
+  message: string;
+  onConfirm: () => void;
+}>) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return <button className="text-action danger-action" type="button" onClick={() => setConfirming(true)}>{label}</button>;
+  }
+
+  return (
+    <span className="confirm-action" role="group" aria-label={message}>
+      <span>{message}</span>
+      <button className="text-action danger-action" type="button" onClick={() => { onConfirm(); setConfirming(false); }}>Confirm</button>
+      <button className="text-action" type="button" onClick={() => setConfirming(false)}>Cancel</button>
+    </span>
+  );
+}
+
 function LedgerPage({
   records,
   drafts,
@@ -1427,30 +1447,18 @@ function LedgerPage({
                       </button>
                     ) : null}
                     {record.recurrenceStatus === "active" || record.recurrenceStatus === "paused" ? (
-                      <button
-                        className="text-action danger-action"
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Cancel future recurrence for this record?")) {
-                            onUpdateRecord(record.id, { recurrenceStatus: "cancelled" });
-                          }
-                        }}
-                      >
-                        Cancel recurring
-                      </button>
+                      <ConfirmActionButton
+                        label="Cancel recurring"
+                        message="Cancel future recurrence?"
+                        onConfirm={() => onUpdateRecord(record.id, { recurrenceStatus: "cancelled" })}
+                      />
                     ) : null}
                     <button className="text-action" type="button" onClick={() => setEditingRecordId(record.id)}>Edit</button>
-                    <button
-                      className="text-action danger-action"
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("Void this ledger record? It will remain in history and be excluded from active totals.")) {
-                          onVoidRecord(record.id);
-                        }
-                      }}
-                    >
-                      Void
-                    </button>
+                    <ConfirmActionButton
+                      label="Void"
+                      message="Void this record? It remains in history but leaves active totals."
+                      onConfirm={() => onVoidRecord(record.id)}
+                    />
                   </div>
                 )}
               </article>
@@ -1680,28 +1688,6 @@ function SuggestionButton({ label, onClick }: Readonly<{ label: string; onClick:
   return <button className="suggestion-button" type="button" onClick={onClick}>{label}</button>;
 }
 
-type CaptureActionData = { title: string; detail: string; icon: LucideIcon; available: boolean };
-
-function CaptureAction({ action }: Readonly<{ action: CaptureActionData }>) {
-  const Icon = action.icon;
-  const content = (
-    <>
-      <Icon size={22} aria-hidden="true" />
-      <span>
-        <strong>{action.title}</strong>
-        <small>{action.detail}</small>
-        <em>{action.available ? "Manual draft" : "Coming soon"}</em>
-      </span>
-    </>
-  );
-
-  return action.available ? (
-    <a className="action-card primary-card" href="#manual-draft-form">{content}</a>
-  ) : (
-    <button className="action-card unavailable" disabled type="button">{content}</button>
-  );
-}
-
 function adjustAmount(value: string, delta: number, allowNegative: boolean): string {
   const current = Number(value);
 
@@ -1779,8 +1765,8 @@ function QuickAccountSetup({
   error,
   onAccountNameChange,
   onCurrencyChange,
-  onAccountTypeChange = () => undefined,
-  onAllowNegativeBalanceChange = () => undefined,
+  onAccountTypeChange = (_value: string) => {},
+  onAllowNegativeBalanceChange = (_value: boolean) => {},
   onInitialBalanceChange,
   onInitialBalanceDateChange,
   onConfirm,
@@ -2223,7 +2209,7 @@ function CapturePage({
     if (typeof cameraVideoRef.current.play === "function") {
       const playResult = cameraVideoRef.current.play();
       if (playResult && typeof playResult.catch === "function") {
-        void playResult.catch(() => {
+        playResult.catch(() => {
           setCameraError("Camera preview could not start. You can still use Choose photos.");
         });
       }
@@ -2960,7 +2946,7 @@ function CapturePage({
             <div className="meal-photo-picker">
               <span className="meal-field-label">Meal photos</span>
               <div className="meal-photo-actions">
-                <button className="meal-file-action" type="button" onClick={() => void openCamera()}>
+                <button className="meal-file-action" type="button" onClick={() => { openCamera().catch(() => undefined); }}>
                   <Camera size={18} aria-hidden="true" />
                   <span>Take photo</span>
                 </button>
@@ -3031,137 +3017,6 @@ function CapturePage({
         </Panel>
       ) : null}
     </section>
-  );
-}
-
-function CaptureSourcesPanel({ actions }: Readonly<{ actions: CaptureActionData[] }>) {
-  return (
-    <Panel title="Choose how to start" eyebrow="Input sources">
-      <p className="panel-copy">
-        Manual entries, scans, meal photos, and attachments start as drafts. This app shell lets
-        you review or discard them; ledger confirmation arrives later.
-      </p>
-      <div className="planned-actions">
-        {actions.map((action) => <CaptureAction action={action} key={action.title} />)}
-      </div>
-    </Panel>
-  );
-}
-
-function ManualDraftPanel({
-  accounts,
-  form,
-  updateForm,
-  onSubmit,
-  formError,
-}: Readonly<{
-  accounts: LocalAccount[];
-  form: DraftForm;
-  updateForm: (field: keyof DraftForm, value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  formError: string | null;
-}>) {
-  return (
-    <article className="panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Local draft</p>
-          <h2>Manual transaction draft</h2>
-        </div>
-      </div>
-      <ManualDraftForm accounts={accounts} form={form} updateForm={updateForm} onSubmit={onSubmit} formError={formError} />
-    </article>
-  );
-}
-
-function ManualDraftForm({
-  accounts,
-  form,
-  updateForm,
-  onSubmit,
-  formError,
-}: Readonly<{
-  accounts: LocalAccount[];
-  form: DraftForm;
-  updateForm: (field: keyof DraftForm, value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  formError: string | null;
-}>) {
-  return (
-    <form className="draft-form" id="manual-draft-form" onSubmit={onSubmit}>
-      <label>
-        <span>Date</span>
-        <input required type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
-      </label>
-      <label>
-        <span>Account</span>
-        <select required disabled={accounts.length === 0} value={form.account} onChange={(event) => updateForm("account", event.target.value)}>
-          <option value="">{accounts.length === 0 ? "Create an account in Settings first" : "Select an account"}</option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.name}>
-              {account.name} ({account.currency})
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>Type</span>
-        <select value={form.kind} onChange={(event) => updateForm("kind", event.target.value as DraftForm["kind"])}>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-          <option value="transfer">Transfer</option>
-          <option value="refund">Refund</option>
-          <option value="adjustment">Adjustment</option>
-        </select>
-      </label>
-      <DraftKindFields accounts={accounts} form={form} updateForm={updateForm} />
-      <AmountField id="draft-editor-amount" label="Amount" required value={form.amount} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
-      <label>
-        <span>Currency</span>
-        <select value={form.currency} onChange={(event) => updateForm("currency", event.target.value)}>
-          <option value="TWD">TWD</option>
-          <option value="JPY">JPY</option>
-          <option value="USD">USD</option>
-        </select>
-      </label>
-      <label className="full-span">
-        <span>Note</span>
-        <textarea value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Optional context before review" />
-      </label>
-      {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
-      <button className="primary-action align-start" type="submit">Create draft</button>
-    </form>
-  );
-}
-
-function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: LocalAccount[]; form: DraftForm; updateForm: (field: keyof DraftForm, value: string) => void }>) {
-  if (form.kind === "transfer") {
-    return (
-      <label>
-        <span>Transfer account</span>
-        <select required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => updateForm("transferAccount", event.target.value)}>
-          <option value="">{accounts.length < 2 ? "Create another account in Settings first" : "Select destination account"}</option>
-          {accounts.filter((account) => account.name !== form.account).map((account) => (
-            <option key={account.id} value={account.name}>
-              {account.name} ({account.currency})
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-
-  return (
-    <>
-      <label>
-        <span>Category</span>
-        <input required pattern=".*\S.*" title="Enter a category." value={form.category} onChange={(event) => updateForm("category", event.target.value)} placeholder="Daily" />
-      </label>
-      <label>
-        <span>{counterpartyLabelForKind(form.kind)}</span>
-        <input required pattern=".*\S.*" title="Enter the source, merchant, or reason." value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)} placeholder={form.kind === "income" ? "Salary" : "7-Eleven"} />
-      </label>
-    </>
   );
 }
 
@@ -3287,7 +3142,7 @@ function AccountSyncPanel({ onSignOut }: Readonly<{ onSignOut: () => Promise<voi
           <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
         </div>
       </dl>
-      <button className="secondary-action align-start" type="button" onClick={() => { void onSignOut(); }}>
+      <button className="secondary-action align-start" type="button" onClick={() => { onSignOut().catch(() => undefined); }}>
         <LogOut size={18} aria-hidden="true" />
         Sign out
       </button>
@@ -3469,7 +3324,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
       <div className="export-actions">
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
-        <button className="secondary-action" type="button" disabled={exporting} onClick={() => { void exportZip(); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
+        <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
       </div>
       {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
       </section>
@@ -3513,40 +3368,18 @@ function EmptyMetric({ label, value, detail }: Readonly<{ label: string; value: 
   );
 }
 
-function kindLabel(kind: DraftForm["kind"]) {
-  switch (kind) {
-    case "expense":
-      return "Expense";
-    case "income":
-      return "Income";
-    case "transfer":
-      return "Transfer";
-    case "refund":
-      return "Refund";
-    case "fund-addition":
-      return "Initial funding";
-    case "adjustment":
-      return "Balance adjustment";
-    case "unresolved-expense":
-      return "Unresolved expense";
-  }
-}
+const kindLabels: Record<DraftForm["kind"], string> = {
+  expense: "Expense",
+  income: "Income",
+  transfer: "Transfer",
+  refund: "Refund",
+  "fund-addition": "Initial funding",
+  adjustment: "Balance adjustment",
+  "unresolved-expense": "Unresolved expense",
+};
 
-function draftSummary(draft: TransactionDraft) {
-  if (draft.kind === "transfer") {
-    const destination = draft.transferMode === "cross-currency" ? `${draft.destinationAmount} ${draft.destinationCurrency}` : draft.currency;
-    return `${draft.account} ${draft.amount} ${draft.currency} to ${draft.transferAccount} ${destination}`;
-  }
-
-  if (draft.kind === "adjustment") {
-    return `${draft.reason}, ${draft.currency} ${draft.amount}`;
-  }
-
-  if (draft.kind === "unresolved-expense") {
-    return `Unresolved expense, ${draft.currency} ${draft.amount}`;
-  }
-
-  return `${draft.counterparty}, ${draft.currency} ${draft.amount}`;
+function kindLabel(kind: DraftForm["kind"]): string {
+  return kindLabels[kind];
 }
 
 function routeTitle(route: AppRoute) {

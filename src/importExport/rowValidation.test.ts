@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { validateImportRows, type NormalizedImportRow } from "./rowValidation";
+import { validateImportRows } from "./rowValidation";
 
 const accounts = [
   { name: "Cash", currency: "TWD" },

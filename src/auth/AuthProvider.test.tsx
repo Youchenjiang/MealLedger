@@ -8,8 +8,8 @@ function AuthHarness() {
   return (
     <div>
       <output>{auth.state}</output>
-      <button type="button" onClick={() => { void auth.signIn(); }}>Sign in</button>
-      <button type="button" onClick={() => { void auth.signOut(); }}>Sign out</button>
+      <button type="button" onClick={() => { auth.signIn().catch(() => undefined); }}>Sign in</button>
+      <button type="button" onClick={() => { auth.signOut().catch(() => undefined); }}>Sign out</button>
     </div>
   );
 }
