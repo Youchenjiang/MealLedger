@@ -513,6 +513,36 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Sync not enabled")).toBeInTheDocument();
   });
 
+  test("keeps an offline manual record visibly local-only", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    act(() => window.dispatchEvent(new Event("offline")));
+    await createExpenseRecord(user);
+
+    expect(screen.getByText("Offline")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ status: "local-only", kind: "expense" })]),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Ledger" }));
+    expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("local-only");
+  });
+
+  test("rejects malformed CSV without touching the local ledger", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.upload(screen.getByLabelText("CSV import file"), new File(["unknown,other\nvalue\n"], "invalid.csv", { type: "text/csv" }));
+
+    const rejectionMessage = await screen.findByText(/CSV rejected:/);
+    expect(rejectionMessage).toHaveTextContent("CSV headers do not contain a supported ledger field.");
+    expect(window.localStorage.getItem("mealledger.manual-ledger.records")).toBe("[]");
+  });
+
   test("shows local record counts as records are created", async () => {
     const user = userEvent.setup();
     renderWorkspace();
