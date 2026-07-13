@@ -354,6 +354,31 @@ function recordDisplayName(record: LocalLedgerRecord): string {
   return record.kind === "transfer" ? `${record.accountName} to ${record.transferAccountName}` : record.counterparty || record.reason || record.kind;
 }
 
+function syncTargetLabel(target: CloudSyncQueueItem["target"]): string {
+  switch (target) {
+    case "record":
+      return "ledger record";
+    case "draft":
+      return "ledger draft";
+    case "meal":
+      return "meal";
+    case "media":
+      return "media metadata";
+    default:
+      return "scan source";
+  }
+}
+
+function formatAmountStep(step: number): string {
+  if (step === 1000) {
+    return "+1k";
+  }
+  if (step === -1000) {
+    return "-1k";
+  }
+  return step > 0 ? `+${step}` : String(step);
+}
+
 function draftCountLabel(draftCount: number): string {
   if (draftCount === 0) {
     return "No drafts to review";
@@ -372,14 +397,19 @@ function draftReviewCopy(draftCount: number): string {
   return `${draftCount} ${noun} waiting. Continue in Capture or confirm a complete draft here.`;
 }
 
-function counterpartyLabel(kind: DraftForm["kind"]): string {
+function counterpartyLabelForKind(kind: DraftForm["kind"]): string {
   switch (kind) {
     case "income":
+    case "fund-addition":
       return "Source";
     case "adjustment":
       return "Reason";
-    default:
+    case "expense":
       return "Merchant";
+    case "refund":
+      return "Merchant or source";
+    default:
+      return "Merchant or source";
   }
 }
 
@@ -933,6 +963,27 @@ function AuthLoadingShell() {
 
 function SignedOutShell({ authState, authMessage, configurationError, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; configurationError: boolean; onSignIn: (email?: string) => Promise<void> }>) {
   const [email, setEmail] = useState("");
+  let authControl: React.ReactNode = null;
+
+  if (!configurationError && isLocalDevelopmentMode) {
+    authControl = (
+      <button className="primary-action" type="button" onClick={() => { void onSignIn(); }}>
+        <LogIn size={18} aria-hidden="true" />
+        Open workspace
+      </button>
+    );
+  } else if (!configurationError) {
+    authControl = (
+      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); void onSignIn(email); }}>
+        <label htmlFor="auth-email">Email</label>
+        <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+        <button className="primary-action" type="submit" disabled={authState === "loading"}>
+          <LogIn size={18} aria-hidden="true" />
+          {authState === "loading" ? "Sending link..." : "Send magic link"}
+        </button>
+      </form>
+    );
+  }
 
   return (
     <main className="signed-out-shell">
@@ -946,21 +997,7 @@ function SignedOutShell({ authState, authMessage, configurationError, onSignIn }
             a later ledger workflow writes it.
           </p>
         </div>
-        {configurationError ? null : isLocalDevelopmentMode ? (
-          <button className="primary-action" type="button" onClick={() => { void onSignIn(); }}>
-            <LogIn size={18} aria-hidden="true" />
-            Open workspace
-          </button>
-        ) : (
-          <form className="auth-form" onSubmit={(event) => { event.preventDefault(); void onSignIn(email); }}>
-            <label htmlFor="auth-email">Email</label>
-            <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
-            <button className="primary-action" type="submit" disabled={authState === "loading"}>
-              <LogIn size={18} aria-hidden="true" />
-              {authState === "loading" ? "Sending link..." : "Send magic link"}
-            </button>
-          </form>
-        )}
+        {authControl}
         {authMessage ? <p className="auth-message" role={authState === "auth-error" ? "alert" : "status"}>{authMessage}</p> : null}
       </section>
     </main>
@@ -1211,15 +1248,7 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
         <Panel title="Sync attention" eyebrow="Action required">
           <div className="sync-issues" aria-label="Cloud sync issues">
             {syncIssues.map((item) => {
-              const targetLabel = item.target === "record"
-                ? "ledger record"
-                : item.target === "draft"
-                ? "ledger draft"
-                : item.target === "meal"
-                ? "meal"
-                : item.target === "media"
-                ? "media metadata"
-                : "scan source";
+              const targetLabel = syncTargetLabel(item.target);
 
               return (
                 <article className="sync-issue" key={item.id}>
@@ -1691,7 +1720,7 @@ function AmountField({
   allowNegative = false,
   placeholder = "100",
   onChange,
-}: {
+}: Readonly<{
   id: string;
   label: string;
   value: string;
@@ -1699,9 +1728,9 @@ function AmountField({
   allowNegative?: boolean;
   placeholder?: string;
   onChange: (value: string) => void;
-}) {
+}>) {
   const steps = [-1000, -100, -10, 10, 100, 1000];
-  const visibleSteps = value.trim() || allowNegative ? steps : steps.filter((step) => step > 0);
+  const visibleSteps = allowNegative || value.trim() ? steps : steps.filter((step) => step > 0);
   const currentAmount = Number(value);
 
   return (
@@ -1731,7 +1760,7 @@ function AmountField({
               disabled={!allowNegative && step < 0 && (!Number.isFinite(currentAmount) || currentAmount <= 0)}
               onClick={() => onChange(adjustAmount(value, step, allowNegative))}
             >
-              {step > 0 ? `+${step === 1000 ? "1k" : step}` : step === -1000 ? "-1k" : step}
+              {formatAmountStep(step)}
             </button>
           ))}
         </div>
@@ -1756,7 +1785,7 @@ function QuickAccountSetup({
   onInitialBalanceDateChange,
   onConfirm,
   onCancel,
-}: {
+}: Readonly<{
   accountName: string;
   currency: string;
   accountType?: string;
@@ -1772,7 +1801,7 @@ function QuickAccountSetup({
   onInitialBalanceDateChange: (value: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
-}) {
+}>) {
   return (
     <div className="quick-account-backdrop">
     <section className="quick-account" aria-label="Add account" role="dialog" aria-modal="true">
@@ -1938,8 +1967,7 @@ function CapturePage({
 
   const isTransfer = form.kind === "transfer";
   const needsCategory = form.kind === "expense" || form.kind === "income" || form.kind === "refund";
-  const counterpartyLabel =
-    form.kind === "expense" ? "Merchant" : form.kind === "income" || form.kind === "fund-addition" ? "Source" : "Merchant or source";
+  const counterpartyLabel = counterpartyLabelForKind(form.kind);
   const needsCounterparty = form.kind === "expense" || form.kind === "income" || form.kind === "refund" || form.kind === "fund-addition";
   const isUnresolvedExpense = form.kind === "unresolved-expense";
   const hasSelectedAccount = accounts.some((account) => account.name === form.account);
@@ -3130,7 +3158,7 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
         <input required pattern=".*\S.*" title="Enter a category." value={form.category} onChange={(event) => updateForm("category", event.target.value)} placeholder="Daily" />
       </label>
       <label>
-        <span>{counterpartyLabel(form.kind)}</span>
+        <span>{counterpartyLabelForKind(form.kind)}</span>
         <input required pattern=".*\S.*" title="Enter the source, merchant, or reason." value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)} placeholder={form.kind === "income" ? "Salary" : "7-Eleven"} />
       </label>
     </>
