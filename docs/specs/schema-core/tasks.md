@@ -63,7 +63,9 @@ Expected verification:
 - TypeScript domain contracts: `src/schemaCore/contracts.ts`.
 - Root and nested category names use a generated parent key so NULL roots are
   also protected by the canonical uniqueness constraint.
-- `npm run test` — 205 tests passed after the completed feature set.
+- Account currency immutability covers both source ledger records and transfer
+  destination history.
+- `npm run test` — 209 tests passed after the completed feature set.
 - `npm run build` and `git diff --check` passed.
 
 ## Environment Boundary
