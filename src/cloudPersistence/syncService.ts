@@ -189,15 +189,11 @@ export function enqueueLocalChanges(
 ): CloudSyncQueueItem[] {
   let next = queue;
   for (const item of media) {
-    if (item.metadataStatus !== "synced") next = enqueueMediaSync(next, item, now);
+    next = enqueueMediaSync(next, item, now);
   }
   for (const record of records) next = enqueueRecordSync(next, record, now);
   for (const draft of drafts) next = enqueueDraftSync(next, draft, now);
-  for (const scan of scans) {
-    if (scan.cloudStatus !== "synced") next = enqueueScanSync(next, scan, now);
-  }
-  for (const meal of meals) {
-    if (meal.status === "local-only") next = enqueueMealSync(next, meal, now);
-  }
+  for (const scan of scans) next = enqueueScanSync(next, scan, now);
+  for (const meal of meals) next = enqueueMealSync(next, meal, now);
   return next;
 }

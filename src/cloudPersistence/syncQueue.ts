@@ -31,19 +31,40 @@ function existing(current: CloudSyncQueueItem[], target: CloudSyncTarget, target
   return current.find((item) => item.target === target && item.targetId === targetId);
 }
 
+function refreshExisting(
+  current: CloudSyncQueueItem[],
+  target: CloudSyncTarget,
+  targetId: string,
+  requestHash: string,
+  idempotencyKey: string,
+  now: string,
+): CloudSyncQueueItem[] | null {
+  const prior = existing(current, target, targetId);
+  if (!prior) return null;
+  if (prior.requestHash === requestHash && prior.idempotencyKey === idempotencyKey) return current;
+
+  return current.map((item) => item.id === prior.id
+    ? {
+      ...item,
+      requestHash,
+      idempotencyKey,
+      state: "pending",
+      attempts: 0,
+      nextAttemptAt: now,
+      lastError: "",
+      updatedAt: now,
+    }
+    : item);
+}
+
 export function enqueueRecordSync(
   current: CloudSyncQueueItem[],
   record: LocalLedgerRecord,
   now: string,
 ): CloudSyncQueueItem[] {
   const requestHash = `${record.id}:${record.version}:${record.updatedAt}`;
-  const prior = existing(current, "record", record.id);
-  if (prior) {
-    if (prior.requestHash === requestHash && prior.idempotencyKey === record.idempotencyKey) return current;
-    return current.map((item) => item.id === prior.id
-      ? { ...item, requestHash, actionType: "record-bundle", idempotencyKey: record.idempotencyKey, state: "pending", nextAttemptAt: now, lastError: "", updatedAt: now }
-      : item);
-  }
+  const refreshed = refreshExisting(current, "record", record.id, requestHash, record.idempotencyKey, now);
+  if (refreshed) return refreshed;
   if (record.status === "synced") return current;
   return [...current, {
     id: queueId("record", record.id),
@@ -66,14 +87,17 @@ export function enqueueDraftSync(
   draft: TransactionDraft,
   now: string,
 ): CloudSyncQueueItem[] {
-  if (existing(current, "draft", draft.id)) return current;
+  const idempotencyKey = `draft:${draft.id}`;
+  const requestHash = `draft:${draft.id}:${JSON.stringify(draft)}`;
+  const refreshed = refreshExisting(current, "draft", draft.id, requestHash, idempotencyKey, now);
+  if (refreshed) return refreshed;
   return [...current, {
     id: queueId("draft", draft.id),
     target: "draft",
     targetId: draft.id,
     actionType: "draft-create",
-    idempotencyKey: `draft:${draft.id}`,
-    requestHash: `draft:${draft.id}`,
+    idempotencyKey,
+    requestHash,
     state: "pending",
     attempts: 0,
     nextAttemptAt: now,
@@ -88,14 +112,18 @@ export function enqueueMealSync(
   meal: MealEntry,
   now: string,
 ): CloudSyncQueueItem[] {
-  if (existing(current, "meal", meal.id)) return current;
+  const idempotencyKey = `meal:${meal.id}`;
+  const requestHash = `meal:${meal.id}:${JSON.stringify(meal)}`;
+  const refreshed = refreshExisting(current, "meal", meal.id, requestHash, idempotencyKey, now);
+  if (refreshed) return refreshed;
+  if (meal.status === "synced") return current;
   return [...current, {
     id: queueId("meal", meal.id),
     target: "meal",
     targetId: meal.id,
     actionType: "meal-create",
-    idempotencyKey: `meal:${meal.id}`,
-    requestHash: `meal:${meal.id}:${meal.occurredAt}:${meal.note}`,
+    idempotencyKey,
+    requestHash,
     state: "pending",
     attempts: 0,
     nextAttemptAt: now,
@@ -110,14 +138,18 @@ export function enqueueMediaSync(
   media: UploadQueueItem,
   now: string,
 ): CloudSyncQueueItem[] {
-  if (existing(current, "media", media.id)) return current;
+  const idempotencyKey = `media:${media.id}`;
+  const requestHash = `media:${media.id}:${JSON.stringify({ name: media.name, type: media.type, size: media.size, status: media.status, kind: media.kind })}`;
+  const refreshed = refreshExisting(current, "media", media.id, requestHash, idempotencyKey, now);
+  if (refreshed) return refreshed;
+  if (media.metadataStatus === "synced") return current;
   return [...current, {
     id: queueId("media", media.id),
     target: "media",
     targetId: media.id,
     actionType: "media-metadata",
-    idempotencyKey: `media:${media.id}`,
-    requestHash: `media:${media.id}:${media.size}:${media.type}`,
+    idempotencyKey,
+    requestHash,
     state: "pending",
     attempts: 0,
     nextAttemptAt: now,
@@ -132,14 +164,18 @@ export function enqueueScanSync(
   scan: TemporaryScan,
   now: string,
 ): CloudSyncQueueItem[] {
-  if (existing(current, "scan", scan.id)) return current;
+  const idempotencyKey = `scan:${scan.id}`;
+  const requestHash = `scan:${scan.id}:${JSON.stringify(scan)}`;
+  const refreshed = refreshExisting(current, "scan", scan.id, requestHash, idempotencyKey, now);
+  if (refreshed) return refreshed;
+  if (scan.cloudStatus === "synced") return current;
   return [...current, {
     id: queueId("scan", scan.id),
     target: "scan",
     targetId: scan.id,
     actionType: "source-payload",
-    idempotencyKey: `scan:${scan.id}`,
-    requestHash: `scan:${scan.id}:${scan.state}:${scan.expiresAt ?? ""}`,
+    idempotencyKey,
+    requestHash,
     state: "pending",
     attempts: 0,
     nextAttemptAt: now,

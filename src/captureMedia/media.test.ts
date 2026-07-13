@@ -14,8 +14,8 @@ describe("temporary scan lifecycle", () => {
   test("retaining or discarding a scan stops temporary expiration", () => {
     const scan = createTemporaryScan({ intent: "scan-invoice", fileName: "invoice.png", mimeType: "image/png", byteSize: 12 }, "scan-2", now)!;
 
-    expect(retainTemporaryScan(scan)).toEqual(expect.objectContaining({ state: "retained", expiresAt: null }));
-    expect(discardTemporaryScan(scan).state).toBe("discarded");
+    expect(retainTemporaryScan(scan)).toEqual(expect.objectContaining({ state: "retained", expiresAt: null, cloudStatus: "local-only" }));
+    expect(discardTemporaryScan(scan)).toEqual(expect.objectContaining({ state: "discarded", cloudStatus: "local-only" }));
   });
 
   test("rejects nameless or invalid sources", () => {

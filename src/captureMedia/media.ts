@@ -44,17 +44,17 @@ export function createTemporaryScan(input: TemporaryScanInput, id: string, now =
 }
 
 export function retainTemporaryScan(scan: TemporaryScan): TemporaryScan {
-  return { ...scan, state: "retained", expiresAt: null };
+  return { ...scan, state: "retained", expiresAt: null, cloudStatus: "local-only" };
 }
 
 export function discardTemporaryScan(scan: TemporaryScan): TemporaryScan {
-  return { ...scan, state: "discarded" };
+  return { ...scan, state: "discarded", cloudStatus: "local-only" };
 }
 
 export function expireTemporaryScans(scans: TemporaryScan[], now = new Date()): TemporaryScan[] {
   return scans.map((scan) => (
     scan.state === "temporary" && scan.expiresAt && new Date(scan.expiresAt) <= now
-      ? { ...scan, state: "expired" }
+      ? { ...scan, state: "expired", cloudStatus: "local-only" }
       : scan
   ));
 }

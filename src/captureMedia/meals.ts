@@ -33,6 +33,7 @@ export function createMealEntry(input: MealEntryInput, id: string): MealEntry | 
 export function linkMealMedia(meal: MealEntry, mediaAssetId: string): MealEntry {
   return {
     ...meal,
+    status: "local-only",
     mediaAssetIds: uniqueIds([...meal.mediaAssetIds, mediaAssetId]),
   };
 }
@@ -40,6 +41,7 @@ export function linkMealMedia(meal: MealEntry, mediaAssetId: string): MealEntry 
 export function linkMealTransaction(meal: MealEntry, transactionId: string): MealEntry {
   return {
     ...meal,
+    status: "local-only",
     transactionIds: uniqueIds([...meal.transactionIds, transactionId]),
   };
 }

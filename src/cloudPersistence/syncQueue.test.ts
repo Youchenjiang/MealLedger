@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
+import type { MealEntry } from "../captureMedia/meals";
+import type { TemporaryScan } from "../captureMedia/media";
 import type { LocalLedgerRecord } from "../manualLedger/records";
-import { enqueueDraftSync, enqueueRecordSync, markCloudSyncFailure, markCloudSynced, markCloudSyncing, pendingCloudSyncItems } from "./syncQueue";
+import type { UploadQueueItem } from "../captureMedia/uploadQueue";
+import { enqueueDraftSync, enqueueMealSync, enqueueMediaSync, enqueueRecordSync, enqueueScanSync, markCloudSyncFailure, markCloudSynced, markCloudSyncing, pendingCloudSyncItems } from "./syncQueue";
 
 const record = { id: "record-1", idempotencyKey: "action-1", version: 1, updatedAt: "2026-07-13T00:00:00.000Z" } as LocalLedgerRecord;
 const draft = { id: "draft-1" } as Parameters<typeof enqueueDraftSync>[1];
@@ -24,6 +27,32 @@ describe("cloud sync queue", () => {
     const edited = enqueueRecordSync(synced, { ...record, status: "synced", version: 2, updatedAt: "2026-07-13T01:00:00.000Z" }, now);
 
     expect(edited[0]).toMatchObject({ state: "pending", requestHash: "record-1:2:2026-07-13T01:00:00.000Z", lastError: "" });
+  });
+
+  test("reopens changed draft, meal, and scan targets after they were synced", () => {
+    const firstDraft = enqueueDraftSync([], { id: "draft-1", note: "before" } as Parameters<typeof enqueueDraftSync>[1], now);
+    const syncedDraft = markCloudSynced(firstDraft, firstDraft[0].id, now);
+    const changedDraft = enqueueDraftSync(syncedDraft, { id: "draft-1", note: "after" } as Parameters<typeof enqueueDraftSync>[1], "2026-07-13T01:00:00.000Z");
+
+    const meal = { id: "meal-1", occurredAt: "2026-07-13T12:30", note: "before", transactionIds: [], mediaAssetIds: [], status: "local-only" as const } satisfies MealEntry;
+    const firstMeal = enqueueMealSync([], meal, now);
+    const syncedMeal = markCloudSynced(firstMeal, firstMeal[0].id, now);
+    const changedMeal = enqueueMealSync(syncedMeal, { ...meal, note: "after", status: "synced" }, "2026-07-13T01:00:00.000Z");
+
+    const scan = { id: "scan-1", intent: "scan-receipt" as const, fileName: "receipt.jpg", mimeType: "image/jpeg", byteSize: 10, state: "temporary" as const, cloudStatus: "local-only" as const, createdAt: now, expiresAt: "2026-07-14T00:00:00.000Z" } satisfies TemporaryScan;
+    const firstScan = enqueueScanSync([], scan, now);
+    const syncedScan = markCloudSynced(firstScan, firstScan[0].id, now);
+    const changedScan = enqueueScanSync(syncedScan, { ...scan, state: "retained", cloudStatus: "local-only", expiresAt: null }, "2026-07-13T01:00:00.000Z");
+
+    const media = { id: "media-1", name: "receipt.jpg", type: "image/jpeg", size: 10, status: "queued", kind: "receipt", metadataStatus: "local-only" } satisfies UploadQueueItem;
+    const firstMedia = enqueueMediaSync([], media, now);
+    const syncedMedia = markCloudSynced(firstMedia, firstMedia[0].id, now);
+    const changedMedia = enqueueMediaSync(syncedMedia, { ...media, size: 20, metadataStatus: "local-only" }, "2026-07-13T01:00:00.000Z");
+
+    expect(changedDraft[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
+    expect(changedMeal[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
+    expect(changedScan[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
+    expect(changedMedia[0]).toMatchObject({ state: "pending", attempts: 0, nextAttemptAt: "2026-07-13T01:00:00.000Z" });
   });
 
   test("tracks attempt state and removes synced items from pending work", () => {
