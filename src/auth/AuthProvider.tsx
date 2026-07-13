@@ -9,6 +9,7 @@ type AuthContextValue = {
   userId: string;
   email: string;
   message: string;
+  configurationError: boolean;
   signIn: (email?: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -19,11 +20,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Authentication failed. Try again.";
 }
 
+const configurationError = !isLocalDevelopmentMode && !supabase;
+const configurationMessage = "Cloud authentication is not configured for this deployment.";
+
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const [state, setState] = useState<AuthState>(isLocalDevelopmentMode ? "signed-out" : "loading");
+  const [state, setState] = useState<AuthState>(isLocalDevelopmentMode ? "signed-out" : configurationError ? "auth-error" : "loading");
   const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(configurationError ? configurationMessage : "");
 
   useEffect(() => {
     if (isLocalDevelopmentMode || !supabase) {
@@ -60,14 +64,21 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     userId,
     email,
     message,
+    configurationError,
     signIn: async (requestedEmail = "") => {
       const normalizedEmail = requestedEmail.trim();
       setEmail(normalizedEmail);
       setMessage("");
 
-      if (isLocalDevelopmentMode || !supabase) {
+      if (isLocalDevelopmentMode) {
         setUserId("local-user");
         setState("signed-in");
+        return;
+      }
+
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
         return;
       }
 
@@ -83,9 +94,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setMessage("Magic link sent. Check your email to open the workspace.");
     },
     signOut: async () => {
-      if (isLocalDevelopmentMode || !supabase) {
+      if (isLocalDevelopmentMode) {
         setUserId("local-user");
         setState("signed-out");
+        return;
+      }
+
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
         return;
       }
 

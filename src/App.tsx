@@ -521,7 +521,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, userId, message: authMessage, signIn, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, configurationError, signIn, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -738,7 +738,7 @@ function AuthenticatedApp() {
   }
 
   if (authState !== "signed-in") {
-    return <SignedOutShell authState={authState} authMessage={authMessage} onSignIn={signIn} />;
+    return <SignedOutShell authState={authState} authMessage={authMessage} configurationError={configurationError} onSignIn={signIn} />;
   }
 
   if (onboardingOpen || (!onboardingCompleted && accounts.length === 0)) {
@@ -909,7 +909,7 @@ function AuthLoadingShell() {
   );
 }
 
-function SignedOutShell({ authState, authMessage, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; onSignIn: (email?: string) => Promise<void> }>) {
+function SignedOutShell({ authState, authMessage, configurationError, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; configurationError: boolean; onSignIn: (email?: string) => Promise<void> }>) {
   const [email, setEmail] = useState("");
 
   return (
@@ -924,7 +924,7 @@ function SignedOutShell({ authState, authMessage, onSignIn }: Readonly<{ authSta
             a later ledger workflow writes it.
           </p>
         </div>
-        {isLocalDevelopmentMode ? (
+        {configurationError ? null : isLocalDevelopmentMode ? (
           <button className="primary-action" type="button" onClick={() => { void onSignIn(); }}>
             <LogIn size={18} aria-hidden="true" />
             Open workspace
