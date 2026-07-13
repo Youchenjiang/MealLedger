@@ -54,7 +54,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       }
     });
 
-    return () => {
+    return function cleanupAuthSubscription(): void {
       mounted = false;
       data.subscription.unsubscribe();
     };

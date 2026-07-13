@@ -1765,8 +1765,8 @@ function QuickAccountSetup({
   error,
   onAccountNameChange,
   onCurrencyChange,
-  onAccountTypeChange = (_value: string) => {},
-  onAllowNegativeBalanceChange = (_value: boolean) => {},
+  onAccountTypeChange,
+  onAllowNegativeBalanceChange,
   onInitialBalanceChange,
   onInitialBalanceDateChange,
   onConfirm,
@@ -1812,7 +1812,7 @@ function QuickAccountSetup({
       </label>
       <label>
         <span>Account type</span>
-        <select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}>
+        <select value={accountType} onChange={(event) => onAccountTypeChange?.(event.target.value)}>
           <option value="cash">Cash</option>
           <option value="bank">Bank account</option>
           <option value="card">Credit card</option>
@@ -1821,7 +1821,7 @@ function QuickAccountSetup({
         </select>
       </label>
       <label className="checkbox-row">
-        <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} />
+        <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange?.(event.target.checked)} />
         <span>Allow negative balance</span>
       </label>
       <AmountField
