@@ -1,5 +1,9 @@
 # Capture Media Test Plan
 
+## Current V1 Status
+
+Capture currently verifies local metadata and queue behavior. Cloud object upload completion, permanent retention, cleanup jobs, OCR/manual takeover, and batch grouping are future-spec cases and must not be reported as implemented by the current branch.
+
 ## Capture Intent
 
 Test Capture page shows manual entry, scan receipt, scan invoice, record meal, and attach photo.

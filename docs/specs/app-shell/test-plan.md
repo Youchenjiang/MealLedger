@@ -49,12 +49,7 @@ Blocking review findings must be fixed before the final verification run. Non-bl
 
 ## Verification Evidence
 
-Final verification is recorded on 2026-07-12:
-
-- `npm run test`: 45 Vitest and React Testing Library tests passed.
-- `npm run test:coverage`: passed. Statements 92.34%, branches 87.88%, functions 90.96%, and lines 93.33% exceed the strengthened thresholds.
-- `npm run test:e2e`: 4 Playwright tests passed for the signed-out-to-Ledger draft flow, 1440px desktop, 720px compact, and 390px mobile.
-- `npm run build`: passed.
+The original app-shell verification is retained as historical evidence. The current branch includes later Manual Ledger, Schema Core, Auth/Onboarding, Capture Media, and Import/Export work; its consolidated verification is recorded in `docs/specs/v1-hardening/test-plan.md`.
 
 Read-only reviews were performed for UX, QA, and responsive behavior. UX and QA blocking findings were fixed before final verification:
 

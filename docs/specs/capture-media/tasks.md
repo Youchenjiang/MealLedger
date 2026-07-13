@@ -66,10 +66,7 @@ Expected verification:
 
 ## V1 Closeout Evidence
 
-- Unit and integration: `npm run test` — 143 tests passed.
-- Coverage: `npm run test:coverage` — 85.98% statements, 77.43% branches.
-- Browser smoke: `npm run test:e2e` — 6 tests passed, including meal multi-photo and invoice scan review.
-- Build and hygiene: `npm run build`, `git diff --check` passed.
+The current implementation is local-only for media bytes. Tasks that require cloud upload, permanent object retention, or OCR processing remain deferred even though their future behavior is described in the requirements. The historical capture-media test counts are superseded by the consolidated `v1-hardening` verification evidence.
 
 ## Explicitly Deferred
 
