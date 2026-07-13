@@ -6,6 +6,10 @@
 - [Official API Traffic Control Notice](https://www.einvoice.nat.gov.tw/static/ptl/ein_upload/download/5540.pdf)
 - [Official API Use Regulations](https://www.einvoice.nat.gov.tw/static/ptl/ein_upload/download/13.pdf)
 - [Official API Application and Self-check Form](https://www.einvoice.nat.gov.tw/static/ptl/ein_upload/download/5220.pdf)
+- [Official test-environment API application page](https://wwwtest.einvoice.nat.gov.tw/portal/oaf/apply/oaf501w)
+
+Research refresh: 2026-07-13. The additional source was checked against the
+current official test environment before this spike was left conditional.
 
 ## Confirmed Findings
 
@@ -16,6 +20,10 @@ approval, the applicant receives an `AppID` and `APIKey`; some requests require
 an APIKey-generated signature. The API is HTTPS POST with JSON responses, and
 the specification lists a separate test endpoint. API keys must not be exposed
 to the browser or bundled into the PWA.
+
+The current official use regulations define an eligible developer as a
+business, organization, or government agency. This does not establish that an
+individual personal-finance project can apply in its own name.
 
 ### Available Consumer Queries
 
@@ -85,6 +93,12 @@ confirms that a test endpoint exists, but the reviewed material does not
 provide a reusable test account or a safe automated fixture dataset for a
 personal carrier. That access still requires confirmation before live-safe
 adapter tests can be written.
+
+The current test-environment application page says that application services
+require platform login before submission. It exposes an application route, not
+public test credentials or a documented reusable fixture procedure. Therefore
+the existence of the test base URL must not be treated as proof that automated
+consumer-carrier tests are available.
 
 The current documented API method list contains request/response query methods
 and does not document a webhook, push, or callback method. Scheduled pull is

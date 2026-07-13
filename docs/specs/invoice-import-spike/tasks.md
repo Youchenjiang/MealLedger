@@ -51,6 +51,17 @@ This spike is documentation-only. It requires link/source review and static
 spec consistency review. It does not run live Ministry of Finance calls, and it
 does not weaken the normal application gates for future implementation work.
 
+### Official research refresh — 2026-07-13
+
+- The official test-environment application page was rechecked.
+- It requires platform login before application services can be submitted.
+- No public consumer test credentials or reusable fixture procedure was found.
+- The developer eligibility and application/security evidence requirements
+  remain unresolved for an individual personal-finance project.
+
+This refresh strengthens the conditional-go decision; it does not close the
+external approval, test-access, or privacy decision gates.
+
 ## External Actions Required Before `invoice-import`
 
 - [ ] Name the operating entity that would apply for the official API and
