@@ -120,6 +120,23 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: /Record meal/ }));
     expect(screen.getByRole("heading", { name: "Record meal" })).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+
+  });
+
+  test("warns when browser storage cannot persist local changes", async () => {
+    const user = userEvent.setup();
+    const setItem = vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new Error("storage denied");
+    });
+
+    try {
+      renderWorkspace();
+      await openWorkspace(user);
+      expect(await screen.findByLabelText(/Local storage unavailable/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Changes may be lost/)).toBeInTheDocument();
+    } finally {
+      setItem.mockRestore();
+    }
   });
 
   test("saves a meal with multiple photos without creating a ledger record", async () => {
@@ -143,6 +160,10 @@ describe("App shell draft flow", () => {
       expect.arrayContaining([expect.objectContaining({ status: "queued", name: "meal-1.jpg" }), expect.objectContaining({ name: "meal-2.jpg" })]),
     );
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.getByText("Media metadata only")).toBeInTheDocument();
+    expect(screen.getByLabelText(/image bytes are not backed up/)).toBeInTheDocument();
   });
 
   test("keeps scanned sources separate from official ledger records", async () => {

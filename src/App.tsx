@@ -504,6 +504,7 @@ function AuthenticatedApp() {
   const [meals, setMeals] = useState<MealEntry[]>(readStoredMeals);
   const [scans, setScans] = useState<TemporaryScan[]>(() => expireTemporaryScans(readStoredScans()));
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>(readStoredUploadQueue);
+  const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
@@ -515,7 +516,7 @@ function AuthenticatedApp() {
     try {
       window.localStorage.setItem(draftsStorageKey, JSON.stringify(drafts));
     } catch {
-      // Local persistence is best effort; the shell remains usable if storage is unavailable.
+      setPersistenceWarning(true);
     }
   }, [drafts]);
 
@@ -529,7 +530,7 @@ function AuthenticatedApp() {
       window.localStorage.setItem(scansStorageKey, JSON.stringify(scans));
       window.localStorage.setItem(uploadQueueStorageKey, JSON.stringify(uploadQueue));
     } catch {
-      // Local persistence is best effort; the ledger remains usable for this session.
+      setPersistenceWarning(true);
     }
   }, [accounts, auditEvents, meals, onboardingCompleted, records, scans, uploadQueue]);
 
@@ -572,10 +573,28 @@ function AuthenticatedApp() {
       },
     ];
 
+    if (persistenceWarning) {
+      items.push({
+        label: "Local storage unavailable",
+        detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.",
+        icon: AlertCircle,
+        tone: "warn",
+      });
+    }
+
     if (draftCount > 0) {
       items.push({
         label: "Local-only data",
         detail: "These drafts stay on this device until a future sync workflow is enabled.",
+        icon: CloudOff,
+        tone: "warn",
+      });
+    }
+
+    if (uploadQueue.length > 0) {
+      items.push({
+        label: "Media metadata only",
+        detail: `${uploadQueue.length} image${uploadQueue.length === 1 ? "" : "s"} queued locally; image bytes are not backed up in this local-only preview.`,
         icon: CloudOff,
         tone: "warn",
       });
@@ -591,7 +610,7 @@ function AuthenticatedApp() {
     }
 
     return items;
-  }, [draftCount, isOnline, recordCount]);
+  }, [draftCount, isOnline, persistenceWarning, recordCount, uploadQueue.length]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
