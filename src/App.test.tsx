@@ -8,6 +8,11 @@ function renderWorkspace(path = "/") {
   return render(<App />);
 }
 
+function testLocalDate() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /open workspace/i }));
   const skipSetup = screen.queryByRole("button", { name: "Skip setup" });
@@ -272,7 +277,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "Settings" }));
-    const file = new File(["date,account,amount\n2026-07-13,Cash,417\n"], "ledger.csv", { type: "text/csv" });
+    const file = new File([`date,account,amount\n${testLocalDate()},Cash,417\n`], "ledger.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
     expect(await screen.findByText("CSV ready for review: 1 rows and 3 columns. Mapped: date, account, amount. Rows ready: 0; review required: 1. No records were created.")).toBeInTheDocument();
@@ -286,7 +291,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
     const file = new File([
-      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+      `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "ledger.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
@@ -306,7 +311,7 @@ describe("App shell draft flow", () => {
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const file = new File([
-      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+      `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
@@ -323,7 +328,7 @@ describe("App shell draft flow", () => {
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const file = new File([
-      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+      `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate-actions.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
@@ -344,7 +349,7 @@ describe("App shell draft flow", () => {
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const file = new File([
-      "date,kind,account,amount,currency,merchant,item_name,category\n2026-07-13,expense,Daily wallet,417,TWD,全聯,香蕉,日用\n",
+      `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate-draft.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
@@ -835,6 +840,27 @@ describe("App shell draft flow", () => {
     await addAccount(user, "daily wallet");
 
     expect(screen.getByLabelText("Available accounts").querySelectorAll("li")).toHaveLength(1);
+  });
+
+  test("records a Settings account current balance as initial funds", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.type(screen.getByLabelText("Account name"), "Savings");
+    await user.selectOptions(screen.getByLabelText("Account type"), "bank");
+    await user.click(screen.getByRole("radio", { name: "Enter current balance" }));
+    await user.type(screen.getByLabelText("Current balance"), "2500");
+    await user.click(screen.getByRole("button", { name: "Add account" }));
+
+    expect(screen.getByLabelText("Available accounts")).toHaveTextContent("Savings");
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "fund-addition", accountName: "Savings", amount: "2500" })]),
+    );
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "income", accountName: "Savings", amount: "2500" })]),
+    );
   });
 
   test("uses native form validation to block incomplete manual records", async () => {
