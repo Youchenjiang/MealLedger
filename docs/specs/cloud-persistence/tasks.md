@@ -52,9 +52,9 @@ than being claimed automatically.
 
 The current branch was verified after the meal/media/source queue slice:
 
-- `npm run test`: 34 files, 187 tests passed.
-- `npm run test:coverage`: 83.41% statements, 73.20% branches, 84.74% functions,
-  84.67% lines.
+- `npm run test`: 34 files, 192 tests passed.
+- `npm run test:coverage`: 83.55% statements, 73.52% branches, 84.53% functions,
+  84.90% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
