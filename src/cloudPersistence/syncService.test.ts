@@ -4,6 +4,9 @@ import type { CloudPersistenceClient, CloudRow } from "./contracts";
 import { enqueueLocalChanges, syncLocalChanges } from "./syncService";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
+import type { MealEntry } from "../captureMedia/meals";
+import type { TemporaryScan } from "../captureMedia/media";
+import type { UploadQueueItem } from "../captureMedia/upload";
 
 const account: LocalAccount = { id: "account-1", name: "Cash", currency: "TWD" };
 const baseRecord = {
@@ -60,7 +63,10 @@ function input(overrides: Partial<Parameters<typeof syncLocalChanges>[0]> = {}) 
     events: [],
     records: [baseRecord],
     drafts: [],
-    queue: enqueueLocalChanges([], [baseRecord], [], "2026-07-13T00:00:00.000Z"),
+    meals: [] as MealEntry[],
+    media: [] as UploadQueueItem[],
+    scans: [] as TemporaryScan[],
+    queue: enqueueLocalChanges([], [baseRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
     now: "2026-07-13T00:00:00.000Z",
     ...overrides,
   };
@@ -91,5 +97,46 @@ describe("cloud sync service", () => {
 
     expect(result.records[0].status).toBe("local-only");
     expect(result.queue[0]).toMatchObject({ state: "retryable-error", lastError: expect.stringContaining("omitted") });
+  });
+
+  test("syncs meal, media metadata, and temporary scan source rows independently", async () => {
+    const meal = {
+      id: "meal-1",
+      occurredAt: "2026-07-13T12:30",
+      note: "Lunch",
+      transactionIds: [baseRecord.id],
+      mediaAssetIds: ["meal-1-0-lunch.jpg"],
+      status: "local-only" as const,
+    };
+    const media = {
+      id: "meal-1-0-lunch.jpg",
+      name: "lunch.jpg",
+      type: "image/jpeg",
+      size: 2048,
+      status: "queued" as const,
+      kind: "meal-photo" as const,
+    };
+    const scan = {
+      id: "scan-1",
+      intent: "scan-receipt" as const,
+      fileName: "receipt.jpg",
+      mimeType: "image/jpeg",
+      byteSize: 1024,
+      state: "temporary" as const,
+      cloudStatus: "local-only" as const,
+      createdAt: "2026-07-13T10:00:00.000Z",
+      expiresAt: "2026-07-14T10:00:00.000Z",
+    };
+    const result = await syncLocalChanges(input({
+      meals: [meal],
+      media: [media],
+      scans: [scan],
+      queue: enqueueLocalChanges([], [baseRecord], [], [meal], [media], [scan], "2026-07-13T00:00:00.000Z"),
+    }));
+
+    expect(result.meals[0].status).toBe("synced");
+    expect(result.media[0].metadataStatus).toBe("synced");
+    expect(result.scans[0].cloudStatus).toBe("synced");
+    expect(result.queue.every((item) => item.state === "synced")).toBe(true);
   });
 });

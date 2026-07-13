@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import type { CloudPersistenceClient, CloudRecordBundle, CloudRow } from "./contracts";
-import { persistRecordBundle } from "./repository";
+import type { CloudMealBundle, CloudPersistenceClient, CloudRecordBundle, CloudRow } from "./contracts";
+import { persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload } from "./repository";
 
 function bundle(): CloudRecordBundle {
   return {
@@ -71,5 +71,26 @@ describe("cloud persistence repository", () => {
 
     expect(result).toMatchObject({ ok: false, failure: { code: "transport", retryable: true, table: "audit_events" } });
     expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events"]);
+  });
+
+  test("writes media metadata, source payload, and meal links without media bytes", async () => {
+    const mock = client();
+    const mediaResult = await persistMediaAsset(mock, { id: "media-1", user_id: "user-1", object_key: "pending/media-1" });
+    const sourceResult = await persistSourcePayload(
+      mock,
+      { id: "source-1", user_id: "user-1", source_state: "temporary" },
+      [{ media_asset_id: "media-1", target_type: "source-payload", target_id: "source-1", link_intent: "ledger-source", user_id: "user-1" }],
+    );
+    const meal: CloudMealBundle = {
+      mealEntry: { id: "meal-1", user_id: "user-1", meal_at: "2026-07-13T04:30:00.000Z" },
+      transactionLinks: [{ meal_id: "meal-1", ledger_record_id: "record-1", user_id: "user-1" }],
+      mediaLinks: [{ media_asset_id: "media-1", target_type: "meal", target_id: "meal-1", link_intent: "meal-photo", user_id: "user-1" }],
+    };
+    const mealResult = await persistMealBundle(mock, meal);
+
+    expect(mediaResult).toMatchObject({ ok: true, tables: ["media_assets"] });
+    expect(sourceResult).toMatchObject({ ok: true, tables: ["source_payloads", "media_links"] });
+    expect(mealResult).toMatchObject({ ok: true, tables: ["meal_entries", "meal_transaction_links", "media_links"] });
+    expect(mock.calls).toEqual(["media_assets", "source_payloads", "media_links", "meal_entries", "meal_transaction_links", "media_links"]);
   });
 });

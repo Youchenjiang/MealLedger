@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
+import type { MealEntry } from "../captureMedia/meals";
+import type { TemporaryScan } from "../captureMedia/media";
+import type { UploadQueueItem } from "../captureMedia/upload";
 import type { LocalLedgerRecord } from "../manualLedger/records";
-import { mapLedgerRecord, mapLocalAccount } from "./mappers";
+import { mapLedgerRecord, mapLocalAccount, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink } from "./mappers";
 
 function record(overrides: Partial<LocalLedgerRecord> = {}): LocalLedgerRecord {
   return {
@@ -60,6 +63,15 @@ const references = {
 };
 
 describe("cloud row mappers", () => {
+  const media: UploadQueueItem = {
+    id: "meal-1-0-lunch.jpg",
+    name: "lunch.jpg",
+    type: "image/jpeg",
+    size: 2048,
+    status: "queued",
+    kind: "meal-photo",
+  };
+
   test("maps a local account without treating a client key as a UUID", () => {
     expect(mapLocalAccount({ id: "account-local-1", name: " Cash ", currency: "twd" }, "user-1")).toEqual({
       user_id: "user-1",
@@ -131,5 +143,59 @@ describe("cloud row mappers", () => {
 
     expect(result).toMatchObject({ ok: false });
     if (!result.ok) expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "missing-refund-allocation" })]));
+  });
+
+  test("maps media metadata without embedding file bytes", () => {
+    const result = mapMediaAsset(media, "user-1", "2026-07-13T10:00:00.000Z");
+
+    expect(result).toMatchObject({
+      user_id: "user-1",
+      media_kind: "meal-photo",
+      content_type: "image/jpeg",
+      byte_size: 2048,
+      upload_status: "queued",
+    });
+    expect(result).not.toHaveProperty("bytes");
+    expect(JSON.stringify(result)).not.toContain("base64");
+    expect(result.object_key).toContain("pending/user-1/");
+  });
+
+  test("maps a temporary scan as a source payload without creating a ledger record", () => {
+    const scan: TemporaryScan = {
+      id: "scan-1",
+      intent: "scan-receipt",
+      fileName: "receipt.jpg",
+      mimeType: "image/jpeg",
+      byteSize: 1024,
+      state: "temporary",
+      cloudStatus: "local-only",
+      createdAt: "2026-07-13T10:00:00.000Z",
+      expiresAt: "2026-07-14T10:00:00.000Z",
+    };
+    const result = mapTemporaryScan(scan, "user-1");
+
+    expect(result).toMatchObject({ user_id: "user-1", source_type: "receipt-scan", source_state: "temporary" });
+    expect(result.payload_json).toEqual(expect.objectContaining({ file_name: "receipt.jpg", byte_size: 1024 }));
+    expect(JSON.stringify(result)).not.toContain("ledger_records");
+    expect(mapTemporaryScanMediaLink(scan, "user-1")).toMatchObject({ target_type: "source-payload", link_intent: "ledger-source" });
+  });
+
+  test("maps a meal with multiple photos and transaction links", () => {
+    const meal: MealEntry = {
+      id: "meal-1",
+      occurredAt: "2026-07-13T12:30",
+      note: "Lunch",
+      transactionIds: ["record-local-1"],
+      mediaAssetIds: [media.id, "meal-1-1-dessert.jpg"],
+      status: "local-only",
+    };
+    const result = mapMealEntry(meal, "user-1", references);
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.value.transactionLinks).toHaveLength(1);
+      expect(result.value.mediaLinks).toHaveLength(2);
+      expect(result.value.mediaLinks[0]).toMatchObject({ target_type: "meal", link_intent: "meal-photo" });
+    }
   });
 });

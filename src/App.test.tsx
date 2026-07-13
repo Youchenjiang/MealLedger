@@ -154,10 +154,10 @@ describe("App shell draft flow", () => {
 
     expect(screen.getByText("Meal saved locally with 2 photos.")).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("mealledger.capture.meals") ?? "[]")).toEqual(
-      [expect.objectContaining({ transactionIds: [], mediaAssetIds: ["local-photo-0-meal-1.jpg", "local-photo-1-meal-2.jpg"] })],
+      [expect.objectContaining({ transactionIds: [], mediaAssetIds: [expect.stringContaining("meal-local-1-0-meal-1.jpg"), expect.stringContaining("meal-local-1-1-meal-2.jpg")] })],
     );
     expect(JSON.parse(window.localStorage.getItem("mealledger.capture.upload-queue") ?? "[]")).toEqual(
-      expect.arrayContaining([expect.objectContaining({ status: "queued", name: "meal-1.jpg" }), expect.objectContaining({ name: "meal-2.jpg" })]),
+      expect.arrayContaining([expect.objectContaining({ status: "queued", kind: "meal-photo", name: "meal-1.jpg" }), expect.objectContaining({ kind: "meal-photo", name: "meal-2.jpg" })]),
     );
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
 

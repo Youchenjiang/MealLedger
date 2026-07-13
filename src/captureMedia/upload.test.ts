@@ -18,6 +18,12 @@ describe("media upload boundary", () => {
     ]);
   });
 
+  test("keeps the media intent on queued metadata", () => {
+    expect(queueUploadFiles([{ name: "lunch.jpg", type: "image/jpeg", size: 10 }], "meal-1", "meal-photo")).toEqual([
+      expect.objectContaining({ id: "meal-1-0-lunch.jpg", kind: "meal-photo", status: "queued" }),
+    ]);
+  });
+
   test("requests a short-lived upload without accepting a public URL", async () => {
     const invoke = vi.fn().mockResolvedValue({
       data: { mediaId: "media-1", putUrl: "https://upload.test", objectKey: "user/originals/media-1.jpg", expiresInSeconds: 900 },
