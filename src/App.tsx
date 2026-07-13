@@ -1112,6 +1112,24 @@ function renderRoute(
           accounts={accounts}
           records={records}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => {
+            const now = new Date().toISOString();
+            const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
+              userId: "local-user",
+              recordId: `record-${draft.id}`,
+              idempotencyKey: `settings:${draft.id}`,
+              createdAt: now,
+            });
+
+            if (!bundle) {
+              return false;
+            }
+
+            setRecords((current) => appendIdempotentRecords(current, bundle));
+            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            queueRecordBundle(bundle.records);
+            return true;
+          }}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
@@ -2857,16 +2875,23 @@ function DraftKindFields({ accounts, form, updateForm }: Readonly<{ accounts: Lo
   );
 }
 
-function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMergeImportDraft, onReopenOnboarding }: Readonly<{
+function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   onAddAccount: (account: LocalAccount) => void;
+  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
   onReopenOnboarding: () => void;
 }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
+  const [accountType, setAccountType] = useState("cash");
+  const [allowNegativeBalance, setAllowNegativeBalance] = useState(false);
+  const [balanceMode, setBalanceMode] = useState<"zero" | "current">("zero");
+  const [balance, setBalance] = useState("");
+  const [balanceDate, setBalanceDate] = useState(localDate());
+  const [accountError, setAccountError] = useState("");
   const dataTools = [
     {
       title: "CSV import review",
@@ -2884,14 +2909,26 @@ function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMerge
 
   const handleAccountSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const account = createLocalAccount(accountName, accountCurrency, draftId());
+    setAccountError("");
+    const account = createLocalAccount(accountName, accountCurrency, draftId(), accountType, allowNegativeBalance);
 
     if (!account || accounts.some((item) => item.name.toLocaleLowerCase() === account.name.toLocaleLowerCase())) {
+      setAccountError(account ? "An account with this name already exists." : "Enter an account name and currency.");
       return;
+    }
+
+    if (balanceMode === "current") {
+      const draft = createInitialFundingDraft({ account: account.name, amount: balance, currency: account.currency, date: balanceDate }, `fund-${account.id}`);
+      if (!draft || !onSaveInitialFunding(account, draft)) {
+        setAccountError("Enter a positive current balance and a valid date.");
+        return;
+      }
     }
 
     onAddAccount(account);
     setAccountName("");
+    setBalance("");
+    setBalanceMode("zero");
   };
 
   return (
@@ -2899,7 +2936,7 @@ function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMerge
       <Panel title="Accounts" eyebrow="Local setup">
         <p className="panel-copy">Create the accounts that manual records may use. This preview keeps them only in the current workspace session.</p>
         <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
-        <form className="draft-form" onSubmit={handleAccountSubmit}>
+        <form className="draft-form" noValidate onSubmit={handleAccountSubmit}>
           <label>
             <span>Account name</span>
             <input required pattern=".*\S.*" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Daily wallet" />
@@ -2912,7 +2949,39 @@ function SettingsPage({ accounts, records, onAddAccount, onImportRecord, onMerge
               <option value="USD">USD</option>
             </select>
           </label>
+          <label>
+            <span>Account type</span>
+            <select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
+              <option value="cash">Cash</option>
+              <option value="bank">Bank account</option>
+              <option value="card">Credit card</option>
+              <option value="wallet">Stored-value wallet</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => setAllowNegativeBalance(event.target.checked)} />
+            <span>Allow negative balance</span>
+          </label>
+          <fieldset>
+            <legend>Starting balance</legend>
+            <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => setBalanceMode("zero")} /> <span>Start from zero</span></label>
+            <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => setBalanceMode("current")} /> <span>Enter current balance</span></label>
+          </fieldset>
+          {balanceMode === "current" ? (
+            <div className="onboarding-balance-fields">
+              <label>
+                <span>Current balance</span>
+                <input required type="number" min="0.01" step="0.01" value={balance} onChange={(event) => setBalance(event.target.value)} placeholder="0" />
+              </label>
+              <label>
+                <span>As of date</span>
+                <input required type="date" value={balanceDate} onChange={(event) => setBalanceDate(event.target.value)} />
+              </label>
+            </div>
+          ) : null}
           <button className="primary-action align-start" type="submit">Add account</button>
+          {accountError ? <p className="quick-account-error" role="alert">{accountError}</p> : null}
         </form>
         {accounts.length === 0 ? <p className="panel-copy">No accounts yet. Add one before creating a manual record.</p> : null}
         {accounts.length > 0 ? (
