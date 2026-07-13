@@ -635,7 +635,8 @@ begin
 
   insert into public.audit_events (user_id, event_type, target_type, target_id, summary, changes_json, created_at)
   select user_id, event_type, target_type, target_id, summary, changes_json, created_at
-  from jsonb_populate_recordset(null::public.audit_events, coalesce(p_audit_events, '[]'::jsonb));
+  from jsonb_populate_recordset(null::public.audit_events, coalesce(p_audit_events, '[]'::jsonb))
+  on conflict (id) do nothing;
 
   return jsonb_build_object('replayed', was_replayed);
 end;
