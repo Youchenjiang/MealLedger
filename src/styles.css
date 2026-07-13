@@ -536,6 +536,66 @@ h2 {
   line-height: 1.5;
 }
 
+.portability-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid #ebe4d8;
+}
+
+.portability-section h3 {
+  margin: 0;
+  color: #2c2925;
+  font-size: 17px;
+}
+
+.file-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.file-picker-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-picker-input:focus-visible + .file-picker-button {
+  outline: 2px solid #8db9a4;
+  outline-offset: 2px;
+}
+
+.file-picker-button {
+  cursor: pointer;
+}
+
+.file-picker-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #69645c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.export-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.export-actions .secondary-action {
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .report-list {
   display: grid;
   gap: 10px;
@@ -1384,6 +1444,10 @@ button.action-card.unavailable {
     padding-bottom: 16px;
   }
 
+  .file-picker-name {
+    flex: 1 1 180px;
+  }
+
   .page-header {
     min-height: 108px;
   }
@@ -1437,5 +1501,11 @@ button.action-card.unavailable {
   .sync-issue {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .export-actions {
+    grid-template-columns: 1fr;
   }
 }

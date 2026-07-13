@@ -3095,6 +3095,7 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 }>) {
   const [importMessage, setImportMessage] = useState("No CSV selected. Validation does not write to the ledger.");
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [importItems, setImportItems] = useState<ImportReviewItem[]>([]);
   const [exportMessage, setExportMessage] = useState("");
   const [exportProgress, setExportProgress] = useState(0);
@@ -3105,6 +3106,8 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
     if (!file) {
       return;
     }
+
+    setSelectedFileName(file.name);
 
     const result = validateCsvBytes(new Uint8Array(await file.arrayBuffer()));
     if (!result.ok) {
@@ -3212,11 +3215,15 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
         Clean exports include confirmed ledger records only. Attachments stay as metadata
         references, not image bytes, and CSV/JSON use the same stable field set.
       </p>
-      <label>
-        <span>Validate CSV import</span>
-      <input aria-label="CSV import file" accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
-      </label>
-      <p className="panel-copy" aria-live="polite">{importMessage}</p>
+      <section className="portability-section" aria-labelledby="csv-import-heading">
+        <h3 id="csv-import-heading">Import a CSV</h3>
+        <div className="file-picker">
+          <input id="csv-import-file" className="file-picker-input" aria-label="CSV import file" accept=".csv,text/csv" type="file" onChange={handleCsvSelection} />
+          <label className="secondary-action file-picker-button" htmlFor="csv-import-file">Choose CSV file</label>
+          <span className="file-picker-name" aria-live="polite">{selectedFileName || "No file selected"}</span>
+        </div>
+        <p className="panel-copy" aria-live="polite">{importMessage}</p>
+      </section>
       {importItems.length > 0 ? (
         <section className="draft-list" aria-label="CSV import review">
           <div className="draft-list-heading">
@@ -3249,13 +3256,20 @@ function ImportExportPanel({ dataTools, accounts, records, onImportRecord, onMer
           ))}
         </section>
       ) : null}
-      <div className="quick-account-actions">
+      <section className="portability-section" aria-labelledby="ledger-export-heading">
+        <h3 id="ledger-export-heading">Export ledger</h3>
+        <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
+      <div className="export-actions">
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
         <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
         <button className="secondary-action" type="button" disabled={exporting} onClick={() => { void exportZip(); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
       </div>
       {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
-      <DataToolList items={dataTools} />
+      </section>
+      <section className="portability-section" aria-labelledby="related-tools-heading">
+        <h3 id="related-tools-heading">Related tools</h3>
+        <DataToolList items={dataTools} />
+      </section>
     </Panel>
   );
 }
