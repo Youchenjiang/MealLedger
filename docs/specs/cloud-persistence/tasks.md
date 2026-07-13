@@ -14,7 +14,8 @@
 - [x] Add local account, record, draft, meal, media, and source metadata row mappers.
 - [x] Add idempotent account, draft, record, meal, media, and source persistence.
 - [x] Add retry classification and bounded backoff policy.
-- [x] Re-queue edited, voided, and unresolved-converted records by version/hash.
+- [x] Re-queue edited, voided, and unresolved-converted local targets by version/hash;
+      keep successfully synced meal, media, and scan targets closed.
 - [x] Preserve tags, ordinary refund links, and audit history in record mapping.
 - [x] Add an authenticated atomic RPC for transfer bundles and version checks.
 - [x] Connect the adapter to the local queue without changing local-first commit.
@@ -50,12 +51,12 @@ than being claimed automatically.
 ## Verification Evidence
 
 The current branch was re-verified after the meal/media/source queue slice,
-invoice-import spike documentation, Supabase configuration hardening, and the
-changed-local-target requeue fix:
+invoice-import spike documentation, Supabase configuration hardening, changed-
+local-target requeue fix, and exact minor-unit aggregation fix:
 
-- `npm run test`: 35 files, 202 tests passed.
-- `npm run test:coverage`: 82.82% statements, 73.10% branches, 84.24% functions,
-  84.06% lines.
+- `npm run test`: 35 files, 205 tests passed.
+- `npm run test:coverage`: 82.96% statements, 73.15% branches, 84.42% functions,
+  84.08% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
@@ -69,6 +70,9 @@ keeps production deployments fail-closed when cloud authentication is missing.
 - QA review blocking findings were fixed: partial-bundle retry completion,
   edited-record requeue, missing tags/refund/audit mappings, and transfer
   atomicity.
+- Exact minor-unit aggregation prevents decimal report/export drift, and
+  successful meal/media/source sync items no longer reopen on a later queue
+  pass.
 - Responsive review found no blocking overflow or overlap. Non-blocking follow-up
   suggestions are visible status-strip affordance and optional sticky header;
   they remain UI polish outside this persistence slice.

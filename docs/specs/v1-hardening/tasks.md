@@ -37,11 +37,11 @@ Verification: React integration tests and Playwright console smoke.
 Updated the Capture and App Shell scope notes, recorded the read-only review dispositions, ran the complete gate, and left the branch ready for user review without pushing or opening a PR.
 
 Verification snapshot on 2026-07-13 after the cloud-persistence slice,
-invoice-import spike documentation, auth configuration hardening, and the
-changed-local-target requeue fix:
+invoice-import spike documentation, auth configuration hardening, changed-
+local-target requeue fix, and exact minor-unit aggregation fix:
 
-- `npm run test`: 202 tests passed across 35 files.
-- `npm run test:coverage`: 82.82% statements, 73.10% branches, 84.24% functions, and 84.06% lines.
+- `npm run test`: 205 tests passed across 35 files.
+- `npm run test:coverage`: 82.96% statements, 73.15% branches, 84.42% functions, and 84.08% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
@@ -58,9 +58,10 @@ Three read-only reviews were requested before closeout:
 | Reviewer | Blocking finding | Disposition |
 | --- | --- | --- |
 | UX / first-use | Local media queue stored metadata only; storage failures were silent; local-only scope was easy to over-read | Fixed with visible media metadata and storage warnings; scope documented as local-only |
-| QA / accounting | Income and fund-addition export mismatch; precision used floating-point arithmetic; relationship constraints were incomplete | Fixed with source round-trip fixtures, minor-unit arithmetic, and schema triggers/policies |
+| QA / accounting | Income and fund-addition export mismatch; precision used floating-point arithmetic; relationship constraints were incomplete | Fixed with source round-trip fixtures, minor-unit aggregation, and schema triggers/policies |
 | Responsive / privacy | Media links did not validate parent ownership; Edge Function column differed from schema; cloud cleanup was not implemented | Fixed ownership and column mismatch; cloud upload/deletion explicitly deferred |
 | Follow-up UX / sync | Draft review had no completion path; failed/conflict sync states lacked a user-facing action; edited synced records could still look synced | Fixed with Continue in Capture, Confirm to ledger, Sync attention with retry, conflict visibility, and local-only status on edits |
+| Follow-up QA / sync | Successful meal, media, and scan writes could be reopened when their local status hash changed after sync | Fixed by keeping synced targets closed and adding regression coverage for all three target types |
 
 Non-blocking follow-ups remain outside this hardening pass:
 
