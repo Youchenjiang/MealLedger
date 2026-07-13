@@ -62,6 +62,8 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("create trigger categories_parent_owned");
     expect(schemaSql).toContain("create or replace function public.audit_event_target_owned");
     expect(schemaSql).toContain("public.audit_event_target_owned(target_type, target_id, auth.uid())");
+    expect(schemaSql).toContain("create or replace function public.idempotency_result_owned");
+    expect(schemaSql).toContain("public.idempotency_result_owned(result_type, result_id, auth.uid())");
   });
 
   test("checks ownership on both sides of relational links", () => {

@@ -490,6 +490,22 @@ as $$
   end;
 $$;
 
+create or replace function public.idempotency_result_owned(p_result_type text, p_result_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security invoker
+set search_path = public
+as $$
+  select case p_result_type
+    when 'ledger-record' then exists (select 1 from public.ledger_records where id = p_result_id and user_id = p_user_id)
+    when 'draft' then exists (select 1 from public.drafts where id = p_result_id and user_id = p_user_id)
+    when 'meal' then exists (select 1 from public.meal_entries where id = p_result_id and user_id = p_user_id)
+    when 'media-asset' then exists (select 1 from public.media_assets where id = p_result_id and user_id = p_user_id)
+    when 'source-payload' then exists (select 1 from public.source_payloads where id = p_result_id and user_id = p_user_id)
+    else false
+  end;
+$$;
+
 create or replace function public.persist_ledger_record_bundle(
   p_request jsonb,
   p_ledger_record jsonb,
@@ -770,4 +786,12 @@ with check (
 create policy audit_events_owner on public.audit_events for all
 using (auth.uid() = user_id and public.audit_event_target_owned(target_type, target_id, auth.uid()))
 with check (auth.uid() = user_id and public.audit_event_target_owned(target_type, target_id, auth.uid()));
-create policy idempotency_keys_owner on public.idempotency_keys for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy idempotency_keys_owner on public.idempotency_keys for all
+using (
+  auth.uid() = user_id
+  and (result_id is null or public.idempotency_result_owned(result_type, result_id, auth.uid()))
+)
+with check (
+  auth.uid() = user_id
+  and (result_id is null or public.idempotency_result_owned(result_type, result_id, auth.uid()))
+);
