@@ -52,7 +52,7 @@ Verified on 2026-07-13 after cloud-persistence, invoice-spike, and sync-requeue
 changes:
 
 - `npm run test`: 202 tests passed across 35 files.
-- `npm run test:coverage`: 83.52% statements, 73.06% branches, 84.38% functions, and 84.86% lines.
+- `npm run test:coverage`: 82.82% statements, 73.10% branches, 84.24% functions, and 84.06% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.

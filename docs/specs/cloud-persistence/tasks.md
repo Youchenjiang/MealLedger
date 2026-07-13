@@ -54,8 +54,8 @@ invoice-import spike documentation, Supabase configuration hardening, and the
 changed-local-target requeue fix:
 
 - `npm run test`: 35 files, 202 tests passed.
-- `npm run test:coverage`: 83.52% statements, 73.06% branches, 84.38% functions,
-  84.86% lines.
+- `npm run test:coverage`: 82.82% statements, 73.10% branches, 84.24% functions,
+  84.06% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
