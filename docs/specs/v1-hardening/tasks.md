@@ -36,7 +36,8 @@ Verification: React integration tests and Playwright console smoke.
 
 Updated the Capture and App Shell scope notes, recorded the read-only review dispositions, ran the complete gate, and left the branch ready for user review without pushing or opening a PR.
 
-Final verification on 2026-07-13:
+Verification at hardening close on 2026-07-13, before the later cloud
+persistence, invoice spike documentation, and auth configuration follow-up:
 
 - `npm run test`: 159 tests passed across 27 files.
 - `npm run test:coverage`: 85.61% statements, 77.10% branches, 85.63% functions, and 86.04% lines.

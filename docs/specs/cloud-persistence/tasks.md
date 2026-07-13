@@ -49,15 +49,19 @@ than being claimed automatically.
 
 ## Verification Evidence
 
-The current branch was verified after the meal/media/source queue slice:
+The current branch was re-verified after the meal/media/source queue slice,
+invoice-import spike documentation, and Supabase configuration hardening:
 
-- `npm run test`: 34 files, 193 tests passed.
-- `npm run test:coverage`: 83.50% statements, 73.46% branches, 84.40% functions,
-  84.89% lines.
+- `npm run test`: 35 files, 197 tests passed.
+- `npm run test:coverage`: 83.29% statements, 73.45% branches, 84.45% functions,
+  84.63% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
   persistence tests cover the adapter contract.
+
+The Supabase configuration boundary also rejects template placeholders and
+keeps production deployments fail-closed when cloud authentication is missing.
 
 ## Review Evidence
 
