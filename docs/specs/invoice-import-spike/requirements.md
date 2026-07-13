@@ -60,10 +60,11 @@ The spike is complete only when each gate has an evidence-backed answer.
    codes are known well enough to implement bounded retries and backoff.
 6. **Delivery**: Push/webhook support is explicitly documented. Until then,
    the product design must assume scheduled pull and show the last successful
-   sync time.
+   sync time. The current API method list does not document push/webhook.
 7. **Testability**: An official test endpoint, test account, or safe fixture
-   procedure exists. If none exists, live integration remains a separately
-   approved operation.
+   procedure exists. The official specification documents a test endpoint, but
+   a reusable test account or fixture procedure still needs confirmation. If
+   none exists, live integration remains a separately approved operation.
 8. **Privacy**: Retention, cross-border processing, user deletion, credential
    revocation, six-month re-consent, required disclosure, and audit requirements
    are documented before implementation.

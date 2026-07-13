@@ -15,9 +15,12 @@
       generic OAuth/redirect authorization flow.
 - [ ] Confirm whether the current project and operating entity qualify for
       application approval as a personal finance product.
-- [ ] Confirm current test credentials or a safe official fixture process.
-- [ ] Confirm push/webhook support or document scheduled pull as the only
-      supported delivery mode.
+- [x] Record the official test API endpoint and the absence of a documented
+      reusable test account or fixture dataset.
+- [x] Review the current method list; no push/webhook method is documented, so
+      scheduled pull is the provisional delivery mode.
+- [ ] Confirm whether the provider offers test credentials or another delivery
+      channel outside the reviewed specification.
 - [x] Record official consent, retention, deletion, and disclosure obligations.
 - [ ] Review project-specific privacy and cross-border legal wording.
 

@@ -78,6 +78,20 @@ the current endpoint behavior. The first implementation should use a small
 initial window and allow an explicit backfill job rather than silently asking
 for an unbounded history.
 
+### Test Environment and Delivery
+
+The current API specification publishes a separate test API base URL. This
+confirms that a test endpoint exists, but the reviewed material does not
+provide a reusable test account or a safe automated fixture dataset for a
+personal carrier. That access still requires confirmation before live-safe
+adapter tests can be written.
+
+The current documented API method list contains request/response query methods
+and does not document a webhook, push, or callback method. Scheduled pull is
+therefore the only supported delivery assumption for the adapter design at
+this stage. This is a documentation finding, not a claim that the provider can
+never offer another integration channel.
+
 ### What Is Not Yet Proven
 
 The reviewed documents do not by themselves prove:
@@ -89,7 +103,8 @@ The reviewed documents do not by themselves prove:
   reviewed API documents carrier validation parameters, not a generic OAuth
   authorization flow;
 - a webhook or push delivery mechanism;
-- a sandbox account lifecycle and safe automated fixture dataset;
+- a sandbox account lifecycle, reusable test credentials, and safe automated
+  fixture dataset;
 - the full retention and cross-border processing position needed for
   MealLedger's privacy notice and user consent copy;
 - whether every carrier type has identical header/detail coverage.
