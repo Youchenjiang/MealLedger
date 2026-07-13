@@ -69,6 +69,7 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("original_record.user_id = auth.uid()");
     expect(schemaSql).toContain("tag.user_id = auth.uid()");
     expect(schemaSql).toContain("meal.user_id = auth.uid()");
+    expect(schemaSql).toContain("merchant.user_id = auth.uid()");
     expect(schemaSql).toContain("source.user_id = auth.uid()");
     expect(schemaSql).toContain("target_record_id is null or exists (select 1 from public.ledger_records record");
     expect(schemaSql).toContain("fee_ledger_record_id is null or exists (select 1 from public.ledger_records fee_record");

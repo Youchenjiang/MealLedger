@@ -723,7 +723,15 @@ with check (
   and exists (select 1 from public.ledger_records record where record.id = ledger_record_id and record.user_id = auth.uid())
   and exists (select 1 from public.tags tag where tag.id = tag_id and tag.user_id = auth.uid())
 );
-create policy meals_owner on public.meal_entries for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy meals_owner on public.meal_entries for all
+using (
+  auth.uid() = user_id
+  and (merchant_id is null or exists (select 1 from public.merchants merchant where merchant.id = merchant_id and merchant.user_id = auth.uid()))
+)
+with check (
+  auth.uid() = user_id
+  and (merchant_id is null or exists (select 1 from public.merchants merchant where merchant.id = merchant_id and merchant.user_id = auth.uid()))
+);
 create policy meal_transaction_links_owner on public.meal_transaction_links for all
 using (
   auth.uid() = user_id
