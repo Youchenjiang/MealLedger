@@ -976,6 +976,47 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
   });
 
+  test("requires an exchange-difference classification for a cross-currency payback", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await addAccount(user, "Japan cash", "JPY");
+    await addAccount(user, "Taiwan wallet", "TWD");
+    await goToCapture(user);
+
+    await user.selectOptions(screen.getByLabelText("Account"), "Japan cash");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.clear(screen.getByLabelText("Merchant"));
+    await user.type(screen.getByLabelText("Merchant"), "Tokyo store");
+    await user.clear(screen.getByLabelText("Item name"));
+    await user.type(screen.getByLabelText("Item name"), "Travel item");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "1000");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    const storedExpenses = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]") as Array<{ id: string }>;
+    await user.selectOptions(screen.getByLabelText("Account"), "Taiwan wallet");
+    await user.selectOptions(screen.getByLabelText("Type"), "refund");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.selectOptions(screen.getByLabelText("Refund type"), "payback");
+    await user.selectOptions(screen.getByLabelText("Original expense"), storedExpenses[0].id);
+    await user.clear(screen.getByLabelText("Merchant or source"));
+    await user.type(screen.getByLabelText("Merchant or source"), "朋友");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "30");
+    await user.type(screen.getByLabelText("Refund reason"), "跨幣別還款");
+
+    const differenceHandling = screen.getByRole("combobox", { name: "Currency difference handling" });
+    expect(differenceHandling).toBeInTheDocument();
+    await user.selectOptions(differenceHandling, "exchange_difference");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+    const storedRecords = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]") as Array<{ refundExcessHandling?: string }>;
+    expect(storedRecords[1]).toMatchObject({ refundExcessHandling: "exchange_difference" });
+  });
+
   test("offers field-by-field history suggestions for merchant and item input", async () => {
     const user = userEvent.setup();
     renderWorkspace();

@@ -65,10 +65,12 @@ describe("clean ledger export", () => {
       kind: "refund",
       refundLinkedRecordId: "expense-1",
       refundLinkedRecordIds: ["expense-1", "expense-2"],
+      refundExcessHandling: "exchange_difference",
     });
 
     expect(row.refund_linked_record_id).toBe("expense-1");
     expect(row.refund_linked_record_ids).toBe("expense-1|expense-2");
+    expect(row.refund_excess_handling).toBe("exchange_difference");
   });
 
   test("serializes CSV with BOM, escaping, and ISO date", () => {

@@ -53,6 +53,23 @@ describe("imported record draft conversion", () => {
     });
   });
 
+  test("preserves exchange-difference classification on imported refunds", () => {
+    const draft = toImportedTransactionDraft({
+      kind: "refund",
+      date: "2026-07-13",
+      account: "Cash",
+      amount: "80",
+      currency: "TWD",
+      category: "Shared",
+      merchant: "Friend",
+      refund_reason: "Foreign currency refund",
+      refund_subtype: "payback",
+      refund_excess_handling: "exchange_difference",
+    }, "import-refund-4");
+
+    expect(draft?.refundExcessHandling).toBe("exchange_difference");
+  });
+
   test("preserves grouping metadata from an imported row", () => {
     const draft = toImportedTransactionDraft({
       kind: "income",

@@ -32,7 +32,11 @@ export function toImportedTransactionDraft(row: NormalizedImportRow, id: string)
     refundSubtype: row.refund_subtype === "payback" ? "payback" : "refund",
     refundLinkedRecordId: row.refund_linked_record_id ?? "",
     refundLinkedRecordIds: (row.refund_linked_record_ids ?? row.refund_linked_record_id ?? "").split("|").map((id) => id.trim()).filter(Boolean),
-    refundExcessHandling: "unclassified",
+    refundExcessHandling: row.refund_excess_handling === "income"
+      || row.refund_excess_handling === "negative-expense"
+      || row.refund_excess_handling === "exchange_difference"
+      ? row.refund_excess_handling
+      : "unclassified",
     recurrenceChoice: "current-cycle-only",
     recurrenceAmountMode: "fixed",
     reason: row.reason ?? "",

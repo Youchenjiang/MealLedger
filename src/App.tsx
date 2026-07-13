@@ -1863,13 +1863,17 @@ function CapturePage({
     : [];
   const selectedRefundIds = form.refundLinkedRecordIds?.length ? form.refundLinkedRecordIds : (form.refundLinkedRecordId ? [form.refundLinkedRecordId] : []);
   const selectedRefundRecords = refundableRecords.filter((record) => selectedRefundIds.includes(record.id));
-  const linkedRefundAmount = selectedRefundRecords.reduce((total, record) => total + Number(record.amount), 0);
-  const refundExceedsLinkedAmount = Boolean(
+  const selectedRefundHasDifferentCurrency = selectedRefundRecords.some((record) => record.currency !== form.currency);
+  const linkedRefundAmount = selectedRefundRecords
+    .filter((record) => record.currency === form.currency)
+    .reduce((total, record) => total + Number(record.amount), 0);
+  const refundDifferenceNeedsClassification = Boolean(
     form.kind === "refund"
       && form.refundSubtype === "payback"
       && selectedRefundRecords.length > 0
-      && Number(form.amount) > linkedRefundAmount,
+      && (selectedRefundHasDifferentCurrency || Number(form.amount) > linkedRefundAmount),
   );
+  const refundDifferenceLabel = selectedRefundHasDifferentCurrency ? "Currency difference handling" : "Excess amount handling";
   const supportsRecurrence = form.kind === "expense" || form.kind === "income" || form.kind === "transfer";
   const autoRecordAllowed = canAutoRecordNextCycle(form, accounts);
 
@@ -1999,7 +2003,7 @@ function CapturePage({
       return;
     }
 
-    if (refundExceedsLinkedAmount && form.refundExcessHandling === "unclassified") {
+    if (refundDifferenceNeedsClassification && form.refundExcessHandling === "unclassified") {
       setFormError("Classify the amount above the linked expense before saving this payback.");
       return;
     }
@@ -2569,15 +2573,18 @@ function CapturePage({
                 <span>Refund reason</span>
                 <textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} />
               </label>
-              {refundExceedsLinkedAmount ? (
+              {refundDifferenceNeedsClassification ? (
                 <label className="full-span warning-field">
-                  <span>Excess amount handling</span>
-                  <select aria-label="Excess amount handling" value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}>
+                  <span>{refundDifferenceLabel}</span>
+                  <select aria-label={refundDifferenceLabel} value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}>
                     <option value="unclassified">Choose a classification</option>
                     <option value="income">Classify excess as income</option>
                     <option value="negative-expense">Classify excess as additional negative expense</option>
+                    <option value="exchange_difference">Classify as exchange difference</option>
                   </select>
-                  <small>This payback exceeds the linked expense and needs an explicit classification.</small>
+                  <small>{selectedRefundHasDifferentCurrency
+                    ? "The linked expense uses another currency; classify the difference before saving this payback."
+                    : "This payback exceeds the linked expense and needs an explicit classification."}</small>
                 </label>
               ) : null}
             </>
