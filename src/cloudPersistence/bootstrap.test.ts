@@ -44,7 +44,7 @@ describe("cloud reference bootstrap", () => {
     expect(result).toEqual({
       ok: true,
       references: {
-        accountIds: { Cash: "remote-accounts-0" },
+        accountIds: { "account-local-1": "remote-accounts-0" },
         categoryIds: { Daily: "remote-categories-0" },
         tagIds: { Subscription: "remote-tags-0" },
         eventIds: { Trip: "remote-events-0" },
