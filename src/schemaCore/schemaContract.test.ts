@@ -49,6 +49,7 @@ describe("schema core contract", () => {
 
   test("defines ownership, immutability, idempotency, and cleanup protections", () => {
     expect(schemaSql).toContain("create trigger accounts_currency_immutable");
+    expect(schemaSql).toContain("where transfer.destination_account_id = old.id");
     expect(schemaSql).toContain("create trigger ledger_currency_matches_account");
     expect(schemaSql).toContain("unique (user_id, idempotency_key)");
     expect(schemaSql).toContain("create index media_assets_cleanup_idx");

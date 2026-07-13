@@ -339,9 +339,15 @@ security invoker
 set search_path = public
 as $$
 begin
-  if old.currency is distinct from new.currency and exists (
-    select 1 from public.ledger_records record
-    where record.account_id = old.id
+  if old.currency is distinct from new.currency and (
+    exists (
+      select 1 from public.ledger_records record
+      where record.account_id = old.id
+    )
+    or exists (
+      select 1 from public.transfer_details transfer
+      where transfer.destination_account_id = old.id
+    )
   ) then
     raise exception 'account currency cannot change after ledger records exist';
   end if;
