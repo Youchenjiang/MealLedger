@@ -1079,6 +1079,24 @@ function renderRoute(
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => {
+            const now = new Date().toISOString();
+            const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
+              userId: "local-user",
+              recordId: `record-${draft.id}`,
+              idempotencyKey: `capture:${draft.id}`,
+              createdAt: now,
+            });
+
+            if (!bundle) {
+              return false;
+            }
+
+            setRecords((current) => appendIdempotentRecords(current, bundle));
+            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            queueRecordBundle(bundle.records);
+            return true;
+          }}
           onSaveRecord={(draft) => {
             const now = new Date().toISOString();
             const bundle = createOfficialRecordBundle(draft, accounts, {
@@ -1730,17 +1748,25 @@ function AmountField({
 function QuickAccountSetup({
   accountName,
   currency,
+  initialBalance,
+  initialBalanceDate,
   error,
   onAccountNameChange,
   onCurrencyChange,
+  onInitialBalanceChange,
+  onInitialBalanceDateChange,
   onConfirm,
   onCancel,
 }: {
   accountName: string;
   currency: string;
+  initialBalance: string;
+  initialBalanceDate: string;
   error: string;
   onAccountNameChange: (value: string) => void;
   onCurrencyChange: (value: string) => void;
+  onInitialBalanceChange: (value: string) => void;
+  onInitialBalanceDateChange: (value: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -1758,6 +1784,23 @@ function QuickAccountSetup({
           <option value="USD">USD</option>
         </select>
       </label>
+      <label>
+        <span>Initial balance (optional)</span>
+        <input
+          type="number"
+          min="0.01"
+          step="0.01"
+          value={initialBalance}
+          onChange={(event) => onInitialBalanceChange(event.target.value)}
+          placeholder="Leave blank to start from zero"
+        />
+      </label>
+      {initialBalance.trim() ? (
+        <label>
+          <span>As of date</span>
+          <input type="date" required value={initialBalanceDate} onChange={(event) => onInitialBalanceDateChange(event.target.value)} />
+        </label>
+      ) : null}
       <div className="quick-account-actions">
         <button className="primary-action" type="button" onClick={onConfirm}>Add and select</button>
         <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
@@ -1775,6 +1818,7 @@ function CapturePage({
   onDiscardDraft,
   onFinishDraftEdit,
   onAddAccount,
+  onSaveInitialFunding,
   onSaveRecord,
   onSaveDraft,
   onSaveMeal,
@@ -1791,6 +1835,7 @@ function CapturePage({
   onDiscardDraft: (id: string) => void;
   onFinishDraftEdit: () => void;
   onAddAccount: (account: LocalAccount) => void;
+  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onSaveRecord: (draft: TransactionDraft) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
   onSaveMeal: (meal: MealEntry) => void;
@@ -1808,6 +1853,8 @@ function CapturePage({
   const [quickAccountField, setQuickAccountField] = useState<"account" | "transferAccount" | "feeAccount" | null>(null);
   const [quickAccountName, setQuickAccountName] = useState("");
   const [quickAccountCurrency, setQuickAccountCurrency] = useState("TWD");
+  const [quickAccountBalance, setQuickAccountBalance] = useState("");
+  const [quickAccountBalanceDate, setQuickAccountBalanceDate] = useState(localDate());
   const [quickAccountError, setQuickAccountError] = useState("");
   const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -1943,6 +1990,8 @@ function CapturePage({
   const beginQuickAccountSetup = (field: "account" | "transferAccount" | "feeAccount") => {
     setQuickAccountField(field);
     setQuickAccountName("");
+    setQuickAccountBalance("");
+    setQuickAccountBalanceDate(localDate());
     setQuickAccountError("");
   };
 
@@ -2143,11 +2192,11 @@ function CapturePage({
   };
 
   const addQuickAccount = () => {
-    const account = createLocalAccount(quickAccountName, quickAccountCurrency, crypto.randomUUID());
-
     if (!quickAccountField) {
       return;
     }
+
+    const account = createLocalAccount(quickAccountName, quickAccountCurrency, crypto.randomUUID());
 
     if (!account) {
       setQuickAccountError("Enter an account name before adding it.");
@@ -2157,6 +2206,20 @@ function CapturePage({
     if (accounts.some((item) => item.name.toLocaleLowerCase() === account.name.toLocaleLowerCase())) {
       setQuickAccountError("An account with this name already exists.");
       return;
+    }
+
+    if (quickAccountBalance.trim()) {
+      const draft = createInitialFundingDraft({
+        account: account.name,
+        amount: quickAccountBalance,
+        currency: account.currency,
+        date: quickAccountBalanceDate,
+      }, `fund-${account.id}`);
+
+      if (!draft || !onSaveInitialFunding(account, draft)) {
+        setQuickAccountError("Enter a positive initial balance and a valid date.");
+        return;
+      }
     }
 
     onAddAccount(account);
@@ -2169,6 +2232,8 @@ function CapturePage({
     }
     setQuickAccountField(null);
     setQuickAccountName("");
+    setQuickAccountBalance("");
+    setQuickAccountBalanceDate(localDate());
     setQuickAccountError("");
   };
 
@@ -2309,11 +2374,15 @@ function CapturePage({
               <QuickAccountSetup
                 accountName={quickAccountName}
                 currency={quickAccountCurrency}
+                initialBalance={quickAccountBalance}
+                initialBalanceDate={quickAccountBalanceDate}
                 error={quickAccountError}
                 onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
                 onCurrencyChange={setQuickAccountCurrency}
+                onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
+                onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
                 onConfirm={addQuickAccount}
-                onCancel={() => { setQuickAccountField(null); setQuickAccountError(""); }}
+                onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
               />
             ) : null}
           </div>
@@ -2505,11 +2574,15 @@ function CapturePage({
                   <QuickAccountSetup
                     accountName={quickAccountName}
                     currency={quickAccountCurrency}
+                    initialBalance={quickAccountBalance}
+                    initialBalanceDate={quickAccountBalanceDate}
                     error={quickAccountError}
                     onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
                     onCurrencyChange={setQuickAccountCurrency}
+                    onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
+                    onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
                     onConfirm={addQuickAccount}
-                    onCancel={() => { setQuickAccountField(null); setQuickAccountError(""); }}
+                    onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
                   />
                 ) : null}
               </div>
@@ -2567,11 +2640,15 @@ function CapturePage({
                   <QuickAccountSetup
                     accountName={quickAccountName}
                     currency={quickAccountCurrency}
+                    initialBalance={quickAccountBalance}
+                    initialBalanceDate={quickAccountBalanceDate}
                     error={quickAccountError}
                     onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
                     onCurrencyChange={setQuickAccountCurrency}
+                    onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
+                    onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
                     onConfirm={addQuickAccount}
-                    onCancel={() => { setQuickAccountField(null); setQuickAccountError(""); }}
+                    onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
                   />
                 ) : null}
               </div>

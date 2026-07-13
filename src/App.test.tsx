@@ -712,6 +712,27 @@ describe("App shell draft flow", () => {
     expect(screen.getByLabelText("Account")).toHaveValue("Travel cash");
   });
 
+  test("records a quick-added account balance as initial funds", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: "Add account" }));
+    await user.type(screen.getByLabelText("New account name"), "Travel cash");
+    await user.type(screen.getByLabelText("Initial balance (optional)"), "2500");
+    fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2026-07-14" } });
+    await user.click(screen.getByRole("button", { name: "Add and select" }));
+
+    expect(screen.getByLabelText("Account")).toHaveValue("Travel cash");
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "fund-addition", accountName: "Travel cash", amount: "2500" })]),
+    );
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "income", accountName: "Travel cash", amount: "2500" })]),
+    );
+  });
+
   test("offers practical quick amount adjustments", async () => {
     const user = userEvent.setup();
     renderWorkspace();
