@@ -41,7 +41,7 @@ Updated the Capture and App Shell scope notes, recorded the read-only review dis
 Verification snapshot on 2026-07-13 after the cloud-persistence slice,
 invoice-import spike documentation, auth configuration hardening, changed-
 
-- `npm run test`: 211 tests passed across 35 files.
+- `npm run test`: 212 tests passed across 35 files.
 - `npm run test:coverage`: 83.11% statements, 73.64% branches, 84.60% functions, and 84.23% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
