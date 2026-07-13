@@ -139,6 +139,9 @@ export function calculateAccountReports(
           if (destinationMinor === null) break;
           destination.totals.transferInTotal += destinationMinor;
           destination.totals.cashFlowTotal += destinationMinor;
+          if (record.transferAccountId !== record.accountId) {
+            destination.count += 1;
+          }
         }
         break;
       }

@@ -30,7 +30,7 @@ export function stableCloudUuid(value: string): string {
     return hash.toString(16).padStart(8, "0");
   });
   const hex = parts.join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(12, 15)}-8${hex.slice(15, 18)}-${hex.slice(18, 30)}`;
 }
 
 function issue(code: CloudMappingIssue["code"], field: string, message: string): CloudMappingIssue {

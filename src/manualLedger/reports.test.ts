@@ -98,7 +98,7 @@ describe("account report projections", () => {
       closingBalance: -1000,
     });
     expect(reports[1]).toMatchObject({
-      recordCount: 0,
+      recordCount: 1,
       transferInTotal: 4500,
       cashFlowTotal: 4500,
       closingBalance: 4500,
