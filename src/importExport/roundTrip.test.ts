@@ -116,6 +116,39 @@ describe("clean export and import round-trip", () => {
     expect(results[1]).toMatchObject({ ok: true, normalized: { merchant: "Store", refund_linked_record_ids: "expense-1|expense-2" } });
   });
 
+  test("preserves income, fund-addition, and grouping metadata through a clean CSV round-trip", () => {
+    const rows = importExportRows([
+      record({
+        id: "income-1",
+        kind: "income",
+        category: "Salary",
+        counterparty: "Part-time job",
+        tags: ["monthly", "work"],
+        event: "2026 summer",
+        sourceLabel: "bank statement",
+      }),
+      record({
+        id: "fund-1",
+        kind: "fund-addition",
+        category: "",
+        counterparty: "Initial savings",
+      }),
+    ]);
+    const results = validateImportRows(rows, accounts);
+
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({
+      ok: true,
+      normalized: {
+        source: "Part-time job",
+        tags: "monthly|work",
+        event: "2026 summer",
+        source_label: "bank statement",
+      },
+    });
+    expect(results[1]).toMatchObject({ ok: true, normalized: { source: "Initial savings" } });
+  });
+
   test("does not put media bytes or base64 fields into the round-trip payload", () => {
     const csv = serializeCleanCsv([record()]);
 

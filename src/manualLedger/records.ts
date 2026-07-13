@@ -46,6 +46,9 @@ export type LocalLedgerRecord = {
   periodStart: string;
   periodEnd: string;
   note: string;
+  tags?: string[];
+  event?: string;
+  sourceLabel?: string;
   createdAt: string;
   updatedAt: string;
   linkedRecordId?: string;
@@ -162,6 +165,9 @@ function createRecord(
     periodStart: draft.periodStart,
     periodEnd: draft.periodEnd,
     note: draft.note,
+    tags: draft.tags,
+    event: draft.event,
+    sourceLabel: draft.sourceLabel,
     createdAt: options.createdAt,
     updatedAt: options.createdAt,
     ...overrides,

@@ -1,6 +1,7 @@
 import type { LocalAccount } from "./accounts";
 import { calculateAccountBalances } from "./balances";
 import type { LocalLedgerRecord } from "./records";
+import { minorUnitsToMajorNumber, parseMinorUnits } from "./money";
 
 export type AccountReport = LocalAccount & {
   recordCount: number;
@@ -15,11 +16,6 @@ export type AccountReport = LocalAccount & {
   cashFlowTotal: number;
   closingBalance: number;
 };
-
-function amount(value: string): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function active(record: LocalLedgerRecord): boolean {
   return record.recordState !== "voided";
@@ -58,7 +54,9 @@ export function calculateAccountReports(
       continue;
     }
 
-    const sourceAmount = amount(record.amount);
+    const sourceMinor = parseMinorUnits(record.amount, record.currency);
+    if (sourceMinor === null) continue;
+    const sourceAmount = minorUnitsToMajorNumber(sourceMinor, record.currency);
     source.recordCount += 1;
 
     switch (record.kind) {
@@ -90,7 +88,9 @@ export function calculateAccountReports(
         source.cashFlowTotal -= sourceAmount;
         const destination = reports.get(record.transferAccountId);
         if (destination) {
-          const destinationAmount = amount(record.destinationAmount || record.amount);
+          const destinationMinor = parseMinorUnits(record.destinationAmount || record.amount, destination.currency);
+          if (destinationMinor === null) break;
+          const destinationAmount = minorUnitsToMajorNumber(destinationMinor, destination.currency);
           destination.transferInTotal += destinationAmount;
           destination.cashFlowTotal += destinationAmount;
         }

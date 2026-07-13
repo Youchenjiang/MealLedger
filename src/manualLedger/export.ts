@@ -1,5 +1,6 @@
 import type { LocalAccount } from "./accounts";
 import { calculateAccountBalances } from "./balances";
+import { minorUnitsToMajorNumber, parseMinorUnits } from "./money";
 import type { LocalLedgerRecord } from "./records";
 
 export const cleanExportColumns = [
@@ -14,6 +15,7 @@ export const cleanExportColumns = [
   "currency",
   "category",
   "counterparty",
+  "source",
   "item_name",
   "transfer_account",
   "transfer_mode",
@@ -30,6 +32,9 @@ export const cleanExportColumns = [
   "refund_excess_handling",
   "reason",
   "note",
+  "tags",
+  "event",
+  "source_label",
   "recurrence_choice",
   "recurrence_amount_mode",
   "status",
@@ -102,6 +107,7 @@ export function toCleanExportRow(record: LocalLedgerRecord): CleanLedgerExportRo
     currency: record.currency,
     category: record.category,
     counterparty: record.counterparty,
+    source: record.kind === "income" || record.kind === "fund-addition" ? record.counterparty : "",
     item_name: record.itemName,
     transfer_account: record.transferAccountName,
     transfer_mode: record.transferMode,
@@ -118,6 +124,9 @@ export function toCleanExportRow(record: LocalLedgerRecord): CleanLedgerExportRo
     refund_excess_handling: record.refundExcessHandling,
     reason: record.reason,
     note: record.note,
+    tags: record.tags?.join("|") ?? "",
+    event: record.event ?? "",
+    source_label: record.sourceLabel ?? "",
     recurrence_choice: record.recurrenceChoice,
     recurrence_amount_mode: record.recurrenceAmountMode,
     status: record.status,
@@ -149,9 +158,9 @@ function recordsForKind(records: LocalLedgerRecord[], kind: LocalLedgerRecord["k
   return activeRecords(records).filter((record) => record.kind === kind);
 }
 
-function numericAmount(value: string): number {
-  const amount = Number(value);
-  return Number.isFinite(amount) ? amount : 0;
+function numericAmount(value: string, currency: string): number {
+  const minorUnits = parseMinorUnits(value, currency);
+  return minorUnits === null ? 0 : minorUnitsToMajorNumber(minorUnits, currency);
 }
 
 function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedgerRecord[]): AccountSummaryRow[] {
@@ -183,7 +192,7 @@ function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedger
     }
 
     source.record_count = Number(source.record_count) + 1;
-    const amount = numericAmount(record.amount);
+    const amount = numericAmount(record.amount, record.currency);
 
     if (record.kind === "income") {
       source.income_total = Number(source.income_total) + amount;
@@ -199,7 +208,8 @@ function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedger
       source.transfer_out_total = Number(source.transfer_out_total) + amount;
       const destination = summary.get(record.transferAccountId);
       if (destination) {
-        destination.transfer_in_total = Number(destination.transfer_in_total) + numericAmount(record.destinationAmount || record.amount);
+        destination.transfer_in_total = Number(destination.transfer_in_total)
+          + numericAmount(record.destinationAmount || record.amount, record.destinationCurrency || destination.currency);
         if (destination.account_id !== source.account_id) {
           destination.record_count = Number(destination.record_count) + 1;
         }

@@ -40,5 +40,8 @@ export function toImportedTransactionDraft(row: NormalizedImportRow, id: string)
     periodStart: row.period_start ?? "",
     periodEnd: row.period_end ?? "",
     note: row.notes ?? "",
+    tags: row.tags?.split("|").map((tag) => tag.trim()).filter(Boolean),
+    event: row.event ?? "",
+    sourceLabel: row.source_label ?? "",
   };
 }

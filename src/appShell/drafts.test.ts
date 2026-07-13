@@ -38,6 +38,7 @@ const accounts = [
   { name: "Daily wallet", currency: "TWD" },
   { name: "Savings", currency: "TWD" },
   { name: "Japan cash", currency: "JPY" },
+  { name: "USD wallet", currency: "USD" },
 ];
 
 const canCreate = (form: DraftForm) => canCreateManualDraft(form, accounts);
@@ -196,6 +197,11 @@ describe("manual transaction drafts", () => {
     expect(canCreate({ ...completeExpense, amount: "not-a-number" })).toBe(false);
     expect(canCreate({ ...completeExpense, kind: "adjustment", category: "", counterparty: "", itemName: "", amount: "-10", reason: "Cash count" })).toBe(true);
     expect(canCreate({ ...completeExpense, kind: "adjustment", category: "", counterparty: "", itemName: "", amount: "0", reason: "Cash count" })).toBe(false);
+  });
+
+  test("rejects fractional amounts for zero-decimal currencies", () => {
+    expect(canCreate({ ...completeExpense, amount: "0.5" })).toBe(false);
+    expect(canCreate({ ...completeExpense, account: "USD wallet", currency: "USD", amount: "0.001" })).toBe(false);
   });
 
   test("requires every record currency to match its selected account", () => {
