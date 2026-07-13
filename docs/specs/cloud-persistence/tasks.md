@@ -50,11 +50,12 @@ than being claimed automatically.
 ## Verification Evidence
 
 The current branch was re-verified after the meal/media/source queue slice,
-invoice-import spike documentation, and Supabase configuration hardening:
+invoice-import spike documentation, Supabase configuration hardening, and the
+changed-local-target requeue fix:
 
-- `npm run test`: 35 files, 198 tests passed.
-- `npm run test:coverage`: 83.29% statements, 73.45% branches, 84.45% functions,
-  84.63% lines.
+- `npm run test`: 35 files, 201 tests passed.
+- `npm run test:coverage`: 83.39% statements, 73.60% branches, 84.47% functions,
+  84.74% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated

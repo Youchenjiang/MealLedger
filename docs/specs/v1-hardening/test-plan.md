@@ -48,10 +48,11 @@ V1 hardening cannot prove cloud object deletion or live signed-URL revocation be
 
 ## Final Verification Evidence
 
-Verified on 2026-07-13:
+Verified on 2026-07-13 after cloud-persistence, invoice-spike, and sync-requeue
+changes:
 
-- `npm run test`: 159 tests passed across 27 files.
-- `npm run test:coverage`: 85.61% statements, 77.10% branches, 85.63% functions, and 86.04% lines.
+- `npm run test`: 201 tests passed across 35 files.
+- `npm run test:coverage`: 83.39% statements, 73.60% branches, 84.47% functions, and 84.74% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.

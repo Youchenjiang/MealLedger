@@ -36,15 +36,20 @@ Verification: React integration tests and Playwright console smoke.
 
 Updated the Capture and App Shell scope notes, recorded the read-only review dispositions, ran the complete gate, and left the branch ready for user review without pushing or opening a PR.
 
-Verification at hardening close on 2026-07-13, before the later cloud
-persistence, invoice spike documentation, and auth configuration follow-up:
+Verification snapshot on 2026-07-13 after the cloud-persistence slice,
+invoice-import spike documentation, auth configuration hardening, and the
+changed-local-target requeue fix:
 
-- `npm run test`: 159 tests passed across 27 files.
-- `npm run test:coverage`: 85.61% statements, 77.10% branches, 85.63% functions, and 86.04% lines.
+- `npm run test`: 201 tests passed across 35 files.
+- `npm run test:coverage`: 83.39% statements, 73.60% branches, 84.47% functions, and 84.74% lines.
 - `npm run test:e2e`: 6 Playwright tests passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.
 - `git status --short`: clean.
+
+The lower aggregate coverage is expected because later cloud, auth, and
+provider-boundary modules are included in the measured source set. It remains
+above the V1 hardening gate of 70% statements/functions/lines and 60% branches.
 
 ## Third-party Review Evidence
 
