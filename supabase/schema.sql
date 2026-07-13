@@ -406,6 +406,27 @@ create trigger transfer_details_valid
 before insert or update on public.transfer_details
 for each row execute function public.validate_transfer_details();
 
+create or replace function public.prevent_transfer_details_delete()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1 from public.ledger_records record
+    where record.id = old.ledger_record_id and record.kind = 'transfer'
+  ) then
+    raise exception 'transfer records require transfer_details';
+  end if;
+  return old;
+end;
+$$;
+
+create trigger transfer_details_delete_guard
+before delete on public.transfer_details
+for each row execute function public.prevent_transfer_details_delete();
+
 create or replace function public.require_transfer_details()
 returns trigger
 language plpgsql

@@ -55,6 +55,7 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("alter table public.ledger_records enable row level security");
     expect(schemaSql).toContain("create policy ledger_records_owner");
     expect(schemaSql).toContain("create trigger transfer_details_valid");
+    expect(schemaSql).toContain("create trigger transfer_details_delete_guard");
     expect(schemaSql).toContain("create trigger refund_links_valid");
     expect(schemaSql).toContain("create constraint trigger ledger_transfer_details_required");
     expect(schemaSql).toContain("create or replace function public.media_link_target_owned");
