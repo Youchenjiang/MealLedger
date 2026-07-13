@@ -16,7 +16,7 @@ Verification: `npm run test`.
 
 ### Task 3: Schema ownership and relationship guards — Complete
 
-Added transfer-detail, refund-link, transfer-required, and media-target ownership guards. Aligned the R2 thumbnail column with the canonical schema and verified temporary scan media links use canonical receipt/invoice intents.
+Added transfer-detail, transfer-detail deletion, refund-link, transfer-required, and media-target ownership guards. Aligned the R2 thumbnail column with the canonical schema and verified temporary scan media links use canonical receipt/invoice intents.
 
 Verification: schema contract tests and migration equality check. Live RLS remains deferred until cloud-persistence.
 
