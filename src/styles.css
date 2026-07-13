@@ -75,6 +75,32 @@ a {
   gap: 16px;
 }
 
+.onboarding-form > label:not(.checkbox-row):not(.radio-row) {
+  display: grid;
+  gap: 6px;
+  color: #4c4740;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.onboarding-form input:not([type="checkbox"]):not([type="radio"]),
+.onboarding-form select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d7cec1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #242321;
+  background: #fffdf8;
+  font: inherit;
+}
+
+.onboarding-form input:not([type="checkbox"]):not([type="radio"]):focus,
+.onboarding-form select:focus {
+  border-color: #8db9a4;
+  outline: 2px solid #dce9e2;
+}
+
 .onboarding-form fieldset {
   display: grid;
   gap: 10px;
@@ -96,9 +122,23 @@ a {
   gap: 10px;
 }
 
-.checkbox-row input,
-.radio-row input {
-  width: auto;
+.checkbox-row input[type="checkbox"],
+.radio-row input[type="radio"] {
+  flex: 0 0 18px;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #2f6758;
+}
+
+.checkbox-row span,
+.radio-row span {
+  color: #4c4740;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .onboarding-balance-fields,
@@ -568,7 +608,7 @@ h2 {
   gap: 12px;
 }
 
-.draft-form label {
+.draft-form label:not(.checkbox-row):not(.radio-row):not(.checkbox-field) {
   display: grid;
   gap: 6px;
 }
@@ -579,7 +619,7 @@ h2 {
   font-weight: 700;
 }
 
-.draft-form input,
+.draft-form input:not([type="checkbox"]):not([type="radio"]),
 .draft-form select,
 .draft-form textarea {
   width: 100%;
@@ -597,7 +637,7 @@ h2 {
   resize: vertical;
 }
 
-.draft-form input:focus,
+.draft-form input:not([type="checkbox"]):not([type="radio"]):focus,
 .draft-form select:focus,
 .draft-form textarea:focus {
   border-color: #8db9a4;
@@ -630,6 +670,36 @@ h2 {
   width: 18px;
   min-height: 18px;
   margin: 0;
+}
+
+.draft-form .checkbox-row,
+.draft-form .radio-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.draft-form .checkbox-row span,
+.draft-form .radio-row span {
+  color: #4c4740;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.draft-form fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #ddd6ca;
+  border-radius: 8px;
+}
+
+.draft-form fieldset legend {
+  padding: 0 6px;
+  color: #4c4740;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .field-control-row {

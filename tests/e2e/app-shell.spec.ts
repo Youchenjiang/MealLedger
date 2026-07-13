@@ -126,6 +126,43 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("keeps account option controls compact and aligned", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  const onboardingControls = await page.locator(".onboarding-form input[type='checkbox'], .onboarding-form input[type='radio']").evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    }),
+  );
+
+  expect(onboardingControls).toHaveLength(3);
+  for (const control of onboardingControls) {
+    expect(control.width).toBeLessThanOrEqual(20);
+    expect(control.height).toBeLessThanOrEqual(20);
+  }
+
+  await page.getByRole("button", { name: "Skip setup" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settingsControls = await page.locator(".draft-form input[type='checkbox'], .draft-form input[type='radio']").evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    }),
+  );
+
+  expect(settingsControls).toHaveLength(3);
+  for (const control of settingsControls) {
+    expect(control.width).toBeLessThanOrEqual(20);
+    expect(control.height).toBeLessThanOrEqual(20);
+  }
+  await expectNoHorizontalOverflow(page);
+  expect(errors).toEqual([]);
+});
+
 test("keeps mobile navigation usable without horizontal overflow", async ({ page }) => {
   const errors = collectBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
