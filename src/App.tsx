@@ -41,7 +41,7 @@ import { createMealEntry, type MealEntry } from "./captureMedia/meals";
 import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retainTemporaryScan, type TemporaryScan } from "./captureMedia/media";
 import { queueUploadFiles, validateMediaBatch, type UploadQueueItem } from "./captureMedia/upload";
 import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient, type RawSupabaseClient } from "./cloudPersistence/supabaseClient";
-import { enqueueRecordSync, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
+import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
 import { enqueueLocalChanges, syncLocalChanges } from "./cloudPersistence/syncService";
 
 const navItems: NavItem[] = [
@@ -365,11 +365,11 @@ function draftCountLabel(draftCount: number): string {
 
 function draftReviewCopy(draftCount: number): string {
   if (draftCount === 0) {
-    return "CSV and JSON exports stay focused on ledger data. Receipt and meal photos remain separate files.";
+    return "Scans, imports, and cancelled entries will appear here before ledger confirmation.";
   }
 
   const noun = draftCount === 1 ? "draft" : "drafts";
-  return `${draftCount} ${noun} can be reviewed here; confirmation arrives later.`;
+  return `${draftCount} ${noun} waiting. Continue in Capture or confirm a complete draft here.`;
 }
 
 function counterpartyLabel(kind: DraftForm["kind"]): string {
@@ -531,6 +531,7 @@ function AuthenticatedApp() {
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>(readStoredUploadQueue);
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
+  const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
   const [cloudSyncQueue, setCloudSyncQueue] = useState<CloudSyncQueueItem[]>(readStoredCloudSyncQueue);
@@ -667,22 +668,50 @@ function AuthenticatedApp() {
     const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
     const cloudDataBlocked = cloudSyncEnabled && !cloudDataOwnerMatches;
     const pendingCloudCount = cloudSyncQueue.filter((item) => item.state !== "synced").length;
+    const conflictCount = cloudSyncQueue.filter((item) => item.state === "conflict").length;
+    const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
+    const firstSyncError = errorItems.find((item) => item.lastError)?.lastError;
+    let syncLabel = "Cloud sync ready";
+    let syncDetail = "Cloud writes use the authenticated workspace.";
+    let syncIcon: LucideIcon = Wifi;
+    let syncTone = "neutral";
+    if (cloudDataBlocked) {
+      syncLabel = "Local data review required";
+      syncDetail = "This signed-in workspace will not claim data from another local user automatically.";
+      syncIcon = CloudOff;
+      syncTone = "danger";
+    } else if (!cloudSyncEnabled) {
+      syncLabel = isOnline ? "Sync not enabled" : "Offline";
+      syncDetail = isOnline ? "This preview keeps changes on this device." : "Drafts and records stay visible on this device while offline.";
+      syncIcon = isOnline ? Wifi : WifiOff;
+    } else if (conflictCount > 0) {
+      syncLabel = `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`;
+      syncDetail = "Conflicting local and cloud versions are held for review before either one is replaced.";
+      syncIcon = CloudOff;
+      syncTone = "danger";
+    } else if (errorItems.length > 0) {
+      syncLabel = `${errorItems.length} cloud sync error${errorItems.length === 1 ? "" : "s"}`;
+      syncDetail = firstSyncError ? `The latest sync attempt failed: ${firstSyncError}` : "A cloud write failed and will be retried when possible.";
+      syncIcon = CloudOff;
+      syncTone = "danger";
+    } else if (pendingCloudCount > 0) {
+      syncLabel = `${pendingCloudCount} cloud sync pending`;
+      syncDetail = "Local changes are queued for the configured Supabase workspace.";
+      syncIcon = CloudOff;
+      syncTone = "warn";
+    }
     const items = [
       {
-        label: cloudDataBlocked ? "Local data review required" : cloudSyncEnabled ? (pendingCloudCount > 0 ? `${pendingCloudCount} cloud sync pending` : "Cloud sync ready") : (isOnline ? "Sync not enabled" : "Offline"),
-        detail: cloudDataBlocked
-          ? "This signed-in workspace will not claim data from another local user automatically."
-          : cloudSyncEnabled
-          ? (pendingCloudCount > 0 ? "Local changes are queued for the configured Supabase workspace." : "Cloud writes use the authenticated workspace.")
-          : (isOnline ? "This preview keeps changes on this device." : "Drafts stay visible on this device."),
-        icon: cloudDataBlocked || (cloudSyncEnabled && pendingCloudCount > 0) ? CloudOff : (isOnline ? Wifi : WifiOff),
-        tone: cloudDataBlocked || (cloudSyncEnabled && pendingCloudCount > 0) ? "warn" : "neutral",
+        label: syncLabel,
+        detail: syncDetail,
+        icon: syncIcon,
+        tone: syncTone,
       },
       {
         label: draftCountLabel(draftCount),
         detail:
           draftCount > 0
-            ? "Review or discard drafts before the later ledger workflow writes records."
+            ? "Continue incomplete drafts in Capture, or confirm a complete draft here."
             : "Nothing is waiting for review.",
         icon: draftCount > 0 ? AlertCircle : CheckCircle2,
         tone: draftCount > 0 ? "warn" : "good",
@@ -789,7 +818,7 @@ function AuthenticatedApp() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} onSignOut={signOut} />
-        {renderRoute(route, drafts, setDrafts, records, setRecords, setAuditEvents, queueRecordBundle, accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
+        {renderRoute(route, drafts, setDrafts, draftToEdit, setDraftToEdit, records, setRecords, setAuditEvents, queueRecordBundle, cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"), (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())), accounts, setAccounts, navigate, () => setOnboardingOpen(true), (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
       </section>
     </main>
   );
@@ -949,10 +978,14 @@ function renderRoute(
   route: AppRoute,
   drafts: TransactionDraft[],
   setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>,
+  draftToEdit: TransactionDraft | null,
+  setDraftToEdit: Dispatch<SetStateAction<TransactionDraft | null>>,
   records: LocalLedgerRecord[],
   setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>,
   setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>,
   queueRecordBundle: (records: LocalLedgerRecord[]) => void,
+  cloudSyncIssues: CloudSyncQueueItem[],
+  onRetryCloudSyncItem: (id: string) => void,
   accounts: LocalAccount[],
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
   navigate: (item: NavItem) => void,
@@ -969,7 +1002,7 @@ function renderRoute(
 
   switch (route) {
     case "overview":
-      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} navigate={navigate} />;
+      return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} navigate={navigate} />;
     case "ledger":
       return (
         <LedgerPage
@@ -977,6 +1010,28 @@ function renderRoute(
           drafts={drafts}
           navigate={navigate}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          onEditDraft={(draft) => {
+            setDraftToEdit(draft);
+            navigate(navItemFor("capture"));
+          }}
+          onConfirmDraft={(draft) => {
+            const now = new Date().toISOString();
+            const bundle = createOfficialRecordBundle(draft, accounts, {
+              userId: "local-user",
+              recordId: `record-${draft.id}`,
+              idempotencyKey: `draft:${draft.id}`,
+              createdAt: now,
+            });
+            if (!bundle) {
+              return false;
+            }
+
+            setRecords((current) => appendIdempotentRecords(current, bundle));
+            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+            setDrafts((current) => current.filter((item) => item.id !== draft.id));
+            queueRecordBundle(bundle.records);
+            return true;
+          }}
           onUpdateRecord={(id, patch) => {
             const record = records.find((item) => item.id === id);
             if (!record || record.recordState === "voided") {
@@ -1020,6 +1075,9 @@ function renderRoute(
           records={records}
           accounts={accounts}
           navigate={navigate}
+          draftToEdit={draftToEdit}
+          onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
+          onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveRecord={(draft) => {
             const now = new Date().toISOString();
@@ -1094,11 +1152,13 @@ function renderRoute(
   }
 }
 
-function OverviewPage({ draftCount, recordCount, accountBalances, accountReports, navigate }: Readonly<{
+function OverviewPage({ draftCount, recordCount, accountBalances, accountReports, syncIssues, onRetrySyncItem, navigate }: Readonly<{
   draftCount: number;
   recordCount: number;
   accountBalances: ReturnType<typeof calculateAccountBalances>;
   accountReports: AccountReport[];
+  syncIssues: CloudSyncQueueItem[];
+  onRetrySyncItem: (id: string) => void;
   navigate: (item: NavItem) => void;
 }>) {
   const accountDetail = accountBalances.length === 0
@@ -1116,6 +1176,37 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
           detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for review."}
         />
       </section>
+      {syncIssues.length > 0 ? (
+        <Panel title="Sync attention" eyebrow="Action required">
+          <div className="sync-issues" aria-label="Cloud sync issues">
+            {syncIssues.map((item) => {
+              const targetLabel = item.target === "record"
+                ? "ledger record"
+                : item.target === "draft"
+                ? "ledger draft"
+                : item.target === "meal"
+                ? "meal"
+                : item.target === "media"
+                ? "media metadata"
+                : "scan source";
+
+              return (
+                <article className="sync-issue" key={item.id}>
+                  <div>
+                    <strong>{targetLabel}</strong>
+                    <span>{item.state === "conflict" ? "Conflict requires review; local data was not overwritten." : item.lastError || "Cloud write is waiting to be retried."}</span>
+                  </div>
+                  {item.state === "conflict" ? (
+                    <span className="record-state-label">Review required</span>
+                  ) : (
+                    <button className="text-action" type="button" onClick={() => onRetrySyncItem(item.id)}>Retry sync</button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </Panel>
+      ) : null}
       <Panel title="Account report" eyebrow="Accounting view">
         {accountReports.length === 0 ? (
           <p className="panel-copy">Add an account to see income, spending, refunds, transfers, and adjustments separately.</p>
@@ -1140,17 +1231,17 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
       <section className="content-grid">
         <Panel title="Start with a new record" eyebrow="First step">
           <p className="panel-copy">
-            Begin with a transaction draft, then review it in Ledger. Confirmation is part of a later
-            ledger workflow.
+            Manual records save directly to the local ledger after required fields pass validation.
+            Scans and imports remain drafts until you confirm them.
           </p>
-              <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
+          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
             Start a record
           </button>
         </Panel>
         <Panel title="Review before it counts" eyebrow="Data safety">
           <p className="panel-copy">
-            Imported rows, scanned receipts, meal photos, and AI suggestions stay as drafts until a
-            later ledger workflow confirms them.
+            Imported rows and scanned receipts stay in Review until you continue incomplete fields or
+            confirm the completed draft. Meal photos stay separate from ledger records.
           </p>
         </Panel>
       </section>
@@ -1163,6 +1254,8 @@ function LedgerPage({
   drafts,
   navigate,
   onDiscardDraft,
+  onEditDraft,
+  onConfirmDraft,
   onUpdateRecord,
   onConvertUnresolved,
   onVoidRecord,
@@ -1171,6 +1264,8 @@ function LedgerPage({
   drafts: TransactionDraft[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
+  onEditDraft: (draft: TransactionDraft) => void;
+  onConfirmDraft: (draft: TransactionDraft) => boolean;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
   onVoidRecord: (id: string) => void;
@@ -1178,6 +1273,7 @@ function LedgerPage({
   const draftCount = drafts.length;
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
+  const [draftMessage, setDraftMessage] = useState("");
   const ledgerColumns = [
     "Record ID",
     "Date",
@@ -1200,7 +1296,7 @@ function LedgerPage({
     <div className="route-stack">
       <section className="content-grid">
         <Panel title="Ledger records" eyebrow="Confirmed records">
-          <p className="panel-copy">Manual records are written locally as official ledger records. Cloud sync is not enabled yet.</p>
+          <p className="panel-copy">Manual records are written locally as official ledger records. Cloud status appears in the workspace header.</p>
           <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("capture"))}>
             Start a record
           </button>
@@ -1326,13 +1422,26 @@ function LedgerPage({
                 </strong>
                 <span>{draft.kind}</span>
               </div>
-              <button className="text-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
-                Discard
-              </button>
+              <div className="record-actions">
+                <button className="secondary-action" type="button" onClick={() => onEditDraft(draft)}>
+                  Continue in Capture
+                </button>
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={() => setDraftMessage(onConfirmDraft(draft) ? "Draft confirmed in the local ledger." : "This draft is incomplete. Continue in Capture to fill the required fields.")}
+                >
+                  Confirm to ledger
+                </button>
+                <button className="text-action danger-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
+                  Discard
+                </button>
+              </div>
             </article>
           ))}
         </section>
       ) : null}
+      {draftMessage ? <p className="inline-message" role="status">{draftMessage}</p> : null}
       <section className="table-card" aria-label="Ledger table fields">
         <div className="table-row table-head">
           {ledgerColumns.map((column) => (
@@ -1644,6 +1753,9 @@ function CapturePage({
   records,
   accounts,
   navigate,
+  draftToEdit,
+  onDiscardDraft,
+  onFinishDraftEdit,
   onAddAccount,
   onSaveRecord,
   onSaveDraft,
@@ -1657,6 +1769,9 @@ function CapturePage({
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
+  draftToEdit: TransactionDraft | null;
+  onDiscardDraft: (id: string) => void;
+  onFinishDraftEdit: () => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveRecord: (draft: TransactionDraft) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
@@ -1667,8 +1782,9 @@ function CapturePage({
   uploadQueue: UploadQueueItem[];
   onQueueUploads: (items: UploadQueueItem[]) => void;
 }>) {
-  const [form, setForm] = useState<DraftForm>(createEmptyDraftForm);
-  const [cleanForm, setCleanForm] = useState<DraftForm>(createEmptyDraftForm);
+  const initialForm: DraftForm = draftToEdit ? { ...draftToEdit } : createEmptyDraftForm();
+  const [form, setForm] = useState<DraftForm>(initialForm);
+  const [cleanForm, setCleanForm] = useState<DraftForm>(initialForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [showCancelChoices, setShowCancelChoices] = useState(false);
   const [quickAccountField, setQuickAccountField] = useState<"account" | "transferAccount" | "feeAccount" | null>(null);
@@ -1920,6 +2036,10 @@ function CapturePage({
     setSavedMessage("Record saved to the local ledger.");
     setForm(nextCleanForm);
     setCleanForm(nextCleanForm);
+    if (draftToEdit) {
+      onDiscardDraft(draftToEdit.id);
+      onFinishDraftEdit();
+    }
     setShowCancelChoices(false);
   };
 

@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 import type { MealEntry } from "../captureMedia/meals";
 import type { TemporaryScan } from "../captureMedia/media";
 import type { LocalLedgerRecord } from "../manualLedger/records";
-import type { UploadQueueItem } from "../captureMedia/uploadQueue";
-import { enqueueDraftSync, enqueueMealSync, enqueueMediaSync, enqueueRecordSync, enqueueScanSync, markCloudSyncFailure, markCloudSynced, markCloudSyncing, pendingCloudSyncItems } from "./syncQueue";
+import type { UploadQueueItem } from "../captureMedia/upload";
+import { enqueueDraftSync, enqueueMealSync, enqueueMediaSync, enqueueRecordSync, enqueueScanSync, markCloudSyncFailure, markCloudSynced, markCloudSyncing, pendingCloudSyncItems, retryCloudSyncItem } from "./syncQueue";
 
 const record = { id: "record-1", idempotencyKey: "action-1", version: 1, updatedAt: "2026-07-13T00:00:00.000Z" } as LocalLedgerRecord;
 const draft = { id: "draft-1" } as Parameters<typeof enqueueDraftSync>[1];
@@ -44,7 +44,7 @@ describe("cloud sync queue", () => {
     const syncedScan = markCloudSynced(firstScan, firstScan[0].id, now);
     const changedScan = enqueueScanSync(syncedScan, { ...scan, state: "retained", cloudStatus: "local-only", expiresAt: null }, "2026-07-13T01:00:00.000Z");
 
-    const media = { id: "media-1", name: "receipt.jpg", type: "image/jpeg", size: 10, status: "queued", kind: "receipt", metadataStatus: "local-only" } satisfies UploadQueueItem;
+    const media = { id: "media-1", name: "receipt.jpg", type: "image/jpeg", size: 10, status: "queued", kind: "receipt-scan", metadataStatus: "local-only" } satisfies UploadQueueItem;
     const firstMedia = enqueueMediaSync([], media, now);
     const syncedMedia = markCloudSynced(firstMedia, firstMedia[0].id, now);
     const changedMedia = enqueueMediaSync(syncedMedia, { ...media, size: 20, metadataStatus: "local-only" }, "2026-07-13T01:00:00.000Z");
@@ -62,6 +62,17 @@ describe("cloud sync queue", () => {
 
     expect(syncing[0]).toMatchObject({ state: "syncing", attempts: 1 });
     expect(pendingCloudSyncItems(synced, now)).toEqual([]);
+  });
+
+  test("reopens failed sync work without changing conflict items", () => {
+    const queued = enqueueRecordSync([], record, now);
+    const queueItemId = queued[0].id;
+    const failed = markCloudSyncFailure(queued, queueItemId, "network failed", false, now);
+    const conflicted = markCloudSyncFailure(failed, queueItemId, "version conflict", false, now, "conflict");
+    const retried = retryCloudSyncItem(conflicted, queueItemId, "2026-07-13T01:00:00.000Z");
+
+    expect(retryCloudSyncItem(failed, queueItemId, "2026-07-13T01:00:00.000Z")[0]).toMatchObject({ state: "pending", attempts: 0, lastError: "" });
+    expect(retried[0]).toMatchObject({ state: "conflict", lastError: "version conflict" });
   });
 
   test("schedules retryable failures and stops non-retryable failures", () => {

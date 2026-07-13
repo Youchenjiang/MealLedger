@@ -351,6 +351,10 @@ describe("App shell draft flow", () => {
     await user.click(await screen.findByRole("button", { name: "Merge to draft row 2" }));
     await user.click(screen.getByRole("button", { name: "Ledger" }));
     expect(screen.getByText("1 local draft")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm to ledger" }));
+    expect(screen.getByText("Draft confirmed in the local ledger.")).toBeInTheDocument();
+    expect(screen.queryByText("1 local draft")).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toHaveLength(2);
   });
 
   test("offers cancel choices and persists an incomplete manual entry as a local draft", async () => {
@@ -376,6 +380,16 @@ describe("App shell draft flow", () => {
 
     await user.click(screen.getByRole("button", { name: "Ledger" }));
     expect(screen.getByText("1 local draft")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue in Capture" }));
+    expect(screen.getByRole("heading", { name: "Capture" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Merchant")).toHaveValue("全聯");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.type(screen.getByLabelText("Item name"), "香蕉");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "80");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.app-shell.drafts") ?? "[]")).toHaveLength(0);
   });
 
   test("discarding a manual entry clears the changed form without creating a record", async () => {

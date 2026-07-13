@@ -205,6 +205,12 @@ export function markCloudSynced(items: CloudSyncQueueItem[], id: string, now: st
     : item);
 }
 
+export function retryCloudSyncItem(items: CloudSyncQueueItem[], id: string, now: string): CloudSyncQueueItem[] {
+  return items.map((item) => item.id === id && (item.state === "failed" || item.state === "retryable-error")
+    ? { ...item, state: "pending", attempts: 0, nextAttemptAt: now, lastError: "", updatedAt: now }
+    : item);
+}
+
 export function markCloudSyncFailure(
   items: CloudSyncQueueItem[],
   id: string,

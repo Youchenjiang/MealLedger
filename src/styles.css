@@ -936,6 +936,44 @@ h2 {
   gap: 8px;
 }
 
+.inline-message {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #8db9a4;
+  border-radius: 8px;
+  color: #2f5d50;
+  background: #f4faf6;
+}
+
+.sync-issues {
+  display: grid;
+  gap: 10px;
+}
+
+.sync-issue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ebe4d8;
+}
+
+.sync-issue:last-child {
+  border-bottom: 0;
+}
+
+.sync-issue > div {
+  display: grid;
+  gap: 4px;
+}
+
+.sync-issue span {
+  color: #69645c;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .record-editor {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1295,5 +1333,19 @@ button.action-card.unavailable {
   .draft-amount {
     justify-items: start;
     text-align: left;
+  }
+
+  .record-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .record-actions > button {
+    flex: 1 1 100%;
+  }
+
+  .sync-issue {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

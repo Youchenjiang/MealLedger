@@ -282,6 +282,7 @@ export function updateOfficialRecord(
   const updatedRecord = {
     ...record,
     ...patch,
+    status: "local-only" as const,
     version: record.version + 1,
     updatedAt,
   };
@@ -349,6 +350,7 @@ export function convertUnresolvedExpense(
     counterpartyMissing: draft.counterpartyMissing,
     itemName: draft.itemName,
     itemNameMissing: draft.itemNameMissing,
+    status: "local-only",
     version: record.version + 1,
     updatedAt,
   };
@@ -366,6 +368,7 @@ export function voidOfficialRecord(
   const voidedRecord = {
     ...record,
     recordState: "voided" as const,
+    status: "local-only" as const,
     version: record.version + 1,
     updatedAt,
   };

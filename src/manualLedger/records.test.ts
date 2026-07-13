@@ -130,7 +130,7 @@ describe("local official ledger records", () => {
       itemNameMissing: false,
     }, accounts, "2026-07-12T13:00:00.000Z");
 
-    expect(result?.record).toMatchObject({ id: "record-1", kind: "expense", localDate: "2026-07-12", version: 2 });
+    expect(result?.record).toMatchObject({ id: "record-1", kind: "expense", localDate: "2026-07-12", version: 2, status: "local-only" });
     expect(result?.auditEvent).toMatchObject({ eventType: "record-updated", targetId: "record-1" });
   });
 
@@ -169,7 +169,7 @@ describe("local official ledger records", () => {
 
     const result = updateOfficialRecord(bundle.records[0], { amount: "120", note: "Corrected" }, "2026-07-12T13:00:00.000Z");
 
-    expect(result.record).toMatchObject({ amount: "120", note: "Corrected", version: 2, recordState: "active" });
+    expect(result.record).toMatchObject({ amount: "120", note: "Corrected", version: 2, recordState: "active", status: "local-only" });
     expect(result.auditEvent).toMatchObject({ eventType: "record-updated", changedFields: ["amount", "note"] });
   });
 
@@ -181,7 +181,7 @@ describe("local official ledger records", () => {
 
     const result = voidOfficialRecord(bundle.records[0], "2026-07-12T13:30:00.000Z");
 
-    expect(result.record).toMatchObject({ id: "record-1", recordState: "voided", version: 2 });
+    expect(result.record).toMatchObject({ id: "record-1", recordState: "voided", version: 2, status: "local-only" });
     expect(result.auditEvent).toMatchObject({ eventType: "record-voided", targetId: "record-1" });
   });
 
