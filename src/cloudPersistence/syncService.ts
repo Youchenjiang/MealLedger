@@ -30,6 +30,7 @@ export type SyncLocalChangesInput = {
   categories: string[];
   tags: string[];
   events: string[];
+  auditEvents: import("../manualLedger/records").LocalAuditEvent[];
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
   meals: MealEntry[];
@@ -153,7 +154,7 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
       continue;
     }
 
-    const mapped = mapLedgerRecord(record, input.userId, bootstrap.references);
+    const mapped = mapLedgerRecord(record, input.userId, bootstrap.references, "Asia/Taipei", input.auditEvents);
     if (!mapped.ok) {
       nextQueue = markCloudSyncFailure(nextQueue, item.id, mapped.issues.map((entry) => entry.message).join(" "), false, input.now);
       continue;
@@ -190,9 +191,7 @@ export function enqueueLocalChanges(
   for (const item of media) {
     if (item.metadataStatus !== "synced") next = enqueueMediaSync(next, item, now);
   }
-  for (const record of records) {
-    if (record.status === "local-only") next = enqueueRecordSync(next, record, now);
-  }
+  for (const record of records) next = enqueueRecordSync(next, record, now);
   for (const draft of drafts) next = enqueueDraftSync(next, draft, now);
   for (const scan of scans) {
     if (scan.cloudStatus !== "synced") next = enqueueScanSync(next, scan, now);

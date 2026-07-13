@@ -70,6 +70,31 @@ async function upsert(
   return result.error ? failure(result.error, table) : null;
 }
 
+async function checkLedgerVersion(
+  client: CloudPersistenceClient,
+  row: CloudRow,
+): Promise<CloudPersistenceFailure | null> {
+  const result = await client.from("ledger_records").select("version").eq("id", row.id).maybeSingle();
+  if (result.error) return failure(result.error, "ledger_records");
+  if (!result.data) return null;
+
+  const remoteVersion = Number(result.data.version);
+  const requestedVersion = Number(row.version);
+  const expectedPreviousVersion = requestedVersion - 1;
+  if (remoteVersion !== requestedVersion && remoteVersion !== expectedPreviousVersion) {
+    return {
+      ok: false,
+      failure: {
+        code: "conflict",
+        message: `Ledger record version conflict: cloud=${remoteVersion}, local=${requestedVersion}.`,
+        retryable: false,
+        table: "ledger_records",
+      },
+    };
+  }
+  return null;
+}
+
 export async function persistAccounts(
   client: CloudPersistenceClient,
   rows: CloudRow[],
@@ -146,7 +171,23 @@ export async function persistRecordBundle(
   bundle: CloudRecordBundle,
 ): Promise<CloudPersistenceResult> {
   const existing = await readExistingIdempotency(client, request);
-  if (existing) return existing;
+  if (existing && !existing.ok) return existing;
+  const replayed = existing?.ok === true && existing.replayed;
+
+  if (bundle.transferDetails) {
+    return {
+      ok: false,
+      failure: {
+        code: "validation",
+        message: "Transfer bundles require the atomic cloud RPC boundary and were kept local-only.",
+        retryable: false,
+        table: "transfer_details",
+      },
+    };
+  }
+
+  const versionFailure = await checkLedgerVersion(client, bundle.ledgerRecord);
+  if (versionFailure) return versionFailure;
 
   const idempotencyError = await upsert(client, "idempotency_keys", {
     user_id: request.userId,
@@ -174,11 +215,17 @@ export async function persistRecordBundle(
     tables.push("refund_links");
   }
 
+  if (bundle.ledgerRecordTags.length > 0) {
+    const tagError = await upsert(client, "ledger_record_tags", bundle.ledgerRecordTags, "ledger_record_id,tag_id");
+    if (tagError) return tagError;
+    tables.push("ledger_record_tags");
+  }
+
   if (bundle.auditEvents.length > 0) {
     const auditError = await upsert(client, "audit_events", bundle.auditEvents, "id");
     if (auditError) return auditError;
     tables.push("audit_events");
   }
 
-  return { ok: true, replayed: false, tables };
+  return { ok: true, replayed, tables };
 }

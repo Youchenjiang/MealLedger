@@ -609,6 +609,7 @@ function AuthenticatedApp() {
         categories,
         tags,
         events,
+        auditEvents,
         records,
         drafts,
         meals,

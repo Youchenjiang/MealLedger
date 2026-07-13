@@ -27,6 +27,7 @@ export type CloudRecordBundle = {
   ledgerRecord: CloudRow;
   transferDetails?: CloudRow;
   refundLinks: CloudRow[];
+  ledgerRecordTags: CloudRow[];
   auditEvents: CloudRow[];
 };
 

@@ -195,13 +195,13 @@ export function mapMealEntry(
   };
 }
 
-function mapAuditEvent(event: LocalAuditEvent): CloudRow {
+function mapAuditEvent(event: LocalAuditEvent, targetId = event.targetId): CloudRow {
   return {
     ...(isUuid(event.id) ? { id: event.id } : {}),
     user_id: event.userId,
     event_type: event.eventType,
     target_type: event.targetType,
-    target_id: event.targetId,
+    target_id: targetId,
     summary: event.summary,
     changes_json: { changedFields: event.changedFields },
     created_at: event.createdAt,
@@ -213,6 +213,7 @@ export function mapLedgerRecord(
   userId: string,
   references: CloudReferenceMap,
   timezone = "Asia/Taipei",
+  auditEvents: LocalAuditEvent[] = [],
 ): CloudMappingResult<CloudRecordBundle> {
   const recordId = ledgerReference(references.ledgerRecordIds, record.id, userId, "id");
   const accountId = reference(references.accountIds, record.accountId, "account_id");
@@ -229,6 +230,16 @@ export function mapLedgerRecord(
     ? reference(references.eventIds, record.event, "event_id")
     : { ok: true as const, value: undefined };
   if (!eventId.ok) issues.push(...eventId.issues);
+
+  const ledgerRecordTags: CloudRow[] = [];
+  for (const tag of record.tags ?? []) {
+    const tagId = reference(references.tagIds, tag, "ledger_record_tags.tag_id");
+    if (!tagId.ok) {
+      issues.push(...tagId.issues);
+    } else {
+      ledgerRecordTags.push({ user_id: userId, ledger_record_id: recordId.ok ? recordId.value : undefined, tag_id: tagId.value });
+    }
+  }
 
   if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok) {
     return { ok: false, issues };
@@ -266,6 +277,7 @@ export function mapLedgerRecord(
   const bundle: CloudRecordBundle = {
     ledgerRecord,
     refundLinks: [],
+    ledgerRecordTags,
     auditEvents: [],
   };
 
@@ -289,7 +301,7 @@ export function mapLedgerRecord(
     };
   }
 
-  if (record.kind === "refund" && record.refundSubtype === "payback") {
+  if (record.kind === "refund") {
     const allocations = references.refundAllocations?.[record.id];
     if (allocations && allocations.length > 0) {
       for (const allocation of allocations) {
@@ -305,13 +317,14 @@ export function mapLedgerRecord(
           original_record_id: originalId.value,
           amount_minor: linkedAmount.value,
           currency: allocation.currency.toUpperCase(),
-          refund_subtype: "payback",
+          refund_subtype: record.refundSubtype,
+          difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
         });
       }
     } else {
       const linkedIds = record.refundLinkedRecordIds ?? (record.refundLinkedRecordId ? [record.refundLinkedRecordId] : []);
       if (linkedIds.length !== 1) {
-        issues.push(issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple payback links require explicit per-record amounts."));
+          issues.push(issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple refund links require explicit per-record amounts."));
       } else {
         const originalId = ledgerReference(references.ledgerRecordIds, linkedIds[0], userId, "original_record_id");
         if (!originalId.ok) {
@@ -322,7 +335,8 @@ export function mapLedgerRecord(
             original_record_id: originalId.value,
             amount_minor: amount.value,
             currency: record.currency.toUpperCase(),
-            refund_subtype: "payback",
+            refund_subtype: record.refundSubtype,
+            difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
           });
         }
       }
@@ -333,16 +347,19 @@ export function mapLedgerRecord(
     return { ok: false, issues };
   }
 
-  bundle.auditEvents.push(mapAuditEvent({
-    id: `cloud-audit-${record.id}`,
-    userId,
-    eventType: "record-created",
-    targetType: "ledger-record",
-    targetId: recordId.value,
-    summary: `Persisted ${record.kind} record`,
-    changedFields: ["kind", "amount", "account"],
-    createdAt: record.updatedAt,
-  }));
+  const recordAuditEvents = auditEvents.filter((event) => event.targetId === record.id);
+  bundle.auditEvents.push(...(recordAuditEvents.length > 0
+    ? recordAuditEvents.map((event) => mapAuditEvent(event, recordId.value))
+    : [mapAuditEvent({
+      id: `cloud-audit-${record.id}`,
+      userId,
+      eventType: "record-created",
+      targetType: "ledger-record",
+      targetId: record.id,
+      summary: `Persisted ${record.kind} record`,
+      changedFields: ["kind", "amount", "account"],
+      createdAt: record.updatedAt,
+    }, recordId.value)]));
 
   return { ok: true, value: bundle };
 }

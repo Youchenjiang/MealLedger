@@ -27,8 +27,8 @@ function queueId(target: CloudSyncTarget, targetId: string): string {
   return `cloud-sync-${target}-${targetId}`;
 }
 
-function existing(current: CloudSyncQueueItem[], target: CloudSyncTarget, targetId: string): boolean {
-  return current.some((item) => item.target === target && item.targetId === targetId);
+function existing(current: CloudSyncQueueItem[], target: CloudSyncTarget, targetId: string): CloudSyncQueueItem | undefined {
+  return current.find((item) => item.target === target && item.targetId === targetId);
 }
 
 export function enqueueRecordSync(
@@ -36,14 +36,22 @@ export function enqueueRecordSync(
   record: LocalLedgerRecord,
   now: string,
 ): CloudSyncQueueItem[] {
-  if (existing(current, "record", record.id)) return current;
+  const requestHash = `${record.id}:${record.version}:${record.updatedAt}`;
+  const prior = existing(current, "record", record.id);
+  if (prior) {
+    if (prior.requestHash === requestHash && prior.idempotencyKey === record.idempotencyKey) return current;
+    return current.map((item) => item.id === prior.id
+      ? { ...item, requestHash, actionType: "record-bundle", idempotencyKey: record.idempotencyKey, state: "pending", nextAttemptAt: now, lastError: "", updatedAt: now }
+      : item);
+  }
+  if (record.status === "synced") return current;
   return [...current, {
     id: queueId("record", record.id),
     target: "record",
     targetId: record.id,
     actionType: "record-bundle",
     idempotencyKey: record.idempotencyKey,
-    requestHash: `${record.id}:${record.version}:${record.updatedAt}`,
+    requestHash,
     state: "pending",
     attempts: 0,
     nextAttemptAt: now,
