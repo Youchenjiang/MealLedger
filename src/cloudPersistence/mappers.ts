@@ -208,6 +208,136 @@ function mapAuditEvent(event: LocalAuditEvent, targetId = event.targetId): Cloud
   };
 }
 
+function mapLedgerTags(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: CloudMappingResult<string>,
+): { rows: CloudRow[]; issues: CloudMappingIssue[] } {
+  const rows: CloudRow[] = [];
+  const issues: CloudMappingIssue[] = [];
+  for (const tag of record.tags ?? []) {
+    const tagId = reference(references.tagIds, tag, "ledger_record_tags.tag_id");
+    if (!tagId.ok) {
+      issues.push(...tagId.issues);
+      continue;
+    }
+
+    rows.push({ user_id: userId, ledger_record_id: recordId.ok ? recordId.value : undefined, tag_id: tagId.value });
+  }
+  return { rows, issues };
+}
+
+function mapTransferDetails(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: string,
+  feeLedgerRecordId?: string,
+): CloudMappingResult<CloudRow | undefined> {
+  if (record.kind !== "transfer") return { ok: true, value: undefined };
+
+  const destinationId = reference(references.accountIds, record.transferAccountId, "destination_account_id");
+  const destinationAmount = money(
+    record.destinationAmount || record.amount,
+    record.destinationCurrency || record.currency,
+    "destination_amount",
+    true,
+  );
+  const feeId = feeLedgerRecordId
+    ? ledgerReference(references.ledgerRecordIds, feeLedgerRecordId, userId, "fee_ledger_record_id")
+    : undefined;
+  const issues = collect([destinationId, destinationAmount]);
+  if (feeId && !feeId.ok) issues.push(...feeId.issues);
+  if (issues.length > 0 || !destinationId.ok || !destinationAmount.ok) {
+    return { ok: false, issues };
+  }
+
+  return {
+    ok: true,
+    value: {
+      ledger_record_id: recordId,
+      destination_account_id: destinationId.value,
+      destination_amount_minor: destinationAmount.value,
+      destination_currency: (record.destinationCurrency || record.currency).toUpperCase(),
+      fee_ledger_record_id: feeId && feeId.ok ? feeId.value : null,
+    },
+  };
+}
+
+function mapRefundLinks(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: string,
+  amount: string,
+): CloudMappingResult<CloudRow[]> {
+  if (record.kind !== "refund") return { ok: true, value: [] };
+
+  const allocations = references.refundAllocations?.[record.id];
+  if (allocations && allocations.length > 0) {
+    const rows: CloudRow[] = [];
+    const issues: CloudMappingIssue[] = [];
+    for (const allocation of allocations) {
+      const originalId = ledgerReference(references.ledgerRecordIds, allocation.originalRecordId, userId, "original_record_id");
+      const linkedAmount = money(allocation.amount, allocation.currency, "refund_link.amount", true);
+      const allocationIssues = collect([originalId, linkedAmount]);
+      if (allocationIssues.length > 0 || !originalId.ok || !linkedAmount.ok) {
+        issues.push(...allocationIssues);
+        continue;
+      }
+      rows.push({
+        refund_record_id: recordId,
+        original_record_id: originalId.value,
+        amount_minor: linkedAmount.value,
+        currency: allocation.currency.toUpperCase(),
+        refund_subtype: record.refundSubtype,
+        difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
+      });
+    }
+    return issues.length > 0 ? { ok: false, issues } : { ok: true, value: rows };
+  }
+
+  const linkedIds = record.refundLinkedRecordIds ?? (record.refundLinkedRecordId ? [record.refundLinkedRecordId] : []);
+  if (linkedIds.length !== 1) {
+    return { ok: false, issues: [issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple refund links require explicit per-record amounts.")] };
+  }
+
+  const originalId = ledgerReference(references.ledgerRecordIds, linkedIds[0], userId, "original_record_id");
+  if (!originalId.ok) return { ok: false, issues: originalId.issues };
+  return {
+    ok: true,
+    value: [{
+      refund_record_id: recordId,
+      original_record_id: originalId.value,
+      amount_minor: amount,
+      currency: record.currency.toUpperCase(),
+      refund_subtype: record.refundSubtype,
+      difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
+    }],
+  };
+}
+
+function mapRecordAuditEvents(
+  record: LocalLedgerRecord,
+  userId: string,
+  recordId: string,
+  auditEvents: LocalAuditEvent[],
+): CloudRow[] {
+  const recordAuditEvents = auditEvents.filter((event) => event.targetId === record.id);
+  if (recordAuditEvents.length > 0) return recordAuditEvents.map((event) => mapAuditEvent(event, recordId));
+  return [mapAuditEvent({
+    id: `cloud-audit-${record.id}`,
+    userId,
+    eventType: "record-created",
+    targetType: "ledger-record",
+    targetId: record.id,
+    summary: `Persisted ${record.kind} record`,
+    changedFields: ["kind", "amount", "account"],
+    createdAt: record.updatedAt,
+  }, recordId)];
+}
+
 export function mapLedgerRecord(
   record: LocalLedgerRecord,
   userId: string,
@@ -232,15 +362,8 @@ export function mapLedgerRecord(
     : { ok: true as const, value: undefined };
   if (!eventId.ok) issues.push(...eventId.issues);
 
-  const ledgerRecordTags: CloudRow[] = [];
-  for (const tag of record.tags ?? []) {
-    const tagId = reference(references.tagIds, tag, "ledger_record_tags.tag_id");
-    if (!tagId.ok) {
-      issues.push(...tagId.issues);
-    } else {
-      ledgerRecordTags.push({ user_id: userId, ledger_record_id: recordId.ok ? recordId.value : undefined, tag_id: tagId.value });
-    }
-  }
+  const tagMapping = mapLedgerTags(record, userId, references, recordId);
+  issues.push(...tagMapping.issues);
 
   if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok) {
     return { ok: false, issues };
@@ -278,94 +401,22 @@ export function mapLedgerRecord(
   const bundle: CloudRecordBundle = {
     ledgerRecord,
     refundLinks: [],
-    ledgerRecordTags,
+    ledgerRecordTags: tagMapping.rows,
     auditEvents: [],
   };
 
-  if (record.kind === "transfer") {
-    const destinationId = reference(references.accountIds, record.transferAccountId, "destination_account_id");
-    const destinationAmount = money(
-      record.destinationAmount || record.amount,
-      record.destinationCurrency || record.currency,
-      "destination_amount",
-      true,
-    );
-    const transferIssues = collect([destinationId, destinationAmount]);
-    const feeId = feeLedgerRecordId
-      ? ledgerReference(references.ledgerRecordIds, feeLedgerRecordId, userId, "fee_ledger_record_id")
-      : undefined;
-    if (feeId) transferIssues.push(...collect([feeId]));
-    if (transferIssues.length > 0 || !destinationId.ok || !destinationAmount.ok) {
-      return { ok: false, issues: [...issues, ...transferIssues] };
-    }
-    bundle.transferDetails = {
-      ledger_record_id: recordId.value,
-      destination_account_id: destinationId.value,
-      destination_amount_minor: destinationAmount.value,
-      destination_currency: (record.destinationCurrency || record.currency).toUpperCase(),
-      fee_ledger_record_id: feeId?.ok ? feeId.value : null,
-    };
-  }
+  const transferMapping = mapTransferDetails(record, userId, references, recordId.value, feeLedgerRecordId);
+  const refundMapping = mapRefundLinks(record, userId, references, recordId.value, amount.value);
+  const detailIssues = [
+    ...(transferMapping.ok ? [] : transferMapping.issues),
+    ...(refundMapping.ok ? [] : refundMapping.issues),
+  ];
+  if (detailIssues.length > 0) return { ok: false, issues: [...issues, ...detailIssues] };
 
-  if (record.kind === "refund") {
-    const allocations = references.refundAllocations?.[record.id];
-    if (allocations && allocations.length > 0) {
-      for (const allocation of allocations) {
-        const originalId = ledgerReference(references.ledgerRecordIds, allocation.originalRecordId, userId, "original_record_id");
-        const linkedAmount = money(allocation.amount, allocation.currency, "refund_link.amount", true);
-        const allocationIssues = collect([originalId, linkedAmount]);
-        if (allocationIssues.length > 0 || !originalId.ok || !linkedAmount.ok) {
-          issues.push(...allocationIssues);
-          continue;
-        }
-        bundle.refundLinks.push({
-          refund_record_id: recordId.value,
-          original_record_id: originalId.value,
-          amount_minor: linkedAmount.value,
-          currency: allocation.currency.toUpperCase(),
-          refund_subtype: record.refundSubtype,
-          difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
-        });
-      }
-    } else {
-      const linkedIds = record.refundLinkedRecordIds ?? (record.refundLinkedRecordId ? [record.refundLinkedRecordId] : []);
-      if (linkedIds.length !== 1) {
-          issues.push(issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple refund links require explicit per-record amounts."));
-      } else {
-        const originalId = ledgerReference(references.ledgerRecordIds, linkedIds[0], userId, "original_record_id");
-        if (!originalId.ok) {
-          issues.push(...originalId.issues);
-        } else {
-          bundle.refundLinks.push({
-            refund_record_id: recordId.value,
-            original_record_id: originalId.value,
-            amount_minor: amount.value,
-            currency: record.currency.toUpperCase(),
-            refund_subtype: record.refundSubtype,
-            difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
-          });
-        }
-      }
-    }
-  }
-
-  if (issues.length > 0) {
-    return { ok: false, issues };
-  }
-
-  const recordAuditEvents = auditEvents.filter((event) => event.targetId === record.id);
-  bundle.auditEvents.push(...(recordAuditEvents.length > 0
-    ? recordAuditEvents.map((event) => mapAuditEvent(event, recordId.value))
-    : [mapAuditEvent({
-      id: `cloud-audit-${record.id}`,
-      userId,
-      eventType: "record-created",
-      targetType: "ledger-record",
-      targetId: record.id,
-      summary: `Persisted ${record.kind} record`,
-      changedFields: ["kind", "amount", "account"],
-      createdAt: record.updatedAt,
-    }, recordId.value)]));
+  bundle.transferDetails = transferMapping.ok ? transferMapping.value : undefined;
+  bundle.refundLinks = refundMapping.ok ? refundMapping.value : [];
+  bundle.ledgerRecordTags = tagMapping.rows;
+  bundle.auditEvents = mapRecordAuditEvents(record, userId, recordId.value, auditEvents);
 
   return { ok: true, value: bundle };
 }
