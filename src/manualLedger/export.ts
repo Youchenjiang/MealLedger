@@ -353,7 +353,7 @@ export function createMultiTableExport(
     "ledger/adjustments.csv": recordsForKind(records, "adjustment"),
   };
   const summaryRows = createAccountSummaryRows(accounts, records);
-  const dates = active.map((record) => record.localDate).sort();
+  const dates = active.map((record) => record.localDate).sort((left, right) => left.localeCompare(right));
   const recordCounts = Object.fromEntries(Object.entries(byPath).map(([path, rows]) => [path, rows.length]));
   recordCounts["reports/account_summary.csv"] = summaryRows.length;
   const manifest = {
@@ -366,7 +366,7 @@ export function createMultiTableExport(
     currency_modes: [...new Set([
       ...accounts.map((account) => account.currency),
       ...active.flatMap((record) => [record.currency, record.destinationCurrency].filter(Boolean)),
-    ])].sort(),
+    ])].sort((left, right) => left.localeCompare(right)),
     files: ["manifest.json", ...multiTablePaths],
     record_counts: recordCounts,
   };
