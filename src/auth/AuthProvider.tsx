@@ -66,10 +66,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       handleSession(session);
     });
 
-    return function cleanupAuthSubscription(): void {
+    const cleanupAuthSubscription = (): void => {
       mounted = false;
       authStateChange.data.subscription.unsubscribe();
     };
+    return cleanupAuthSubscription;
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
