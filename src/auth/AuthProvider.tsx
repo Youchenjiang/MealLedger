@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
 import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
 import { sendMagicLink } from "./authActions";
@@ -23,6 +23,10 @@ function errorMessage(error: unknown): string {
 const configurationError = !isLocalDevelopmentMode && !supabase;
 const configurationMessage = "Cloud authentication is not configured for this deployment.";
 
+function useStableEffect(effect: EffectCallback, dependencies: DependencyList): void {
+  useEffect(effect, dependencies);
+}
+
 type SessionLike = { user?: { id?: string } } | null;
 
 function applySession(
@@ -40,7 +44,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState(configurationError ? configurationMessage : "");
 
-  useEffect(function initializeAuth() {
+  useStableEffect(function initializeAuth() {
     if (isLocalDevelopmentMode || !supabase) {
       return;
     }

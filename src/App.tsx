@@ -2400,7 +2400,7 @@ function ManualLedgerAccountField({
   form, accounts, isTransfer, quickAccountField, quickAccountProps, beginQuickAccountSetup, selectSourceAccount,
 }: Readonly<ManualLedgerAccountFieldProps>) {
   return (
-    <div className={"form-field entry-account-field " + (isTransfer ? "" : "entry-account-last")}>
+    <div className={`form-field entry-account-field ${isTransfer ? "" : "entry-account-last"}`}>
       <label htmlFor="entry-account"><span>{isTransfer ? "Source account" : "Account"}</span></label>
       <div className="field-control-row">
         <select id="entry-account" required disabled={accounts.length === 0} value={form.account} onChange={(event) => selectSourceAccount(event.target.value)}>
