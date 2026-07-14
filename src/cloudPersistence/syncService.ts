@@ -59,7 +59,6 @@ function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedger
   });
 }
 
-// skipcq: JS-R1005
 export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<SyncLocalChangesResult> {
   let nextRecords = input.records;
   let nextMeals = input.meals;

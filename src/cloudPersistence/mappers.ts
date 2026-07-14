@@ -208,7 +208,6 @@ function mapAuditEvent(event: LocalAuditEvent, targetId = event.targetId): Cloud
   };
 }
 
-// skipcq: JS-R1005
 export function mapLedgerRecord(
   record: LocalLedgerRecord,
   userId: string,
