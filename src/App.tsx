@@ -1847,6 +1847,167 @@ function QuickAccountSetup({
   );
 }
 
+function useMealCapture(
+  onSaveMeal: (meal: MealEntry) => void,
+  onQueueUploads: (items: UploadQueueItem[]) => void,
+) {
+  const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime);
+  const [mealNote, setMealNote] = useState("");
+  const [mealPhotoFiles, setMealPhotoFiles] = useState<File[]>([]);
+  const [mealError, setMealError] = useState("");
+  const [mealSavedMessage, setMealSavedMessage] = useState("");
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+
+  const appendMealPhotos = (files: FileList | File[] | null) => {
+    const incoming = Array.from(files ?? []);
+    if (incoming.length === 0) return;
+    setMealPhotoFiles((current) => {
+      const existing = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      return [...current, ...incoming.filter((file) => !existing.has(`${file.name}:${file.size}:${file.lastModified}`))];
+    });
+    setMealError("");
+  };
+
+  const stopCamera = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
+    setIsCameraOpen(false);
+  };
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  useEffect(() => {
+    if (!isCameraOpen || !cameraStreamRef.current || !cameraVideoRef.current) return;
+    try {
+      cameraVideoRef.current.srcObject = cameraStreamRef.current;
+    } catch {
+      setCameraError("Camera preview could not start. You can still use Choose photos.");
+      return;
+    }
+    const playResult = cameraVideoRef.current.play();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch(() => setCameraError("Camera preview could not start. You can still use Choose photos."));
+    }
+  }, [isCameraOpen]);
+
+  const openCamera = async () => {
+    setCameraError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("This browser does not support direct camera capture. Use Choose photos instead.");
+      return;
+    }
+    try {
+      cameraStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" } } });
+      setIsCameraOpen(true);
+    } catch {
+      cameraStreamRef.current = null;
+      setCameraError("Camera permission was denied or the camera is unavailable. Use Choose photos instead.");
+    }
+  };
+
+  const captureCameraPhoto = () => {
+    const video = cameraVideoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      setCameraError("The camera preview is not ready yet. Try again in a moment.");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCameraError("The photo could not be created. Use Choose photos instead.");
+        return;
+      }
+      appendMealPhotos([new File([blob], `meal-${Date.now()}.jpg`, { type: "image/jpeg" })]);
+      stopCamera();
+    }, "image/jpeg", 0.92);
+  };
+
+  const handleMealSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const mediaValidation = validateMediaBatch(mealPhotoFiles);
+    if (!mediaValidation.ok) {
+      setMealError(mediaValidation.error ?? "The selected photos exceed the upload limit.");
+      return;
+    }
+    const mealId = `meal-${crypto.randomUUID()}`;
+    const queuedMedia = queueUploadFiles(mealPhotoFiles, mealId, "meal-photo");
+    const meal = createMealEntry({ occurredAt: mealOccurredAt, note: mealNote, mediaAssetIds: queuedMedia.map((item) => item.id) }, mealId);
+    if (!meal) {
+      setMealError("Choose a meal time before saving.");
+      return;
+    }
+    onSaveMeal(meal);
+    onQueueUploads(queuedMedia);
+    setMealError("");
+    setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
+    setMealNote("");
+    setMealPhotoFiles([]);
+  };
+
+  return {
+    mealOccurredAt,
+    setMealOccurredAt,
+    mealNote,
+    setMealNote,
+    mealPhotoFiles,
+    mealError,
+    setMealError,
+    mealSavedMessage,
+    isCameraOpen,
+    cameraError,
+    cameraVideoRef,
+    appendMealPhotos,
+    stopCamera,
+    openCamera,
+    captureCameraPhoto,
+    handleMealSubmit,
+  };
+}
+
+function useScanCapture(
+  captureIntent: CaptureIntent,
+  onSaveScans: (scans: TemporaryScan[]) => void,
+  onQueueUploads: (items: UploadQueueItem[]) => void,
+) {
+  const [scanFiles, setScanFiles] = useState<File[]>([]);
+  const [scanError, setScanError] = useState("");
+  const [scanSavedMessage, setScanSavedMessage] = useState("");
+
+  const handleScanSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setScanError("");
+    setScanSavedMessage("");
+    if (scanFiles.length === 0 || (captureIntent !== "scan-invoice" && captureIntent !== "scan-receipt")) {
+      setScanError("Choose at least one scan image before saving.");
+      return;
+    }
+    const mediaValidation = validateMediaBatch(scanFiles);
+    if (!mediaValidation.ok) {
+      setScanError(mediaValidation.error ?? "The selected scans exceed the upload limit.");
+      return;
+    }
+    const queuedMedia = queueUploadFiles(scanFiles, `scan-${crypto.randomUUID()}`, captureIntent === "scan-invoice" ? "invoice-scan" : "receipt-scan");
+    const nextScans = scanFiles
+      .map((file, index) => createTemporaryScan({ intent: captureIntent, fileName: file.name, mimeType: file.type, byteSize: file.size }, queuedMedia[index].id))
+      .filter((scan): scan is TemporaryScan => Boolean(scan));
+    onSaveScans(nextScans);
+    onQueueUploads(queuedMedia);
+    setScanFiles([]);
+    setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
+  };
+
+  return { scanFiles, setScanFiles, scanError, setScanError, scanSavedMessage, handleScanSubmit };
+}
+
 function CapturePage({
   records,
   accounts,
@@ -1905,18 +2066,32 @@ function CapturePage({
   const [quickSourceError, setQuickSourceError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
   const [captureIntent, setCaptureIntent] = useState<CaptureIntent>("manual-ledger");
-  const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime);
-  const [mealNote, setMealNote] = useState("");
-  const [mealPhotoFiles, setMealPhotoFiles] = useState<File[]>([]);
-  const [mealError, setMealError] = useState("");
-  const [mealSavedMessage, setMealSavedMessage] = useState("");
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [cameraError, setCameraError] = useState("");
-  const cameraStreamRef = useRef<MediaStream | null>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement>(null);
-  const [scanFiles, setScanFiles] = useState<File[]>([]);
-  const [scanError, setScanError] = useState("");
-  const [scanSavedMessage, setScanSavedMessage] = useState("");
+  const {
+    mealOccurredAt,
+    setMealOccurredAt,
+    mealNote,
+    setMealNote,
+    mealPhotoFiles,
+    mealError,
+    setMealError,
+    mealSavedMessage,
+    isCameraOpen,
+    cameraError,
+    cameraVideoRef,
+    appendMealPhotos,
+    stopCamera,
+    openCamera,
+    captureCameraPhoto,
+    handleMealSubmit,
+  } = useMealCapture(onSaveMeal, onQueueUploads);
+  const {
+    scanFiles,
+    setScanFiles,
+    scanError,
+    setScanError,
+    scanSavedMessage,
+    handleScanSubmit,
+  } = useScanCapture(captureIntent, onSaveScans, onQueueUploads);
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(cleanForm);
 
   useEffect(() => {
@@ -2168,161 +2343,9 @@ function CapturePage({
     setShowCancelChoices(false);
   };
 
-  const appendMealPhotos = (files: FileList | File[] | null) => {
-    const incoming = Array.from(files ?? []);
-    if (incoming.length === 0) {
-      return;
-    }
-
-    setMealPhotoFiles((current) => {
-      const existing = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
-      return [...current, ...incoming.filter((file) => !existing.has(`${file.name}:${file.size}:${file.lastModified}`))];
-    });
-    setMealError("");
-  };
-
-  const stopCamera = () => {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-    cameraStreamRef.current = null;
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = null;
-    }
-    setIsCameraOpen(false);
-  };
-
-  useEffect(() => () => {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
-  }, []);
-
-  useEffect(() => {
-    if (!isCameraOpen || !cameraStreamRef.current || !cameraVideoRef.current) {
-      return;
-    }
-
-    try {
-      cameraVideoRef.current.srcObject = cameraStreamRef.current;
-    } catch {
-      setCameraError("Camera preview could not start. You can still use Choose photos.");
-      return;
-    }
-
-    if (typeof cameraVideoRef.current.play === "function") {
-      const playResult = cameraVideoRef.current.play();
-      if (playResult && typeof playResult.catch === "function") {
-        playResult.catch(() => {
-          setCameraError("Camera preview could not start. You can still use Choose photos.");
-        });
-      }
-    }
-  }, [isCameraOpen]);
-
-  const openCamera = async () => {
-    setCameraError("");
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("This browser does not support direct camera capture. Use Choose photos instead.");
-      return;
-    }
-
-    try {
-      cameraStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { ideal: "environment" } },
-      });
-      setIsCameraOpen(true);
-    } catch {
-      cameraStreamRef.current = null;
-      setCameraError("Camera permission was denied or the camera is unavailable. Use Choose photos instead.");
-    }
-  };
-
-  const captureCameraPhoto = () => {
-    const video = cameraVideoRef.current;
-    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
-      setCameraError("The camera preview is not ready yet. Try again in a moment.");
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        setCameraError("The photo could not be created. Use Choose photos instead.");
-        return;
-      }
-
-      appendMealPhotos([new File([blob], `meal-${Date.now()}.jpg`, { type: "image/jpeg" })]);
-      stopCamera();
-    }, "image/jpeg", 0.92);
-  };
-
   const keepEntryAsDraft = () => {
     onSaveDraft({ ...normalizeDraftForm(form), id: draftId() });
     resetEntry();
-  };
-
-  const handleMealSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const mediaValidation = validateMediaBatch(mealPhotoFiles);
-    if (!mediaValidation.ok) {
-      setMealError(mediaValidation.error ?? "The selected photos exceed the upload limit.");
-      return;
-    }
-    setMealError("");
-    const mealId = `meal-${crypto.randomUUID()}`;
-    const queuedMedia = queueUploadFiles(mealPhotoFiles, mealId, "meal-photo");
-    const meal = createMealEntry({
-      occurredAt: mealOccurredAt,
-      note: mealNote,
-      mediaAssetIds: queuedMedia.map((item) => item.id),
-    }, mealId);
-
-    if (!meal) {
-      setMealError("Choose a meal time before saving.");
-      return;
-    }
-
-    onSaveMeal(meal);
-    onQueueUploads(queuedMedia);
-    setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
-    setMealNote("");
-    setMealPhotoFiles([]);
-  };
-
-  const handleScanSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setScanError("");
-    setScanSavedMessage("");
-    if (scanFiles.length === 0 || (captureIntent !== "scan-invoice" && captureIntent !== "scan-receipt")) {
-      setScanError("Choose at least one scan image before saving.");
-      return;
-    }
-
-    const mediaValidation = validateMediaBatch(scanFiles);
-    if (!mediaValidation.ok) {
-      setScanError(mediaValidation.error ?? "The selected scans exceed the upload limit.");
-      return;
-    }
-
-    const queuedMedia = queueUploadFiles(
-      scanFiles,
-      `scan-${crypto.randomUUID()}`,
-      captureIntent === "scan-invoice" ? "invoice-scan" : "receipt-scan",
-    );
-    const nextScans = scanFiles
-      .map((file, index) => createTemporaryScan({
-        intent: captureIntent,
-        fileName: file.name,
-        mimeType: file.type,
-        byteSize: file.size,
-      }, queuedMedia[index].id))
-      .filter((scan): scan is TemporaryScan => Boolean(scan));
-
-    onSaveScans(nextScans);
-    onQueueUploads(queuedMedia);
-    setScanFiles([]);
-    setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
   };
 
   const addQuickAccount = () => {
@@ -2932,91 +2955,195 @@ function CapturePage({
           />
         ) : null}
       </Panel> : captureIntent === "record-meal" ? (
-        <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
-          <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
-          <form className="meal-form" onSubmit={handleMealSubmit}>
-            <label>
-              <span>Meal time</span>
-              <input required type="datetime-local" value={mealOccurredAt} onChange={(event) => { setMealOccurredAt(event.target.value); setMealError(""); }} />
-            </label>
-            <label>
-              <span>Meal note</span>
-              <textarea value={mealNote} onChange={(event) => setMealNote(event.target.value)} placeholder="Optional" />
-            </label>
-            <div className="meal-photo-picker">
-              <span className="meal-field-label">Meal photos</span>
-              <div className="meal-photo-actions">
-                <button className="meal-file-action" type="button" onClick={() => { openCamera().catch(() => undefined); }}>
-                  <Camera size={18} aria-hidden="true" />
-                  <span>Take photo</span>
-                </button>
-                <label className="meal-file-action" htmlFor="meal-photos">
-                  <ImagePlus size={18} aria-hidden="true" />
-                  <span>Choose photos</span>
-                  <input id="meal-photos" aria-label="Meal photos" accept="image/*" multiple type="file" onChange={(event) => appendMealPhotos(event.target.files)} />
-                </label>
-              </div>
-            </div>
-            {isCameraOpen ? (
-              <div className="camera-capture-dialog" role="dialog" aria-modal="true" aria-label="Take meal photo">
-                <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
-                <div className="camera-capture-actions">
-                  <button className="primary-action" type="button" onClick={captureCameraPhoto}>Capture photo</button>
-                  <button className="secondary-action" type="button" onClick={stopCamera}>Cancel</button>
-                </div>
-              </div>
-            ) : null}
-            {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
-            {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
-            <button className="primary-action align-start" type="submit">Save meal</button>
-            {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
-            {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
-            {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
-          </form>
-        </Panel>
+        <MealCapturePanel
+          mealOccurredAt={mealOccurredAt}
+          mealNote={mealNote}
+          mealPhotoFiles={mealPhotoFiles}
+          mealError={mealError}
+          mealSavedMessage={mealSavedMessage}
+          isCameraOpen={isCameraOpen}
+          cameraError={cameraError}
+          cameraVideoRef={cameraVideoRef}
+          uploadQueue={uploadQueue}
+          onMealTimeChange={(value) => { setMealOccurredAt(value); setMealError(""); }}
+          onMealNoteChange={setMealNote}
+          onAppendPhotos={appendMealPhotos}
+          onOpenCamera={openCamera}
+          onCapturePhoto={captureCameraPhoto}
+          onStopCamera={stopCamera}
+          onSubmit={handleMealSubmit}
+        />
       ) : captureIntent === "scan-invoice" || captureIntent === "scan-receipt" ? (
-        <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
-          <p className="panel-copy">Scans remain temporary until you explicitly keep or discard them. They do not create official ledger records.</p>
-          <form className="meal-form" onSubmit={handleScanSubmit}>
-            <label>
-              <span>Scan images</span>
-              <input accept="image/*" multiple type="file" onChange={(event) => { setScanFiles(Array.from(event.target.files ?? [])); setScanError(""); }} />
-            </label>
-            {scanFiles.length > 0 ? <p className="field-help">Selected {scanFiles.length} image{scanFiles.length === 1 ? "" : "s"}.</p> : null}
-            <button className="primary-action align-start" type="submit">Save scan drafts</button>
-            {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
-            {scanSavedMessage ? <p className="auth-message" role="status">{scanSavedMessage}</p> : null}
-            {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
-          </form>
-          <div className="source-list" aria-label="Temporary scans">
-            {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => (
-              <div className="source-list-row" key={scan.id}>
-                <span><strong>{scan.fileName}</strong><small>{scan.state === "temporary" ? "Temporary · expires in 24 hours" : "Retained source"}</small></span>
-                {scan.state === "temporary" ? (
-                  <span className="source-list-actions">
-                    <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>Keep source</button>
-                    <button className="quiet-action" type="button" onClick={() => onUpdateScan(discardTemporaryScan(scan))}>Discard</button>
-                  </span>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </Panel>
+        <ScanCapturePanel
+          captureIntent={captureIntent}
+          scanFiles={scanFiles}
+          scanError={scanError}
+          scanSavedMessage={scanSavedMessage}
+          scans={scans}
+          uploadQueue={uploadQueue}
+          onScanFilesChange={(files) => { setScanFiles(files); setScanError(""); }}
+          onSubmit={handleScanSubmit}
+          onUpdateScan={onUpdateScan}
+        />
       ) : (
-        <Panel key="capture-workspace" title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
-          <p className="panel-copy">This source is kept separate from the official ledger. The workflow will ask for confirmation before any ledger record is created.</p>
-          <p className="field-help">Select Manual ledger when you want to record an official transaction now.</p>
-        </Panel>
+        <CaptureWorkspacePanel captureIntent={captureIntent} />
       )}
-      {recordCount > 0 ? (
-        <Panel title="Record saved" eyebrow="Local ledger">
-          <p className="panel-copy">{recordCount} official local record{recordCount === 1 ? "" : "s"} stored on this device.</p>
-          <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
-            Open Ledger
-          </button>
-        </Panel>
-      ) : null}
+      <SavedRecordPanel recordCount={recordCount} navigate={navigate} />
     </section>
+  );
+}
+
+function MealCapturePanel({
+  mealOccurredAt,
+  mealNote,
+  mealPhotoFiles,
+  mealError,
+  mealSavedMessage,
+  isCameraOpen,
+  cameraError,
+  cameraVideoRef,
+  uploadQueue,
+  onMealTimeChange,
+  onMealNoteChange,
+  onAppendPhotos,
+  onOpenCamera,
+  onCapturePhoto,
+  onStopCamera,
+  onSubmit,
+}: Readonly<{
+  mealOccurredAt: string;
+  mealNote: string;
+  mealPhotoFiles: File[];
+  mealError: string;
+  mealSavedMessage: string;
+  isCameraOpen: boolean;
+  cameraError: string;
+  cameraVideoRef: React.RefObject<HTMLVideoElement>;
+  uploadQueue: UploadQueueItem[];
+  onMealTimeChange: (value: string) => void;
+  onMealNoteChange: (value: string) => void;
+  onAppendPhotos: (files: FileList | File[] | null) => void;
+  onOpenCamera: () => Promise<void>;
+  onCapturePhoto: () => void;
+  onStopCamera: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}>) {
+  return (
+    <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
+      <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
+      <form className="meal-form" onSubmit={onSubmit}>
+        <label>
+          <span>Meal time</span>
+          <input required type="datetime-local" value={mealOccurredAt} onChange={(event) => onMealTimeChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Meal note</span>
+          <textarea value={mealNote} onChange={(event) => onMealNoteChange(event.target.value)} placeholder="Optional" />
+        </label>
+        <div className="meal-photo-picker">
+          <span className="meal-field-label">Meal photos</span>
+          <div className="meal-photo-actions">
+            <button className="meal-file-action" type="button" onClick={() => { onOpenCamera().catch(() => undefined); }}>
+              <Camera size={18} aria-hidden="true" />
+              <span>Take photo</span>
+            </button>
+            <label className="meal-file-action" htmlFor="meal-photos">
+              <ImagePlus size={18} aria-hidden="true" />
+              <span>Choose photos</span>
+              <input id="meal-photos" aria-label="Meal photos" accept="image/*" multiple type="file" onChange={(event) => onAppendPhotos(event.target.files)} />
+            </label>
+          </div>
+        </div>
+        {isCameraOpen ? (
+          <div className="camera-capture-dialog" role="dialog" aria-modal="true" aria-label="Take meal photo">
+            <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
+            <div className="camera-capture-actions">
+              <button className="primary-action" type="button" onClick={onCapturePhoto}>Capture photo</button>
+              <button className="secondary-action" type="button" onClick={onStopCamera}>Cancel</button>
+            </div>
+          </div>
+        ) : null}
+        {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
+        {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
+        <button className="primary-action align-start" type="submit">Save meal</button>
+        {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
+        {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
+        {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
+      </form>
+    </Panel>
+  );
+}
+
+function ScanCapturePanel({
+  captureIntent,
+  scanFiles,
+  scanError,
+  scanSavedMessage,
+  scans,
+  uploadQueue,
+  onScanFilesChange,
+  onSubmit,
+  onUpdateScan,
+}: Readonly<{
+  captureIntent: "scan-invoice" | "scan-receipt";
+  scanFiles: File[];
+  scanError: string;
+  scanSavedMessage: string;
+  scans: TemporaryScan[];
+  uploadQueue: UploadQueueItem[];
+  onScanFilesChange: (files: File[]) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onUpdateScan: (scan: TemporaryScan) => void;
+}>) {
+  return (
+    <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
+      <p className="panel-copy">Scans remain temporary until you explicitly keep or discard them. They do not create official ledger records.</p>
+      <form className="meal-form" onSubmit={onSubmit}>
+        <label>
+          <span>Scan images</span>
+          <input accept="image/*" multiple type="file" onChange={(event) => onScanFilesChange(Array.from(event.target.files ?? []))} />
+        </label>
+        {scanFiles.length > 0 ? <p className="field-help">Selected {scanFiles.length} image{scanFiles.length === 1 ? "" : "s"}.</p> : null}
+        <button className="primary-action align-start" type="submit">Save scan drafts</button>
+        {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
+        {scanSavedMessage ? <p className="auth-message" role="status">{scanSavedMessage}</p> : null}
+        {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
+      </form>
+      <div className="source-list" aria-label="Temporary scans">
+        {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => (
+          <div className="source-list-row" key={scan.id}>
+            <span><strong>{scan.fileName}</strong><small>{scan.state === "temporary" ? "Temporary · expires in 24 hours" : "Retained source"}</small></span>
+            {scan.state === "temporary" ? (
+              <span className="source-list-actions">
+                <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>Keep source</button>
+                <button className="quiet-action" type="button" onClick={() => onUpdateScan(discardTemporaryScan(scan))}>Discard</button>
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function CaptureWorkspacePanel({ captureIntent }: Readonly<{ captureIntent: CaptureIntent }>) {
+  return (
+    <Panel key="capture-workspace" title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
+      <p className="panel-copy">This source is kept separate from the official ledger. The workflow will ask for confirmation before any ledger record is created.</p>
+      <p className="field-help">Select Manual ledger when you want to record an official transaction now.</p>
+    </Panel>
+  );
+}
+
+function SavedRecordPanel({ recordCount, navigate }: Readonly<{ recordCount: number; navigate: (item: NavItem) => void }>) {
+  if (recordCount === 0) return null;
+  return (
+    <Panel title="Record saved" eyebrow="Local ledger">
+      <p className="panel-copy">{recordCount} official local record{recordCount === 1 ? "" : "s"} stored on this device.</p>
+      <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
+        Open Ledger
+      </button>
+    </Panel>
   );
 }
 
