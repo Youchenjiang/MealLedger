@@ -85,41 +85,10 @@ export function detectImportDuplicates(
   const duplicates = new Map<number, ImportDuplicate[]>();
 
   for (const [index, row] of rows.entries()) {
-    const matches: ImportDuplicate[] = [];
-    for (const record of records) {
-      const reason = matchesRecord(row.normalized, record);
-      if (reason) {
-        matches.push({ candidateType: "existing-record", candidateId: record.id, reason });
-      }
-    }
-
-    for (const previous of rows.slice(0, index)) {
-      const reason = matchesRecord(row.normalized, {
-        id: `batch-${previous.rowNumber}`,
-        recordState: "active",
-        kind: kindOf(previous.normalized),
-        localDate: previous.normalized.date ?? "",
-        accountName: previous.normalized.account ?? "",
-        amount: previous.normalized.amount ?? "",
-        currency: previous.normalized.currency ?? "",
-        counterparty: previous.normalized.merchant ?? previous.normalized.source ?? "",
-        counterpartyMissing: false,
-        itemName: previous.normalized.item_name ?? "",
-        itemNameMissing: false,
-        transferAccountName: previous.normalized.target_account ?? "",
-        destinationAmount: previous.normalized.target_amount ?? previous.normalized.amount ?? "",
-        destinationCurrency: previous.normalized.target_currency ?? previous.normalized.currency ?? "",
-        refundSubtype: previous.normalized.refund_subtype === "payback" ? "payback" : "refund",
-        refundLinkedRecordId: previous.normalized.refund_linked_record_id ?? "",
-        timePrecision: previous.normalized.time_precision === "month" || previous.normalized.time_precision === "period" ? previous.normalized.time_precision : "day",
-        periodStart: previous.normalized.period_start ?? "",
-        periodEnd: previous.normalized.period_end ?? "",
-        reason: previous.normalized.reason ?? "",
-      } as LocalLedgerRecord);
-      if (reason) {
-        matches.push({ candidateType: "batch-row", candidateId: `batch-${previous.rowNumber}`, candidateRowNumber: previous.rowNumber, reason });
-      }
-    }
+    const matches = [
+      ...findExistingMatches(row.normalized, records),
+      ...findBatchMatches(row.normalized, rows.slice(0, index)),
+    ];
 
     if (matches.length > 0) {
       duplicates.set(row.rowNumber, matches);
@@ -127,4 +96,51 @@ export function detectImportDuplicates(
   }
 
   return duplicates;
+}
+
+function findExistingMatches(normalized: NormalizedImportRow, records: LocalLedgerRecord[]): ImportDuplicate[] {
+  return records.flatMap((record) => {
+    const reason = matchesRecord(normalized, record);
+    return reason ? [{ candidateType: "existing-record", candidateId: record.id, reason }] : [];
+  });
+}
+
+function findBatchMatches(
+  normalized: NormalizedImportRow,
+  previousRows: Array<{ rowNumber: number; normalized: NormalizedImportRow }>,
+): ImportDuplicate[] {
+  return previousRows.flatMap((previous) => {
+    const candidateId = `batch-${previous.rowNumber}`;
+    const reason = matchesRecord(normalized, importedRowAsRecord(previous.normalized, candidateId));
+    return reason ? [{ candidateType: "batch-row", candidateId, candidateRowNumber: previous.rowNumber, reason }] : [];
+  });
+}
+
+function importedRowAsRecord(normalized: NormalizedImportRow, id: string): LocalLedgerRecord {
+  const targetCurrency = normalized.target_currency ?? normalized.currency ?? "";
+  const timePrecision = normalized.time_precision === "month" || normalized.time_precision === "period"
+    ? normalized.time_precision
+    : "day";
+  return {
+    id,
+    recordState: "active",
+    kind: kindOf(normalized),
+    localDate: normalized.date ?? "",
+    accountName: normalized.account ?? "",
+    amount: normalized.amount ?? "",
+    currency: normalized.currency ?? "",
+    counterparty: normalized.merchant ?? normalized.source ?? "",
+    counterpartyMissing: false,
+    itemName: normalized.item_name ?? "",
+    itemNameMissing: false,
+    transferAccountName: normalized.target_account ?? "",
+    destinationAmount: normalized.target_amount ?? normalized.amount ?? "",
+    destinationCurrency: targetCurrency,
+    refundSubtype: normalized.refund_subtype === "payback" ? "payback" : "refund",
+    refundLinkedRecordId: normalized.refund_linked_record_id ?? "",
+    timePrecision,
+    periodStart: normalized.period_start ?? "",
+    periodEnd: normalized.period_end ?? "",
+    reason: normalized.reason ?? "",
+  } as LocalLedgerRecord;
 }
