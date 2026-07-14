@@ -145,11 +145,11 @@ async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, st
 }
 
 async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
-  if (item.target === "draft") return syncDraftItem(item, context, state);
-  if (item.target === "media") return syncMediaItem(item, context, state);
-  if (item.target === "scan") return syncScanItem(item, context, state);
-  if (item.target === "meal") return syncMealItem(item, context, state);
-  return syncRecordItem(item, context, state);
+  if (item.target === "draft") return await syncDraftItem(item, context, state);
+  if (item.target === "media") return await syncMediaItem(item, context, state);
+  if (item.target === "scan") return await syncScanItem(item, context, state);
+  if (item.target === "meal") return await syncMealItem(item, context, state);
+  return await syncRecordItem(item, context, state);
 }
 
 export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<SyncLocalChangesResult> {

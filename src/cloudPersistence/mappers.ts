@@ -338,6 +338,86 @@ function mapRecordAuditEvents(
   }, recordId)];
 }
 
+function optionalText(value: string | undefined): string | null {
+  return value?.trim() || null;
+}
+
+function optionalReference(
+  value: string,
+  values: Record<string, string> | undefined,
+  field: string,
+): CloudMappingResult<string | undefined> {
+  if (!value.trim()) return { ok: true, value: undefined };
+  const result = reference(values, value, field);
+  if (!result.ok) return { ok: false, issues: result.issues };
+  return { ok: true, value: result.value };
+}
+
+function createLedgerRow(
+  record: LocalLedgerRecord,
+  userId: string,
+  timezone: string,
+  accountId: string,
+  amount: string,
+  categoryId: string | undefined,
+  eventId: string | undefined,
+  recordId: string,
+): CloudRow {
+  const isDay = record.timePrecision === "day";
+  const source = record.kind === "income" || record.kind === "fund-addition" ? optionalText(record.counterparty) : null;
+  return {
+    id: recordId,
+    user_id: userId,
+    kind: record.kind,
+    record_state: record.recordState,
+    local_date: isDay ? record.localDate : null,
+    timezone,
+    time_precision: record.timePrecision,
+    period_start: isDay ? null : record.periodStart,
+    period_end: isDay ? null : record.periodEnd,
+    account_id: accountId,
+    amount_minor: amount,
+    currency: record.currency.toUpperCase(),
+    category_id: categoryId ?? null,
+    merchant_text: optionalText(record.counterparty),
+    item_name: optionalText(record.itemName),
+    source,
+    reason: optionalText(record.reason) ?? optionalText(record.refundReason),
+    event_id: eventId ?? null,
+    source_label: optionalText(record.sourceLabel),
+    note: optionalText(record.note),
+    version: record.version,
+    idempotency_key: record.idempotencyKey,
+    voided_at: record.recordState === "voided" ? record.updatedAt : null,
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  };
+}
+
+function mapLedgerDetails(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: string,
+  amount: string,
+  feeLedgerRecordId: string | undefined,
+): CloudMappingResult<Pick<CloudRecordBundle, "transferDetails" | "refundLinks">> {
+  const transferMapping = mapTransferDetails(record, userId, references, recordId, feeLedgerRecordId);
+  const refundMapping = mapRefundLinks(record, userId, references, recordId, amount);
+  const issues = [
+    ...(transferMapping.ok ? [] : transferMapping.issues),
+    ...(refundMapping.ok ? [] : refundMapping.issues),
+  ];
+  if (issues.length > 0) return { ok: false, issues };
+  return {
+    ok: true,
+    value: {
+      transferDetails: transferMapping.ok ? transferMapping.value : undefined,
+      refundLinks: refundMapping.ok ? refundMapping.value : [],
+    },
+  };
+}
+
 export function mapLedgerRecord(
   record: LocalLedgerRecord,
   userId: string,
@@ -352,51 +432,22 @@ export function mapLedgerRecord(
   const issues = collect([recordId, accountId, amount]);
 
   const needsCategory = ["expense", "income", "refund"].includes(record.kind);
-  const categoryId = record.category.trim() && needsCategory
-    ? reference(references.categoryIds, record.category, "category_id")
+  const categoryId = needsCategory
+    ? optionalReference(record.category, references.categoryIds, "category_id")
     : { ok: true as const, value: undefined };
   if (!categoryId.ok) issues.push(...categoryId.issues);
 
-  const eventId = record.event?.trim()
-    ? reference(references.eventIds, record.event, "event_id")
-    : { ok: true as const, value: undefined };
+  const eventId = optionalReference(record.event ?? "", references.eventIds, "event_id");
   if (!eventId.ok) issues.push(...eventId.issues);
 
   const tagMapping = mapLedgerTags(record, userId, references, recordId);
   issues.push(...tagMapping.issues);
 
-  if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok) {
+  if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok || !categoryId.ok || !eventId.ok) {
     return { ok: false, issues };
   }
 
-  const isDay = record.timePrecision === "day";
-  const ledgerRecord: CloudRow = {
-    id: recordId.value,
-    user_id: userId,
-    kind: record.kind,
-    record_state: record.recordState,
-    local_date: isDay ? record.localDate : null,
-    timezone,
-    time_precision: record.timePrecision,
-    period_start: isDay ? null : record.periodStart,
-    period_end: isDay ? null : record.periodEnd,
-    account_id: accountId.value,
-    amount_minor: amount.value,
-    currency: record.currency.toUpperCase(),
-    category_id: categoryId.ok ? categoryId.value ?? null : null,
-    merchant_text: record.counterparty || null,
-    item_name: record.itemName || null,
-    source: record.kind === "income" || record.kind === "fund-addition" ? record.counterparty || null : null,
-    reason: record.reason || record.refundReason || null,
-    event_id: eventId.ok ? eventId.value ?? null : null,
-    source_label: record.sourceLabel || null,
-    note: record.note || null,
-    version: record.version,
-    idempotency_key: record.idempotencyKey,
-    voided_at: record.recordState === "voided" ? record.updatedAt : null,
-    created_at: record.createdAt,
-    updated_at: record.updatedAt,
-  };
+  const ledgerRecord = createLedgerRow(record, userId, timezone, accountId.value, amount.value, categoryId.value, eventId.value, recordId.value);
 
   const bundle: CloudRecordBundle = {
     ledgerRecord,
@@ -405,16 +456,11 @@ export function mapLedgerRecord(
     auditEvents: [],
   };
 
-  const transferMapping = mapTransferDetails(record, userId, references, recordId.value, feeLedgerRecordId);
-  const refundMapping = mapRefundLinks(record, userId, references, recordId.value, amount.value);
-  const detailIssues = [
-    ...(transferMapping.ok ? [] : transferMapping.issues),
-    ...(refundMapping.ok ? [] : refundMapping.issues),
-  ];
-  if (detailIssues.length > 0) return { ok: false, issues: [...issues, ...detailIssues] };
+  const detailMapping = mapLedgerDetails(record, userId, references, recordId.value, amount.value, feeLedgerRecordId);
+  if (!detailMapping.ok) return { ok: false, issues: [...issues, ...detailMapping.issues] };
 
-  bundle.transferDetails = transferMapping.ok ? transferMapping.value : undefined;
-  bundle.refundLinks = refundMapping.ok ? refundMapping.value : [];
+  bundle.transferDetails = detailMapping.value.transferDetails;
+  bundle.refundLinks = detailMapping.value.refundLinks;
   bundle.ledgerRecordTags = tagMapping.rows;
   bundle.auditEvents = mapRecordAuditEvents(record, userId, recordId.value, auditEvents);
 
