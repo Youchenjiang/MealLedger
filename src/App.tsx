@@ -898,54 +898,111 @@ function OnboardingPage({ onComplete, onAddAccount, onApplyDefaultTaxonomy, onSa
           <p className="lede">Your current balance is recorded as initial funds, not income.</p>
         </div>
         <form className="onboarding-form" noValidate onSubmit={submit}>
-          <label>
-            <span>Account name</span>
-            <input required value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Daily wallet" />
-          </label>
-          <label>
-            <span>Account type</span>
-            <select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
-              <option value="cash">Cash</option>
-              <option value="bank">Bank account</option>
-              <option value="card">Credit card</option>
-              <option value="wallet">Stored-value wallet</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label>
-            <span>Currency</span>
-            <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
-              <option value="TWD">TWD</option>
-              <option value="JPY">JPY</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => setAllowNegativeBalance(event.target.checked)} />
-            <span>Allow negative balance</span>
-          </label>
-          <fieldset>
-            <legend>Starting balance</legend>
-            <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => setBalanceMode("zero")} /> <span>Start from zero</span></label>
-            <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => setBalanceMode("current")} /> <span>Enter current balance</span></label>
-          </fieldset>
-          {balanceMode === "current" ? (
-            <div className="onboarding-balance-fields">
-              <AmountField id="onboarding-current-balance" label="Current balance" required value={balance} onChange={setBalance} placeholder="0" />
-              <label>
-                <span>As of date</span>
-                <input required type="date" value={balanceDate} onChange={(event) => setBalanceDate(event.target.value)} />
-              </label>
-            </div>
-          ) : null}
-          <div className="onboarding-actions">
-            <button className="primary-action" type="submit">Create account</button>
-            <button className="quiet-action" type="button" onClick={onComplete}>Browse workspace</button>
-          </div>
+          <OnboardingFields
+            accountName={accountName}
+            accountType={accountType}
+            currency={currency}
+            allowNegativeBalance={allowNegativeBalance}
+            balanceMode={balanceMode}
+            balance={balance}
+            balanceDate={balanceDate}
+            onAccountNameChange={setAccountName}
+            onAccountTypeChange={setAccountType}
+            onCurrencyChange={setCurrency}
+            onAllowNegativeBalanceChange={setAllowNegativeBalance}
+            onBalanceModeChange={setBalanceMode}
+            onBalanceChange={setBalance}
+            onBalanceDateChange={setBalanceDate}
+          />
+          <OnboardingActions onComplete={onComplete} />
           {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
         </form>
       </section>
     </main>
+  );
+}
+
+function OnboardingFields({
+  accountName,
+  accountType,
+  currency,
+  allowNegativeBalance,
+  balanceMode,
+  balance,
+  balanceDate,
+  onAccountNameChange,
+  onAccountTypeChange,
+  onCurrencyChange,
+  onAllowNegativeBalanceChange,
+  onBalanceModeChange,
+  onBalanceChange,
+  onBalanceDateChange,
+}: Readonly<{
+  accountName: string;
+  accountType: string;
+  currency: string;
+  allowNegativeBalance: boolean;
+  balanceMode: "zero" | "current";
+  balance: string;
+  balanceDate: string;
+  onAccountNameChange: (value: string) => void;
+  onAccountTypeChange: (value: string) => void;
+  onCurrencyChange: (value: string) => void;
+  onAllowNegativeBalanceChange: (value: boolean) => void;
+  onBalanceModeChange: (value: "zero" | "current") => void;
+  onBalanceChange: (value: string) => void;
+  onBalanceDateChange: (value: string) => void;
+}>) {
+  return (
+    <>
+      <label>
+        <span>Account name</span>
+        <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" />
+      </label>
+      <label>
+        <span>Account type</span>
+        <select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}>
+          <option value="cash">Cash</option>
+          <option value="bank">Bank account</option>
+          <option value="card">Credit card</option>
+          <option value="wallet">Stored-value wallet</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>
+        <span>Currency</span>
+        <select value={currency} onChange={(event) => onCurrencyChange(event.target.value)}>
+          <option value="TWD">TWD</option>
+          <option value="JPY">JPY</option>
+          <option value="USD">USD</option>
+        </select>
+      </label>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} />
+        <span>Allow negative balance</span>
+      </label>
+      <fieldset>
+        <legend>Starting balance</legend>
+        <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>Start from zero</span></label>
+        <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>Enter current balance</span></label>
+      </fieldset>
+      {balanceMode === "current" ? <div className="onboarding-balance-fields">
+        <AmountField id="onboarding-current-balance" label="Current balance" required value={balance} onChange={onBalanceChange} placeholder="0" />
+        <label>
+          <span>As of date</span>
+          <input required type="date" value={balanceDate} onChange={(event) => onBalanceDateChange(event.target.value)} />
+        </label>
+      </div> : null}
+    </>
+  );
+}
+
+function OnboardingActions({ onComplete }: Readonly<{ onComplete: () => void }>) {
+  return (
+    <div className="onboarding-actions">
+      <button className="primary-action" type="submit">Create account</button>
+      <button className="quiet-action" type="button" onClick={onComplete}>Browse workspace</button>
+    </div>
   );
 }
 
@@ -1791,13 +1848,69 @@ function QuickAccountSetup({
   return (
     <div className="quick-account-backdrop">
     <section className="quick-account" aria-label="Add account" role="dialog" aria-modal="true">
-      <header className="quick-account-heading">
-        <div>
-          <span className="eyebrow">New account</span>
-          <h3>Add an account</h3>
-        </div>
-        <p>Set the account details before using it in this record.</p>
-      </header>
+      <QuickAccountHeading />
+      <QuickAccountFields
+        accountName={accountName}
+        currency={currency}
+        accountType={accountType}
+        allowNegativeBalance={allowNegativeBalance}
+        initialBalance={initialBalance}
+        initialBalanceDate={initialBalanceDate}
+        onAccountNameChange={onAccountNameChange}
+        onCurrencyChange={onCurrencyChange}
+        onAccountTypeChange={onAccountTypeChange}
+        onAllowNegativeBalanceChange={onAllowNegativeBalanceChange}
+        onInitialBalanceChange={onInitialBalanceChange}
+        onInitialBalanceDateChange={onInitialBalanceDateChange}
+      />
+      <QuickAccountActions onConfirm={onConfirm} onCancel={onCancel} />
+      {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
+    </section>
+    </div>
+  );
+}
+
+function QuickAccountHeading() {
+  return (
+    <header className="quick-account-heading">
+      <div>
+        <span className="eyebrow">New account</span>
+        <h3>Add an account</h3>
+      </div>
+      <p>Set the account details before using it in this record.</p>
+    </header>
+  );
+}
+
+function QuickAccountFields({
+  accountName,
+  currency,
+  accountType,
+  allowNegativeBalance,
+  initialBalance,
+  initialBalanceDate,
+  onAccountNameChange,
+  onCurrencyChange,
+  onAccountTypeChange,
+  onAllowNegativeBalanceChange,
+  onInitialBalanceChange,
+  onInitialBalanceDateChange,
+}: Readonly<{
+  accountName: string;
+  currency: string;
+  accountType: string;
+  allowNegativeBalance: boolean;
+  initialBalance: string;
+  initialBalanceDate: string;
+  onAccountNameChange: (value: string) => void;
+  onCurrencyChange: (value: string) => void;
+  onAccountTypeChange?: (value: string) => void;
+  onAllowNegativeBalanceChange?: (value: boolean) => void;
+  onInitialBalanceChange: (value: string) => void;
+  onInitialBalanceDateChange: (value: string) => void;
+}>) {
+  return (
+    <>
       <label>
         <span>Account name</span>
         <input required value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" />
@@ -1824,25 +1937,20 @@ function QuickAccountSetup({
         <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange?.(event.target.checked)} />
         <span>Allow negative balance</span>
       </label>
-      <AmountField
-        id="quick-account-initial-balance"
-        label="Initial balance (optional)"
-        value={initialBalance}
-        onChange={onInitialBalanceChange}
-        placeholder="Leave blank to start from zero"
-      />
-      {initialBalance.trim() ? (
-        <label>
-          <span>Balance as of</span>
-          <input type="date" required value={initialBalanceDate} onChange={(event) => onInitialBalanceDateChange(event.target.value)} />
-        </label>
-      ) : null}
-      <div className="quick-account-actions">
-        <button className="primary-action" type="button" onClick={onConfirm}>Add and select</button>
-        <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
-      </div>
-      {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
-    </section>
+      <AmountField id="quick-account-initial-balance" label="Initial balance (optional)" value={initialBalance} onChange={onInitialBalanceChange} placeholder="Leave blank to start from zero" />
+      {initialBalance.trim() ? <label>
+        <span>Balance as of</span>
+        <input type="date" required value={initialBalanceDate} onChange={(event) => onInitialBalanceDateChange(event.target.value)} />
+      </label> : null}
+    </>
+  );
+}
+
+function QuickAccountActions({ onConfirm, onCancel }: Readonly<{ onConfirm: () => void; onCancel: () => void }>) {
+  return (
+    <div className="quick-account-actions">
+      <button className="primary-action" type="button" onClick={onConfirm}>Add and select</button>
+      <button className="quiet-action" type="button" onClick={onCancel}>Cancel</button>
     </div>
   );
 }
@@ -2006,6 +2114,48 @@ function useScanCapture(
   };
 
   return { scanFiles, setScanFiles, scanError, setScanError, scanSavedMessage, handleScanSubmit };
+}
+
+function CaptureStartPanel({
+  captureIntent,
+  selectedCaptureAction,
+  actionIcons,
+  onSelectIntent,
+}: Readonly<{
+  captureIntent: CaptureIntent;
+  selectedCaptureAction: (typeof captureIntents)[number];
+  actionIcons: Record<CaptureIntent, LucideIcon>;
+  onSelectIntent: (intent: CaptureIntent) => void;
+}>) {
+  return (
+    <section className="capture-start" aria-labelledby="capture-start-title">
+      <div className="capture-start-heading">
+        <div>
+          <p className="eyebrow">Quick capture</p>
+          <h2 id="capture-start-title">What are you saving?</h2>
+        </div>
+        <p className="capture-start-detail">{selectedCaptureAction.detail}</p>
+      </div>
+      <div className="capture-intent-picker" role="toolbar" aria-label="Capture type">
+        {captureIntents.map((action) => {
+          const Icon = actionIcons[action.id];
+          const selected = captureIntent === action.id;
+          return (
+            <button
+              aria-pressed={selected}
+              className={`capture-intent-button ${selected ? "selected" : ""}`}
+              type="button"
+              key={action.id}
+              onClick={() => onSelectIntent(action.id)}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{action.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function CapturePage({
@@ -2419,35 +2569,32 @@ function CapturePage({
     }));
   };
 
+  const quickAccountProps: React.ComponentProps<typeof QuickAccountSetup> = {
+    accountName: quickAccountName,
+    currency: quickAccountCurrency,
+    accountType: quickAccountType,
+    allowNegativeBalance: quickAccountAllowNegative,
+    initialBalance: quickAccountBalance,
+    initialBalanceDate: quickAccountBalanceDate,
+    error: quickAccountError,
+    onAccountNameChange: (value) => { setQuickAccountName(value); setQuickAccountError(""); },
+    onCurrencyChange: setQuickAccountCurrency,
+    onAccountTypeChange: setQuickAccountType,
+    onAllowNegativeBalanceChange: setQuickAccountAllowNegative,
+    onInitialBalanceChange: (value) => { setQuickAccountBalance(value); setQuickAccountError(""); },
+    onInitialBalanceDateChange: (value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); },
+    onConfirm: addQuickAccount,
+    onCancel: () => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); },
+  };
+
   return (
     <section className="capture-layout">
-      <section className="capture-start" aria-labelledby="capture-start-title">
-        <div className="capture-start-heading">
-          <div>
-            <p className="eyebrow">Quick capture</p>
-            <h2 id="capture-start-title">What are you saving?</h2>
-          </div>
-          <p className="capture-start-detail">{selectedCaptureAction.detail}</p>
-        </div>
-        <div className="capture-intent-picker" role="toolbar" aria-label="Capture type">
-          {captureIntents.map((action) => {
-            const Icon = actionIcons[action.id];
-            const selected = captureIntent === action.id;
-            return (
-              <button
-                aria-pressed={selected}
-                className={`capture-intent-button ${selected ? "selected" : ""}`}
-                type="button"
-                key={action.id}
-                onClick={() => setCaptureIntent(action.id)}
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{action.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <CaptureStartPanel
+        captureIntent={captureIntent}
+        selectedCaptureAction={selectedCaptureAction}
+        actionIcons={actionIcons}
+        onSelectIntent={setCaptureIntent}
+      />
       {captureIntent === "manual-ledger" ? <Panel key="manual-ledger" title="Manual ledger record" eyebrow="Official local record">
         {accounts.length === 0 ? (
           <section className="manual-empty-state" aria-label="Account required" role="status">
@@ -2693,69 +2840,15 @@ function CapturePage({
             </div>
           ) : null}
           {isTransfer ? (
-            <>
-              <section className="transfer-mode full-span" aria-label="Transfer type">
-                <fieldset className="segmented-fieldset">
-                  <legend>Transfer type</legend>
-                  <div className="segmented-control">
-                  {(["same-currency", "cross-currency"] as const).map((mode) => (
-                    <label
-                      className={form.transferMode === mode ? "active" : ""}
-                      key={mode}
-                    >
-                      <input checked={form.transferMode === mode} name="transfer-mode" type="radio" value={mode} onChange={() => setTransferMode(mode)} />
-                      <span>{mode === "same-currency" ? "Same currency" : "Cross currency"}</span>
-                    </label>
-                  ))}
-                  </div>
-                </fieldset>
-              </section>
-              <div className="form-field">
-                <label htmlFor="entry-destination-account">
-                  <span>Destination account</span>
-                </label>
-                <div className="field-control-row">
-                  <select
-                    id="entry-destination-account"
-                    required
-                    disabled={accounts.length < 2}
-                    value={form.transferAccount}
-                    onChange={(event) => selectDestinationAccount(event.target.value)}
-                  >
-                    <option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>
-                    {accounts
-                      .filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency))
-                      .map((account) => (
-                        <option key={account.id} value={account.name}>
-                          {account.name} ({account.currency})
-                        </option>
-                      ))}
-                  </select>
-                  <button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => beginQuickAccountSetup("transferAccount")}>
-                    <Plus size={18} aria-hidden="true" />
-                  </button>
-                </div>
-                {quickAccountField === "transferAccount" ? (
-              <QuickAccountSetup
-                accountName={quickAccountName}
-                currency={quickAccountCurrency}
-                accountType={quickAccountType}
-                allowNegativeBalance={quickAccountAllowNegative}
-                initialBalance={quickAccountBalance}
-                    initialBalanceDate={quickAccountBalanceDate}
-                    error={quickAccountError}
-                onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
-                onCurrencyChange={setQuickAccountCurrency}
-                onAccountTypeChange={setQuickAccountType}
-                onAllowNegativeBalanceChange={setQuickAccountAllowNegative}
-                onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
-                    onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
-                    onConfirm={addQuickAccount}
-                    onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
-                  />
-                ) : null}
-              </div>
-            </>
+            <TransferFields
+              form={form}
+              accounts={accounts}
+              quickAccountField={quickAccountField}
+              quickAccountProps={quickAccountProps}
+              onBeginQuickAccountSetup={beginQuickAccountSetup}
+              onSelectDestinationAccount={selectDestinationAccount}
+              onSetTransferMode={setTransferMode}
+            />
           ) : null}
           <AmountField
             id="entry-amount"
@@ -2792,53 +2885,15 @@ function CapturePage({
           ) : null}
           {isTransfer && form.feeEnabled ? (
             <>
-              <div className="form-field">
-                <label htmlFor="entry-fee-account">
-                  <span>Fee account</span>
-                </label>
-                <div className="field-control-row">
-                  <select id="entry-fee-account" value={form.feeAccount} onChange={(event) => selectFeeAccount(event.target.value)}>
-                    <option value="">Select fee account</option>
-                    {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
-                  </select>
-                  <button className="icon-button" type="button" aria-label="Add fee account" title="Add fee account" onClick={() => beginQuickAccountSetup("feeAccount")}>
-                    <Plus size={18} aria-hidden="true" />
-                  </button>
-                </div>
-                {quickAccountField === "feeAccount" ? (
-                <QuickAccountSetup
-                  accountName={quickAccountName}
-                  currency={quickAccountCurrency}
-                  accountType={quickAccountType}
-                  allowNegativeBalance={quickAccountAllowNegative}
-                  initialBalance={quickAccountBalance}
-                    initialBalanceDate={quickAccountBalanceDate}
-                    error={quickAccountError}
-                  onAccountNameChange={(value) => { setQuickAccountName(value); setQuickAccountError(""); }}
-                  onCurrencyChange={setQuickAccountCurrency}
-                  onAccountTypeChange={setQuickAccountType}
-                  onAllowNegativeBalanceChange={setQuickAccountAllowNegative}
-                  onInitialBalanceChange={(value) => { setQuickAccountBalance(value); setQuickAccountError(""); }}
-                    onInitialBalanceDateChange={(value) => { setQuickAccountBalanceDate(value); setQuickAccountError(""); }}
-                    onConfirm={addQuickAccount}
-                    onCancel={() => { setQuickAccountField(null); setQuickAccountBalance(""); setQuickAccountBalanceDate(localDate()); setQuickAccountError(""); }}
-                  />
-                ) : null}
-              </div>
-              <AmountField
-                id="entry-fee-amount"
-                label="Fee amount"
-                value={form.feeAmount}
-                onChange={(value) => updateForm("feeAmount", value)}
+              <FeeFields
+                form={form}
+                accounts={accounts}
+                quickAccountField={quickAccountField}
+                quickAccountProps={quickAccountProps}
+                onBeginQuickAccountSetup={beginQuickAccountSetup}
+                onSelectFeeAccount={selectFeeAccount}
+                onUpdateForm={updateForm}
               />
-              <div className="form-field">
-                <span>Fee currency</span>
-                <output className="derived-value">{form.feeCurrency}</output>
-              </div>
-              <label>
-                <span>Fee category</span>
-                <input value={form.feeCategory} onChange={(event) => updateForm("feeCategory", event.target.value)} placeholder="Fees" />
-              </label>
             </>
           ) : null}
           {form.kind === "refund" ? (
@@ -2993,7 +3048,7 @@ function CapturePage({
   );
 }
 
-function MealCapturePanel({
+function MealCaptureForm({
   mealOccurredAt,
   mealNote,
   mealPhotoFiles,
@@ -3029,48 +3084,138 @@ function MealCapturePanel({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }>) {
   return (
-    <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
-      <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
-      <form className="meal-form" onSubmit={onSubmit}>
-        <label>
-          <span>Meal time</span>
-          <input required type="datetime-local" value={mealOccurredAt} onChange={(event) => onMealTimeChange(event.target.value)} />
-        </label>
-        <label>
-          <span>Meal note</span>
-          <textarea value={mealNote} onChange={(event) => onMealNoteChange(event.target.value)} placeholder="Optional" />
-        </label>
-        <div className="meal-photo-picker">
-          <span className="meal-field-label">Meal photos</span>
-          <div className="meal-photo-actions">
-            <button className="meal-file-action" type="button" onClick={() => { onOpenCamera().catch(() => undefined); }}>
-              <Camera size={18} aria-hidden="true" />
-              <span>Take photo</span>
-            </button>
-            <label className="meal-file-action" htmlFor="meal-photos">
-              <ImagePlus size={18} aria-hidden="true" />
-              <span>Choose photos</span>
-              <input id="meal-photos" aria-label="Meal photos" accept="image/*" multiple type="file" onChange={(event) => onAppendPhotos(event.target.files)} />
-            </label>
+    <form className="meal-form" onSubmit={onSubmit}>
+      <label>
+        <span>Meal time</span>
+        <input required type="datetime-local" value={mealOccurredAt} onChange={(event) => onMealTimeChange(event.target.value)} />
+      </label>
+      <label>
+        <span>Meal note</span>
+        <textarea value={mealNote} onChange={(event) => onMealNoteChange(event.target.value)} placeholder="Optional" />
+      </label>
+      <div className="meal-photo-picker">
+        <span className="meal-field-label">Meal photos</span>
+        <div className="meal-photo-actions">
+          <button className="meal-file-action" type="button" onClick={() => { onOpenCamera().catch(() => undefined); }}>
+            <Camera size={18} aria-hidden="true" />
+            <span>Take photo</span>
+          </button>
+          <label className="meal-file-action" htmlFor="meal-photos">
+            <ImagePlus size={18} aria-hidden="true" />
+            <span>Choose photos</span>
+            <input id="meal-photos" aria-label="Meal photos" accept="image/*" multiple type="file" onChange={(event) => onAppendPhotos(event.target.files)} />
+          </label>
+        </div>
+      </div>
+      {isCameraOpen ? (
+        <div className="camera-capture-dialog" role="dialog" aria-modal="true" aria-label="Take meal photo">
+          <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
+          <div className="camera-capture-actions">
+            <button className="primary-action" type="button" onClick={onCapturePhoto}>Capture photo</button>
+            <button className="secondary-action" type="button" onClick={onStopCamera}>Cancel</button>
           </div>
         </div>
-        {isCameraOpen ? (
-          <div className="camera-capture-dialog" role="dialog" aria-modal="true" aria-label="Take meal photo">
-            <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
-            <div className="camera-capture-actions">
-              <button className="primary-action" type="button" onClick={onCapturePhoto}>Capture photo</button>
-              <button className="secondary-action" type="button" onClick={onStopCamera}>Cancel</button>
-            </div>
-          </div>
-        ) : null}
-        {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
-        {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
-        <button className="primary-action align-start" type="submit">Save meal</button>
-        {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
-        {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
-        {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
-      </form>
+      ) : null}
+      {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
+      {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
+      <button className="primary-action align-start" type="submit">Save meal</button>
+      {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
+      {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
+      {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
+    </form>
+  );
+}
+
+function MealCapturePanel(props: Readonly<React.ComponentProps<typeof MealCaptureForm>>) {
+  return (
+    <Panel key="record-meal" title="Record meal" eyebrow="Optional meal record">
+      <p className="panel-copy">A meal can stand alone, have multiple photos, and be linked to a ledger record later.</p>
+      <MealCaptureForm {...props} />
     </Panel>
+  );
+}
+
+function TransferFields({
+  form,
+  accounts,
+  quickAccountField,
+  quickAccountProps,
+  onBeginQuickAccountSetup,
+  onSelectDestinationAccount,
+  onSetTransferMode,
+}: Readonly<{
+  form: DraftForm;
+  accounts: LocalAccount[];
+  quickAccountField: "account" | "transferAccount" | "feeAccount" | null;
+  quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>;
+  onBeginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void;
+  onSelectDestinationAccount: (name: string) => void;
+  onSetTransferMode: (mode: DraftForm["transferMode"]) => void;
+}>) {
+  return (
+    <>
+      <section className="transfer-mode full-span" aria-label="Transfer type">
+        <fieldset className="segmented-fieldset">
+          <legend>Transfer type</legend>
+          <div className="segmented-control">
+            {(["same-currency", "cross-currency"] as const).map((mode) => (
+              <label className={form.transferMode === mode ? "active" : ""} key={mode}>
+                <input checked={form.transferMode === mode} name="transfer-mode" type="radio" value={mode} onChange={() => onSetTransferMode(mode)} />
+                <span>{mode === "same-currency" ? "Same currency" : "Cross currency"}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </section>
+      <div className="form-field">
+        <label htmlFor="entry-destination-account"><span>Destination account</span></label>
+        <div className="field-control-row">
+          <select id="entry-destination-account" required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => onSelectDestinationAccount(event.target.value)}>
+            <option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>
+            {accounts.filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency)).map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
+          </select>
+          <button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => onBeginQuickAccountSetup("transferAccount")}><Plus size={18} aria-hidden="true" /></button>
+        </div>
+        {quickAccountField === "transferAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}
+      </div>
+    </>
+  );
+}
+
+function FeeFields({
+  form,
+  accounts,
+  quickAccountField,
+  quickAccountProps,
+  onBeginQuickAccountSetup,
+  onSelectFeeAccount,
+  onUpdateForm,
+}: Readonly<{
+  form: DraftForm;
+  accounts: LocalAccount[];
+  quickAccountField: "account" | "transferAccount" | "feeAccount" | null;
+  quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>;
+  onBeginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void;
+  onSelectFeeAccount: (name: string) => void;
+  onUpdateForm: (field: keyof DraftForm, value: string) => void;
+}>) {
+  return (
+    <>
+      <div className="form-field">
+        <label htmlFor="entry-fee-account"><span>Fee account</span></label>
+        <div className="field-control-row">
+          <select id="entry-fee-account" value={form.feeAccount} onChange={(event) => onSelectFeeAccount(event.target.value)}>
+            <option value="">Select fee account</option>
+            {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
+          </select>
+          <button className="icon-button" type="button" aria-label="Add fee account" title="Add fee account" onClick={() => onBeginQuickAccountSetup("feeAccount")}><Plus size={18} aria-hidden="true" /></button>
+        </div>
+        {quickAccountField === "feeAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}
+      </div>
+      <AmountField id="entry-fee-amount" label="Fee amount" value={form.feeAmount} onChange={(value) => onUpdateForm("feeAmount", value)} />
+      <div className="form-field"><span>Fee currency</span><output className="derived-value">{form.feeCurrency}</output></div>
+      <label><span>Fee category</span><input value={form.feeCategory} onChange={(event) => onUpdateForm("feeCategory", event.target.value)} placeholder="Fees" /></label>
+    </>
   );
 }
 
