@@ -1,8 +1,8 @@
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import { bootstrapReferences } from "./bootstrap";
-import type { CloudPersistenceClient } from "./contracts";
+import type { CloudPersistenceClient, CloudReferenceMap } from "./contracts";
 import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink } from "./mappers";
-import { persistDraft, persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload } from "./repository";
+import { persistDraft, persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
 import {
   enqueueDraftSync,
   enqueueRecordSync,
@@ -59,14 +59,103 @@ function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedger
   });
 }
 
+type SyncState = SyncLocalChangesResult;
+type SyncContext = { input: SyncLocalChangesInput; references: CloudReferenceMap };
+
+function applyPersistenceResult(
+  queue: CloudSyncQueueItem[],
+  item: CloudSyncQueueItem,
+  result: CloudPersistenceResult,
+  now: string,
+): CloudSyncQueueItem[] {
+  if (result.ok) return markCloudSynced(queue, item.id, now);
+  return markCloudSyncFailure(queue, item.id, result.failure.message, result.failure.retryable, now, result.failure.code === "conflict" ? "conflict" : undefined);
+}
+
+function applyItemFailure(state: SyncState, item: CloudSyncQueueItem, message: string, now: string, retryable = false): SyncState {
+  return { ...state, queue: markCloudSyncFailure(state.queue, item.id, message, retryable, now) };
+}
+
+async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+  const { input } = context;
+  const draft = input.drafts.find((candidate) => candidate.id === item.targetId);
+  if (!draft) return applyItemFailure(state, item, "Local draft is no longer available.", input.now);
+  const result = await persistDraft(input.client, mapDraft(draft, input.userId));
+  return { ...state, queue: applyPersistenceResult(state.queue, item, result, input.now) };
+}
+
+async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+  const { input } = context;
+  const media = input.media.find((candidate) => candidate.id === item.targetId);
+  if (!media) return applyItemFailure(state, item, "Local media metadata is no longer available.", input.now);
+  const result = await persistMediaAsset(input.client, mapMediaAsset(media, input.userId, input.now));
+  const nextMedia = result.ok
+    ? state.media.map((candidate) => candidate.id === media.id ? { ...candidate, metadataStatus: "synced" as const } : candidate)
+    : state.media;
+  return { ...state, media: nextMedia, queue: applyPersistenceResult(state.queue, item, result, input.now) };
+}
+
+async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+  const { input } = context;
+  const scan = input.scans.find((candidate) => candidate.id === item.targetId);
+  if (!scan) return applyItemFailure(state, item, "Local scan metadata is no longer available.", input.now);
+  const mediaLink = input.media.some((candidate) => candidate.id === scan.id)
+    ? [mapTemporaryScanMediaLink(scan, input.userId)]
+    : [];
+  const result = await persistSourcePayload(input.client, mapTemporaryScan(scan, input.userId), mediaLink);
+  const nextScans = result.ok
+    ? state.scans.map((candidate) => candidate.id === scan.id ? { ...candidate, cloudStatus: "synced" as const } : candidate)
+    : state.scans;
+  return { ...state, scans: nextScans, queue: applyPersistenceResult(state.queue, item, result, input.now) };
+}
+
+async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+  const { input, references } = context;
+  const meal = input.meals.find((candidate) => candidate.id === item.targetId);
+  if (!meal) return applyItemFailure(state, item, "Local meal metadata is no longer available.", input.now);
+  const mappedMeal = mapMealEntry(meal, input.userId, references);
+  if (!mappedMeal.ok) return applyItemFailure(state, item, mappedMeal.issues.map((entry) => entry.message).join(" "), input.now);
+  const result = await persistMealBundle(input.client, mappedMeal.value);
+  const nextMeals = result.ok
+    ? state.meals.map((candidate) => candidate.id === meal.id ? { ...candidate, status: "synced" as const } : candidate)
+    : state.meals;
+  return { ...state, meals: nextMeals, queue: applyPersistenceResult(state.queue, item, result, input.now) };
+}
+
+async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+  const { input, references } = context;
+  const record = input.records.find((candidate) => candidate.id === item.targetId);
+  if (!record) return applyItemFailure(state, item, "Local record is no longer available.", input.now);
+  const feeRecord = record.kind === "transfer"
+    ? input.records.find((candidate) => candidate.kind === "expense" && candidate.linkedRecordId === record.id)
+    : undefined;
+  const mapped = mapLedgerRecord(record, input.userId, references, "Asia/Taipei", input.auditEvents, feeRecord?.id);
+  if (!mapped.ok) return applyItemFailure(state, item, mapped.issues.map((entry) => entry.message).join(" "), input.now);
+  const result = await persistRecordBundle(input.client, {
+    userId: input.userId,
+    actionType: item.actionType,
+    idempotencyKey: item.idempotencyKey,
+    requestHash: item.requestHash,
+    expiresAt: new Date(new Date(input.now).getTime() + 180 * 24 * 60 * 60 * 1000).toISOString(),
+  }, mapped.value);
+  const nextRecords = result.ok
+    ? state.records.map((candidate) => candidate.id === record.id ? { ...candidate, status: "synced" as const } : candidate)
+    : state.records;
+  return { ...state, records: nextRecords, queue: applyPersistenceResult(state.queue, item, result, input.now) };
+}
+
+async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+  if (item.target === "draft") return syncDraftItem(item, context, state);
+  if (item.target === "media") return syncMediaItem(item, context, state);
+  if (item.target === "scan") return syncScanItem(item, context, state);
+  if (item.target === "meal") return syncMealItem(item, context, state);
+  return syncRecordItem(item, context, state);
+}
+
 export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<SyncLocalChangesResult> {
-  let nextRecords = input.records;
-  let nextMeals = input.meals;
-  let nextMedia = input.media;
-  let nextScans = input.scans;
-  let nextQueue = input.queue;
   const pending = orderPendingSyncItems(pendingCloudSyncItems(input.queue, input.now), input.records);
-  if (pending.length === 0) return { records: nextRecords, meals: nextMeals, media: nextMedia, scans: nextScans, queue: nextQueue };
+  let state: SyncState = { records: input.records, meals: input.meals, media: input.media, scans: input.scans, queue: input.queue };
+  if (pending.length === 0) return state;
 
   const bootstrap = await bootstrapReferences(input.referenceClient, {
     userId: input.userId,
@@ -76,120 +165,19 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
     events: input.events,
   });
   if (!bootstrap.ok) {
-    nextQueue = pending.reduce(
-      (current, item) => markCloudSyncFailure(current, item.id, bootstrap.message, true, input.now),
-      nextQueue,
-    );
-    return { records: nextRecords, meals: nextMeals, media: nextMedia, scans: nextScans, queue: nextQueue };
+    state = {
+      ...state,
+      queue: pending.reduce((current, item) => markCloudSyncFailure(current, item.id, bootstrap.message, true, input.now), state.queue),
+    };
+    return state;
   }
 
+  const context: SyncContext = { input, references: bootstrap.references };
   for (const item of pending) {
-    nextQueue = markCloudSyncing(nextQueue, item.id, input.now);
-    if (item.target === "draft") {
-      const draft = input.drafts.find((candidate) => candidate.id === item.targetId);
-      if (!draft) {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, "Local draft is no longer available.", false, input.now);
-        continue;
-      }
-
-      const result = await persistDraft(input.client, mapDraft(draft, input.userId));
-      nextQueue = result.ok
-        ? markCloudSynced(nextQueue, item.id, input.now)
-        : markCloudSyncFailure(nextQueue, item.id, result.failure.message, result.failure.retryable, input.now, result.failure.code === "conflict" ? "conflict" : undefined);
-      continue;
-    }
-
-    if (item.target === "media") {
-      const media = input.media.find((candidate) => candidate.id === item.targetId);
-      if (!media) {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, "Local media metadata is no longer available.", false, input.now);
-        continue;
-      }
-
-      const result = await persistMediaAsset(input.client, mapMediaAsset(media, input.userId, input.now));
-      if (result.ok) {
-        nextMedia = nextMedia.map((candidate) => candidate.id === media.id ? { ...candidate, metadataStatus: "synced" } : candidate);
-        nextQueue = markCloudSynced(nextQueue, item.id, input.now);
-      } else {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, result.failure.message, result.failure.retryable, input.now, result.failure.code === "conflict" ? "conflict" : undefined);
-      }
-      continue;
-    }
-
-    if (item.target === "scan") {
-      const scan = input.scans.find((candidate) => candidate.id === item.targetId);
-      if (!scan) {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, "Local scan metadata is no longer available.", false, input.now);
-        continue;
-      }
-
-      const mediaLink = input.media.some((candidate) => candidate.id === scan.id)
-        ? [mapTemporaryScanMediaLink(scan, input.userId)]
-        : [];
-      const result = await persistSourcePayload(input.client, mapTemporaryScan(scan, input.userId), mediaLink);
-      if (result.ok) {
-        nextScans = nextScans.map((candidate) => candidate.id === scan.id ? { ...candidate, cloudStatus: "synced" } : candidate);
-        nextQueue = markCloudSynced(nextQueue, item.id, input.now);
-      } else {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, result.failure.message, result.failure.retryable, input.now, result.failure.code === "conflict" ? "conflict" : undefined);
-      }
-      continue;
-    }
-
-    if (item.target === "meal") {
-      const meal = input.meals.find((candidate) => candidate.id === item.targetId);
-      if (!meal) {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, "Local meal metadata is no longer available.", false, input.now);
-        continue;
-      }
-
-      const mappedMeal = mapMealEntry(meal, input.userId, bootstrap.references);
-      if (!mappedMeal.ok) {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, mappedMeal.issues.map((entry) => entry.message).join(" "), false, input.now);
-        continue;
-      }
-
-      const result = await persistMealBundle(input.client, mappedMeal.value);
-      if (result.ok) {
-        nextMeals = nextMeals.map((candidate) => candidate.id === meal.id ? { ...candidate, status: "synced" } : candidate);
-        nextQueue = markCloudSynced(nextQueue, item.id, input.now);
-      } else {
-        nextQueue = markCloudSyncFailure(nextQueue, item.id, result.failure.message, result.failure.retryable, input.now, result.failure.code === "conflict" ? "conflict" : undefined);
-      }
-      continue;
-    }
-
-    const record = input.records.find((candidate) => candidate.id === item.targetId);
-    if (!record) {
-      nextQueue = markCloudSyncFailure(nextQueue, item.id, "Local record is no longer available.", false, input.now);
-      continue;
-    }
-
-    const feeRecord = record.kind === "transfer"
-      ? input.records.find((candidate) => candidate.kind === "expense" && candidate.linkedRecordId === record.id)
-      : undefined;
-    const mapped = mapLedgerRecord(record, input.userId, bootstrap.references, "Asia/Taipei", input.auditEvents, feeRecord?.id);
-    if (!mapped.ok) {
-      nextQueue = markCloudSyncFailure(nextQueue, item.id, mapped.issues.map((entry) => entry.message).join(" "), false, input.now);
-      continue;
-    }
-
-    const result = await persistRecordBundle(input.client, {
-      userId: input.userId,
-      actionType: item.actionType,
-      idempotencyKey: item.idempotencyKey,
-      requestHash: item.requestHash,
-      expiresAt: new Date(new Date(input.now).getTime() + 180 * 24 * 60 * 60 * 1000).toISOString(),
-    }, mapped.value);
-    if (result.ok) {
-      nextRecords = nextRecords.map((candidate) => candidate.id === record.id ? { ...candidate, status: "synced" } : candidate);
-      nextQueue = markCloudSynced(nextQueue, item.id, input.now);
-    } else {
-      nextQueue = markCloudSyncFailure(nextQueue, item.id, result.failure.message, result.failure.retryable, input.now, result.failure.code === "conflict" ? "conflict" : undefined);
-    }
+    state = { ...state, queue: markCloudSyncing(state.queue, item.id, input.now) };
+    state = await syncItem(item, context, state);
   }
-
-  return { records: nextRecords, meals: nextMeals, media: nextMedia, scans: nextScans, queue: nextQueue };
+  return state;
 }
 
 export function enqueueLocalChanges(
