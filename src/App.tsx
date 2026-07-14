@@ -2382,7 +2382,6 @@ function ManualLedgerMoneyFields({
 }
 
 function ManualLedgerDetails(props: Readonly<ManualLedgerDetailsProps>) {
-  const { form } = props;
   return (
     <fieldset className="entry-details">
       <ManualLedgerPartyFields {...props} />
@@ -2394,6 +2393,27 @@ function ManualLedgerDetails(props: Readonly<ManualLedgerDetailsProps>) {
 type ManualLedgerTimingFieldsProps = Pick<ManualLedgerFormProps, "form" | "isUnresolvedExpense" | "setTimePrecision" | "setMonthRange" | "updateForm"> & {
   hasSelectedAccount: boolean;
 };
+
+type ManualLedgerAccountFieldProps = Pick<ManualLedgerFormProps, "form" | "accounts" | "isTransfer" | "quickAccountField" | "quickAccountProps" | "beginQuickAccountSetup" | "selectSourceAccount">;
+
+function ManualLedgerAccountField({
+  form, accounts, isTransfer, quickAccountField, quickAccountProps, beginQuickAccountSetup, selectSourceAccount,
+}: Readonly<ManualLedgerAccountFieldProps>) {
+  return (
+    <div className={"form-field entry-account-field " + (isTransfer ? "" : "entry-account-last")}>
+      <label htmlFor="entry-account"><span>{isTransfer ? "Source account" : "Account"}</span></label>
+      <div className="field-control-row">
+        <select id="entry-account" required disabled={accounts.length === 0} value={form.account} onChange={(event) => selectSourceAccount(event.target.value)}>
+          <option value="">{accounts.length === 0 ? "Add an account" : "Select an account"}</option>
+          {accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}
+        </select>
+        <button className="icon-button" type="button" aria-label="Add account" title="Add account" onClick={() => beginQuickAccountSetup("account")}><Plus size={18} aria-hidden="true" /></button>
+      </div>
+      {accounts.length === 0 ? <p className="field-help">Add an account to start recording.</p> : null}
+      {quickAccountField === "account" ? <QuickAccountSetup {...quickAccountProps} /> : null}
+    </div>
+  );
+}
 
 function ManualLedgerTimingFields({
   form, hasSelectedAccount, isUnresolvedExpense, setTimePrecision, setMonthRange, updateForm,
@@ -2441,34 +2461,7 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
   return (
     <form className={`draft-form ${hasSelectedAccount ? "has-selected-account" : "needs-account"}`} id="manual-draft-form" onSubmit={handleSubmit}>
               <ManualLedgerTimingFields form={form} hasSelectedAccount={hasSelectedAccount} isUnresolvedExpense={isUnresolvedExpense} setTimePrecision={setTimePrecision} setMonthRange={setMonthRange} updateForm={updateForm} />
-              <div className={`form-field entry-account-field ${isTransfer ? "" : "entry-account-last"}`}>
-                <label htmlFor="entry-account">
-                  <span>{isTransfer ? "Source account" : "Account"}</span>
-                </label>
-                <div className="field-control-row">
-                  <select
-                    id="entry-account"
-                    required
-                    disabled={accounts.length === 0}
-                    value={form.account}
-                    onChange={(event) => selectSourceAccount(event.target.value)}
-                  >
-                    <option value="">{accounts.length === 0 ? "Add an account" : "Select an account"}</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.name}>
-                        {account.name} ({account.currency})
-                      </option>
-                    ))}
-                  </select>
-                  <button className="icon-button" type="button" aria-label="Add account" title="Add account" onClick={() => beginQuickAccountSetup("account")}>
-                    <Plus size={18} aria-hidden="true" />
-                  </button>
-                </div>
-                {accounts.length === 0 ? <p className="field-help">Add an account to start recording.</p> : null}
-                {quickAccountField === "account" ? (
-                  <QuickAccountSetup {...quickAccountProps} />
-                ) : null}
-              </div>
+              <ManualLedgerAccountField form={form} accounts={accounts} isTransfer={isTransfer} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} beginQuickAccountSetup={beginQuickAccountSetup} selectSourceAccount={selectSourceAccount} />
               {hasSelectedAccount ? (
                 <label className="entry-kind-field">
                   <span>Type</span>
