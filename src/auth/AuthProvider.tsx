@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
 import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
 import { sendMagicLink } from "./authActions";
@@ -23,6 +23,17 @@ function errorMessage(error: unknown): string {
 const configurationError = !isLocalDevelopmentMode && !supabase;
 const configurationMessage = "Cloud authentication is not configured for this deployment.";
 
+type SessionLike = { user?: { id?: string } } | null;
+
+function applySession(
+  session: SessionLike,
+  setUserId: Dispatch<SetStateAction<string>>,
+  setState: Dispatch<SetStateAction<AuthState>>,
+): void {
+  setUserId(session?.user?.id ?? "");
+  setState(session ? "signed-in" : "signed-out");
+}
+
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [state, setState] = useState<AuthState>(isLocalDevelopmentMode ? "signed-out" : configurationError ? "auth-error" : "loading");
   const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
@@ -35,28 +46,27 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
 
     let mounted = true;
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (mounted) {
-        if (error) {
+    const handleSession = (session: SessionLike): void => {
+      if (!mounted) return;
+      applySession(session, setUserId, setState);
+    };
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        if (mounted) {
           setState("auth-error");
           setMessage(errorMessage(error));
-        } else {
-          setUserId(data.session?.user.id ?? "");
-          setState(data.session ? "signed-in" : "signed-out");
         }
+        return;
       }
+      handleSession(data.session);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) {
-        setUserId(session?.user.id ?? "");
-        setState(session ? "signed-in" : "signed-out");
-      }
-    });
+    const authStateChange = supabase.auth.onAuthStateChange((_event, session) => handleSession(session));
 
     return function cleanupAuthSubscription(): void {
       mounted = false;
-      data.subscription.unsubscribe();
+      authStateChange.data.subscription.unsubscribe();
     };
   }, []);
 
