@@ -144,4 +144,16 @@ describe("clean ledger export", () => {
     expect(bundle.files["reports/account_summary.csv"]).toContain("0.3");
     expect(bundle.files["reports/account_summary.csv"]).not.toContain("0.30000000000000004");
   });
+
+  test("sorts export date and currency metadata deterministically", () => {
+    const jpyAccount: LocalAccount = { id: "jpy", name: "JPY wallet", currency: "JPY" };
+    const records = [
+      { ...record, id: "later", localDate: "2026-07-13" },
+      { ...record, id: "earlier", localDate: "2026-01-02", accountId: "jpy", accountName: "JPY wallet", currency: "JPY", amount: "100" },
+    ];
+    const bundle = createMultiTableExport([account, jpyAccount], records, "2026-07-13T00:00:00.000Z");
+
+    expect(bundle.manifest.date_range).toEqual({ start: "2026-01-02", end: "2026-07-13" });
+    expect(bundle.manifest.currency_modes).toEqual(["JPY", "TWD"]);
+  });
 });
