@@ -51,7 +51,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       applySession(session, setUserId, setState);
     };
 
-    void supabase.auth.getSession().then(({ data, error }) => {
+    supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
         if (mounted) {
           setState("auth-error");
@@ -62,7 +62,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       handleSession(data.session);
     });
 
-    const authStateChange = supabase.auth.onAuthStateChange((_event, session) => handleSession(session));
+    const authStateChange = supabase.auth.onAuthStateChange((_event, session) => {
+      handleSession(session);
+    });
 
     return function cleanupAuthSubscription(): void {
       mounted = false;

@@ -135,12 +135,30 @@ function validateKindFields(normalized: NormalizedImportRow, kind: ManualRecordK
     errors.push("Kind is required and must be a supported ledger kind.");
     return;
   }
-  if (kind === "expense") return validateExpenseFields(normalized, errors);
-  if (kind === "income") return validateIncomeFields(normalized, errors);
-  if (kind === "fund-addition") return validateDateAndRequired(normalized, "source", "Source", errors);
-  if (kind === "adjustment") return validateAdjustmentFields(normalized, amount, errors);
-  if (kind === "refund") return validateRefundFields(normalized, errors);
-  if (kind === "transfer") return validateTransferFields(normalized, account, accounts, amount, errors);
+  if (kind === "expense") {
+    validateExpenseFields(normalized, errors);
+    return;
+  }
+  if (kind === "income") {
+    validateIncomeFields(normalized, errors);
+    return;
+  }
+  if (kind === "fund-addition") {
+    validateDateAndRequired(normalized, "source", "Source", errors);
+    return;
+  }
+  if (kind === "adjustment") {
+    validateAdjustmentFields(normalized, amount, errors);
+    return;
+  }
+  if (kind === "refund") {
+    validateRefundFields(normalized, errors);
+    return;
+  }
+  if (kind === "transfer") {
+    validateTransferFields(normalized, account, accounts, amount, errors);
+    return;
+  }
   validateUnresolvedExpenseFields(normalized, errors);
 }
 

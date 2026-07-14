@@ -260,7 +260,7 @@ function mapTransferDetails(
       destination_account_id: destinationId.value,
       destination_amount_minor: destinationAmount.value,
       destination_currency: (record.destinationCurrency || record.currency).toUpperCase(),
-      fee_ledger_record_id: feeId && feeId.ok ? feeId.value : null,
+      fee_ledger_record_id: feeId?.ok ? feeId.value : null,
     },
   };
 }

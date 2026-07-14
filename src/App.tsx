@@ -2183,13 +2183,6 @@ type ManualLedgerFormProps = {
   formError: string | null;
   savedMessage: string;
   quickAccountField: "account" | "transferAccount" | "feeAccount" | null;
-  quickAccountName: string;
-  quickAccountCurrency: string;
-  quickAccountType: string;
-  quickAccountAllowNegative: boolean;
-  quickAccountBalance: string;
-  quickAccountBalanceDate: string;
-  quickAccountError: string;
   quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>;
   isAddingCategory: boolean;
   quickCategoryName: string;
@@ -2225,15 +2218,155 @@ type ManualLedgerFormProps = {
   setShowCancelChoices: Dispatch<SetStateAction<boolean>>;
 };
 
+type ManualLedgerDetailsProps = Pick<ManualLedgerFormProps,
+  | "form"
+  | "accounts"
+  | "isTransfer"
+  | "needsCategory"
+  | "categoryOptions"
+  | "needsCounterparty"
+  | "counterpartyLabel"
+  | "sourceOptions"
+  | "refundableRecords"
+  | "selectedRefundIds"
+  | "selectedRefundHasDifferentCurrency"
+  | "refundDifferenceNeedsClassification"
+  | "refundDifferenceLabel"
+  | "merchantSuggestions"
+  | "itemSuggestions"
+  | "quickAccountField"
+  | "quickAccountProps"
+  | "isAddingCategory"
+  | "quickCategoryName"
+  | "quickCategoryError"
+  | "isAddingSource"
+  | "quickSourceName"
+  | "quickSourceError"
+  | "setForm"
+  | "updateForm"
+  | "beginQuickAccountSetup"
+  | "selectDestinationAccount"
+  | "selectFeeAccount"
+  | "setTransferMode"
+  | "setMissingExpenseField"
+  | "applySuggestion"
+  | "setIsAddingCategory"
+  | "setQuickCategoryName"
+  | "setQuickCategoryError"
+  | "addQuickCategory"
+  | "setIsAddingSource"
+  | "setQuickSourceName"
+  | "setQuickSourceError"
+  | "addQuickSource"
+>;
+
+function ManualLedgerDetails({
+  form, accounts, isTransfer, needsCategory, categoryOptions, needsCounterparty, counterpartyLabel, sourceOptions,
+  refundableRecords, selectedRefundIds, selectedRefundHasDifferentCurrency, refundDifferenceNeedsClassification,
+  refundDifferenceLabel, merchantSuggestions, itemSuggestions, quickAccountField, quickAccountProps,
+  isAddingCategory, quickCategoryName, quickCategoryError, isAddingSource, quickSourceName, quickSourceError,
+  setForm, updateForm, beginQuickAccountSetup, selectDestinationAccount, selectFeeAccount, setTransferMode,
+  setMissingExpenseField, applySuggestion, setIsAddingCategory, setQuickCategoryName, setQuickCategoryError,
+  addQuickCategory, setIsAddingSource, setQuickSourceName, setQuickSourceError, addQuickSource,
+}: Readonly<ManualLedgerDetailsProps>) {
+  return (
+    <fieldset className="entry-details">
+      {needsCategory ? (
+        <div className="form-field">
+          <label htmlFor="entry-category"><span>Category</span></label>
+          <div className="field-control-row">
+            <select id="entry-category" required value={form.category} onChange={(event) => updateForm("category", event.target.value)}>
+              <option value="">Select a category</option>
+              {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+            </select>
+            <button className="icon-button" type="button" aria-label="Add category" title="Add category" onClick={() => { setIsAddingCategory(true); setQuickCategoryError(""); }}>
+              <Plus size={18} aria-hidden="true" />
+            </button>
+          </div>
+          {isAddingCategory ? (
+            <section className="quick-category" aria-label="Quick category setup">
+              <label><span>New category name</span><input value={quickCategoryName} onChange={(event) => { setQuickCategoryName(event.target.value); setQuickCategoryError(""); }} placeholder="Household" /></label>
+              <div className="quick-account-actions">
+                <button className="primary-action" type="button" onClick={addQuickCategory}>Add and select</button>
+                <button className="quiet-action" type="button" onClick={() => { setIsAddingCategory(false); setQuickCategoryError(""); }}>Cancel</button>
+              </div>
+              {quickCategoryError ? <p className="quick-account-error" role="alert">{quickCategoryError}</p> : null}
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+      {needsCounterparty ? (
+        form.kind === "income" || form.kind === "fund-addition" ? (
+          <div className="form-field">
+            <label htmlFor="entry-source">Source</label>
+            <div className="field-control-row">
+              <select id="entry-source" required value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)}>
+                <option value="">Select a source</option>
+                {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+              </select>
+              <button className="icon-button" type="button" aria-label="Add source" title="Add source" onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
+                <Plus size={18} aria-hidden="true" />
+              </button>
+            </div>
+            {isAddingSource ? (
+              <section className="quick-category" aria-label="Quick source setup">
+                <label htmlFor="quick-source-name">New source</label>
+                <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder="Parent" />
+                <div className="quick-account-actions">
+                  <button className="primary-action" type="button" onClick={addQuickSource}>Add and select</button>
+                  <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>Cancel</button>
+                </div>
+                {quickSourceError ? <p className="quick-account-error" role="alert">{quickSourceError}</p> : null}
+              </section>
+            ) : null}
+          </div>
+        ) : (
+          <div className="form-field">
+            <label htmlFor="entry-counterparty"><span>{counterpartyLabel}</span></label>
+            <input id="entry-counterparty" required pattern=".*\S.*" title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`} value={form.counterparty} disabled={form.kind === "expense" && form.counterpartyMissing} onChange={(event) => updateForm("counterparty", event.target.value)} />
+            {form.kind === "expense" ? (
+              <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} /><span>Merchant unavailable</span></label>
+            ) : null}
+            {form.kind === "expense" && merchantSuggestions.length > 0 && !form.counterpartyMissing ? <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} /> : null}
+          </div>
+        )
+      ) : null}
+      {form.kind === "refund" ? (
+        <>
+          <label><span>Refund type</span><select value={form.refundSubtype} onChange={(event) => updateForm("refundSubtype", event.target.value as DraftForm["refundSubtype"])}><option value="refund">Store refund</option><option value="payback">Friend payback</option></select></label>
+          {form.refundSubtype === "payback" ? (
+            <label htmlFor="entry-refund-links"><span>Original expense</span><select id="entry-refund-links" aria-label="Original expense" required multiple value={selectedRefundIds} onChange={(event) => { const ids = [...event.target.selectedOptions].map((option) => option.value).filter(Boolean); setForm((current) => ({ ...current, refundLinkedRecordId: ids[0] ?? "", refundLinkedRecordIds: ids })); }}><option value="">Select an expense to link</option>{refundableRecords.map((record) => <option key={record.id} value={record.id}>{record.localDate} · {record.counterparty} · {record.currency} {record.amount}</option>)}</select><small>Select one or more expenses when a payback settles multiple shared expenses.</small></label>
+          ) : null}
+        </>
+      ) : null}
+      {form.kind === "expense" ? (
+        <div className="form-field">
+          <label htmlFor="entry-item-name"><span>Item name</span></label>
+          <input id="entry-item-name" required pattern=".*\S.*" disabled={form.itemNameMissing} value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
+          <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.itemNameMissing} onChange={(event) => setMissingExpenseField("itemName", event.target.checked)} /><span>Item unavailable</span></label>
+          {itemSuggestions.length > 0 && !form.itemNameMissing ? <HistorySuggestions records={itemSuggestions} source="item" onApply={applySuggestion} /> : null}
+        </div>
+      ) : null}
+      {isTransfer ? <TransferFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectDestinationAccount={selectDestinationAccount} onSetTransferMode={setTransferMode} /> : null}
+      <AmountField id="entry-amount" label={isTransfer && form.transferMode === "cross-currency" ? "Source amount" : "Amount"} required value={form.amount} allowNegative={form.kind === "adjustment"} onChange={(value) => updateForm("amount", value)} />
+      <div className="form-field"><span>{isTransfer && form.transferMode === "cross-currency" ? "Source currency" : "Currency"}</span><output className="derived-value">{form.currency}</output></div>
+      {isTransfer && form.transferMode === "cross-currency" ? <><AmountField id="entry-destination-amount" label="Destination amount" required value={form.destinationAmount} onChange={(value) => updateForm("destinationAmount", value)} /><div className="form-field"><span>Destination currency</span><output className="derived-value">{form.destinationCurrency}</output></div></> : null}
+      {isTransfer ? <label className="full-span checkbox-field"><input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} /><span>Add transfer fee</span></label> : null}
+      {isTransfer && form.feeEnabled ? <FeeFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectFeeAccount={selectFeeAccount} onUpdateForm={updateForm} /> : null}
+      {form.kind === "refund" ? <><label className="full-span"><span>Refund reason</span><textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} /></label>{refundDifferenceNeedsClassification ? <label className="full-span warning-field"><span>{refundDifferenceLabel}</span><select aria-label={refundDifferenceLabel} value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}><option value="unclassified">Choose a classification</option><option value="income">Classify excess as income</option><option value="negative-expense">Classify excess as additional negative expense</option><option value="exchange_difference">Classify as exchange difference</option></select><small>{selectedRefundHasDifferentCurrency ? "The linked expense uses another currency; classify the difference before saving this payback." : "This payback exceeds the linked expense and needs an explicit classification."}</small></label> : null}</> : null}
+      {form.kind === "adjustment" ? <label className="full-span"><span>Adjustment reason</span><textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} /></label> : null}
+    </fieldset>
+  );
+}
+
 function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
   const {
     form, accounts, hasSelectedAccount, isUnresolvedExpense, isTransfer, needsCategory, categoryOptions,
     needsCounterparty, counterpartyLabel, sourceOptions, refundableRecords, selectedRefundIds,
     selectedRefundHasDifferentCurrency, refundDifferenceNeedsClassification, refundDifferenceLabel,
     merchantSuggestions, itemSuggestions, supportsRecurrence, autoRecordAllowed, hasUnsavedChanges,
-    showCancelChoices, formError, savedMessage, quickAccountField, quickAccountName, quickAccountCurrency,
-    quickAccountType, quickAccountAllowNegative, quickAccountBalance, quickAccountBalanceDate, quickAccountError,
-    quickAccountProps, isAddingCategory, quickCategoryName, quickCategoryError, isAddingSource, quickSourceName,
+    showCancelChoices, formError, savedMessage, quickAccountField, quickAccountProps, isAddingCategory, quickCategoryName,
+    quickCategoryError, isAddingSource, quickSourceName,
      quickSourceError, setForm, setFormError, setSavedMessage, updateForm, handleSubmit, beginQuickAccountSetup, setTimePrecision, setMonthRange,
     selectSourceAccount, selectDestinationAccount, selectFeeAccount, setTransferMode, setRecordKind,
     setMissingExpenseField, applySuggestion, setIsAddingCategory, setQuickCategoryName, setQuickCategoryError,
@@ -2330,221 +2463,49 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
                   </select>
                 </label>
               ) : null}
-              {hasSelectedAccount ? <fieldset className="entry-details">
-              {needsCategory ? (
-                <div className="form-field">
-                  <label htmlFor="entry-category">
-                    <span>Category</span>
-                  </label>
-                  <div className="field-control-row">
-                    <select id="entry-category" required value={form.category} onChange={(event) => updateForm("category", event.target.value)}>
-                      <option value="">Select a category</option>
-                      {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
-                    </select>
-                    <button className="icon-button" type="button" aria-label="Add category" title="Add category" onClick={() => { setIsAddingCategory(true); setQuickCategoryError(""); }}>
-                      <Plus size={18} aria-hidden="true" />
-                    </button>
-                  </div>
-                  {isAddingCategory ? (
-                    <section className="quick-category" aria-label="Quick category setup">
-                      <label>
-                        <span>New category name</span>
-                        <input value={quickCategoryName} onChange={(event) => { setQuickCategoryName(event.target.value); setQuickCategoryError(""); }} placeholder="Household" />
-                      </label>
-                      <div className="quick-account-actions">
-                        <button className="primary-action" type="button" onClick={addQuickCategory}>Add and select</button>
-                        <button className="quiet-action" type="button" onClick={() => { setIsAddingCategory(false); setQuickCategoryError(""); }}>Cancel</button>
-                      </div>
-                      {quickCategoryError ? <p className="quick-account-error" role="alert">{quickCategoryError}</p> : null}
-                    </section>
-                  ) : null}
-                </div>
-              ) : null}
-              {needsCounterparty ? (
-                form.kind === "income" || form.kind === "fund-addition" ? (
-                  <div className="form-field">
-                    <label htmlFor="entry-source">Source</label>
-                    <div className="field-control-row">
-                      <select id="entry-source" required value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)}>
-                        <option value="">Select a source</option>
-                        {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
-                      </select>
-                      <button className="icon-button" type="button" aria-label="Add source" title="Add source" onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
-                        <Plus size={18} aria-hidden="true" />
-                      </button>
-                    </div>
-                    {isAddingSource ? (
-                      <section className="quick-category" aria-label="Quick source setup">
-                        <label htmlFor="quick-source-name">New source</label>
-                        <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder="Parent" />
-                        <div className="quick-account-actions">
-                          <button className="primary-action" type="button" onClick={addQuickSource}>Add and select</button>
-                          <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>Cancel</button>
-                        </div>
-                        {quickSourceError ? <p className="quick-account-error" role="alert">{quickSourceError}</p> : null}
-                      </section>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="form-field">
-                    <label htmlFor="entry-counterparty">
-                      <span>{counterpartyLabel}</span>
-                    </label>
-                    <input
-                      id="entry-counterparty"
-                      required
-                      pattern=".*\S.*"
-                      title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`}
-                      value={form.counterparty}
-                      disabled={form.kind === "expense" && form.counterpartyMissing}
-                      onChange={(event) => updateForm("counterparty", event.target.value)}
-                    />
-                    {form.kind === "expense" ? (
-                      <label className="checkbox-field inline-checkbox">
-                        <input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} />
-                        <span>Merchant unavailable</span>
-                      </label>
-                    ) : null}
-                    {form.kind === "expense" && merchantSuggestions.length > 0 && !form.counterpartyMissing ? (
-                      <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} />
-                    ) : null}
-                  </div>
-                )
-              ) : null}
-              {form.kind === "refund" ? (
-                <>
-                  <label>
-                    <span>Refund type</span>
-                    <select value={form.refundSubtype} onChange={(event) => updateForm("refundSubtype", event.target.value as DraftForm["refundSubtype"])}>
-                      <option value="refund">Store refund</option>
-                      <option value="payback">Friend payback</option>
-                    </select>
-                  </label>
-                  {form.refundSubtype === "payback" ? (
-                    <label htmlFor="entry-refund-links">
-                      <span>Original expense</span>
-                      <select
-                        id="entry-refund-links"
-                        aria-label="Original expense"
-                        required
-                        multiple
-                        value={selectedRefundIds}
-                        onChange={(event) => {
-                          const ids = [...event.target.selectedOptions].map((option) => option.value).filter(Boolean);
-                          setForm((current) => ({ ...current, refundLinkedRecordId: ids[0] ?? "", refundLinkedRecordIds: ids }));
-                        }}
-                      >
-                        <option value="">Select an expense to link</option>
-                        {refundableRecords.map((record) => (
-                          <option key={record.id} value={record.id}>
-                            {record.localDate} · {record.counterparty} · {record.currency} {record.amount}
-                          </option>
-                        ))}
-                      </select>
-                      <small>Select one or more expenses when a payback settles multiple shared expenses.</small>
-                    </label>
-                  ) : null}
-                </>
-              ) : null}
-              {form.kind === "expense" ? (
-                <div className="form-field">
-                  <label htmlFor="entry-item-name">
-                    <span>Item name</span>
-                  </label>
-                  <input id="entry-item-name" required pattern=".*\S.*" disabled={form.itemNameMissing} value={form.itemName} onChange={(event) => updateForm("itemName", event.target.value)} />
-                  <label className="checkbox-field inline-checkbox">
-                    <input type="checkbox" checked={form.itemNameMissing} onChange={(event) => setMissingExpenseField("itemName", event.target.checked)} />
-                    <span>Item unavailable</span>
-                  </label>
-                  {itemSuggestions.length > 0 && !form.itemNameMissing ? (
-                    <HistorySuggestions records={itemSuggestions} source="item" onApply={applySuggestion} />
-                  ) : null}
-                </div>
-              ) : null}
-              {isTransfer ? (
-                <TransferFields
+              {hasSelectedAccount ? (
+                <ManualLedgerDetails
                   form={form}
                   accounts={accounts}
+                  isTransfer={isTransfer}
+                  needsCategory={needsCategory}
+                  categoryOptions={categoryOptions}
+                  needsCounterparty={needsCounterparty}
+                  counterpartyLabel={counterpartyLabel}
+                  sourceOptions={sourceOptions}
+                  refundableRecords={refundableRecords}
+                  selectedRefundIds={selectedRefundIds}
+                  selectedRefundHasDifferentCurrency={selectedRefundHasDifferentCurrency}
+                  refundDifferenceNeedsClassification={refundDifferenceNeedsClassification}
+                  refundDifferenceLabel={refundDifferenceLabel}
+                  merchantSuggestions={merchantSuggestions}
+                  itemSuggestions={itemSuggestions}
                   quickAccountField={quickAccountField}
                   quickAccountProps={quickAccountProps}
-                  onBeginQuickAccountSetup={beginQuickAccountSetup}
-                  onSelectDestinationAccount={selectDestinationAccount}
-                  onSetTransferMode={setTransferMode}
+                  isAddingCategory={isAddingCategory}
+                  quickCategoryName={quickCategoryName}
+                  quickCategoryError={quickCategoryError}
+                  isAddingSource={isAddingSource}
+                  quickSourceName={quickSourceName}
+                  quickSourceError={quickSourceError}
+                  setForm={setForm}
+                  updateForm={updateForm}
+                  beginQuickAccountSetup={beginQuickAccountSetup}
+                  selectDestinationAccount={selectDestinationAccount}
+                  selectFeeAccount={selectFeeAccount}
+                  setTransferMode={setTransferMode}
+                  setMissingExpenseField={setMissingExpenseField}
+                  applySuggestion={applySuggestion}
+                  setIsAddingCategory={setIsAddingCategory}
+                  setQuickCategoryName={setQuickCategoryName}
+                  setQuickCategoryError={setQuickCategoryError}
+                  addQuickCategory={addQuickCategory}
+                  setIsAddingSource={setIsAddingSource}
+                  setQuickSourceName={setQuickSourceName}
+                  setQuickSourceError={setQuickSourceError}
+                  addQuickSource={addQuickSource}
                 />
-              ) : null}
-              <AmountField
-                id="entry-amount"
-                label={isTransfer && form.transferMode === "cross-currency" ? "Source amount" : "Amount"}
-                required
-                value={form.amount}
-                allowNegative={form.kind === "adjustment"}
-                onChange={(value) => updateForm("amount", value)}
-              />
-              <div className="form-field">
-                <span>{isTransfer && form.transferMode === "cross-currency" ? "Source currency" : "Currency"}</span>
-                <output className="derived-value">{hasSelectedAccount ? form.currency : "Select an account first"}</output>
-              </div>
-              {isTransfer && form.transferMode === "cross-currency" ? (
-                <>
-                  <AmountField
-                    id="entry-destination-amount"
-                    label="Destination amount"
-                    required
-                    value={form.destinationAmount}
-                    onChange={(value) => updateForm("destinationAmount", value)}
-                  />
-                  <div className="form-field">
-                    <span>Destination currency</span>
-                    <output className="derived-value">{form.destinationCurrency}</output>
-                  </div>
-                </>
-              ) : null}
-              {isTransfer ? (
-                <label className="full-span checkbox-field">
-                  <input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} />
-                  <span>Add transfer fee</span>
-                </label>
-              ) : null}
-              {isTransfer && form.feeEnabled ? (
-                <FeeFields
-                  form={form}
-                  accounts={accounts}
-                  quickAccountField={quickAccountField}
-                  quickAccountProps={quickAccountProps}
-                  onBeginQuickAccountSetup={beginQuickAccountSetup}
-                  onSelectFeeAccount={selectFeeAccount}
-                  onUpdateForm={updateForm}
-                />
-              ) : null}
-              {form.kind === "refund" ? (
-                <>
-                  <label className="full-span">
-                    <span>Refund reason</span>
-                    <textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} />
-                  </label>
-                  {refundDifferenceNeedsClassification ? (
-                    <label className="full-span warning-field">
-                      <span>{refundDifferenceLabel}</span>
-                      <select aria-label={refundDifferenceLabel} value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}>
-                        <option value="unclassified">Choose a classification</option>
-                        <option value="income">Classify excess as income</option>
-                        <option value="negative-expense">Classify excess as additional negative expense</option>
-                        <option value="exchange_difference">Classify as exchange difference</option>
-                      </select>
-                      <small>{selectedRefundHasDifferentCurrency
-                        ? "The linked expense uses another currency; classify the difference before saving this payback."
-                        : "This payback exceeds the linked expense and needs an explicit classification."}</small>
-                    </label>
-                  ) : null}
-                </>
-              ) : null}
-              {form.kind === "adjustment" ? (
-                <label className="full-span">
-                  <span>Adjustment reason</span>
-                  <textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} />
-                </label>
-              ) : null}
-              </fieldset> : (
+              ) : (
                 <div className="entry-details-locked full-span" role="status" aria-live="polite">
                   <strong>Select an account to continue</strong>
                   <span>Choose an existing account or use the plus button above. The record fields will appear next.</span>
@@ -3089,13 +3050,6 @@ function CapturePage({
     formError,
     savedMessage,
     quickAccountField,
-    quickAccountName,
-    quickAccountCurrency,
-    quickAccountType,
-    quickAccountAllowNegative,
-    quickAccountBalance,
-    quickAccountBalanceDate,
-    quickAccountError,
     quickAccountProps,
     isAddingCategory,
     quickCategoryName,
@@ -3404,6 +3358,56 @@ function SavedRecordPanel({ recordCount, navigate }: Readonly<{ recordCount: num
   );
 }
 
+type AccountSetupPanelProps = {
+  accounts: LocalAccount[];
+  accountName: string;
+  accountCurrency: string;
+  accountType: string;
+  allowNegativeBalance: boolean;
+  balanceMode: "zero" | "current";
+  balance: string;
+  balanceDate: string;
+  accountError: string;
+  onAccountNameChange: (value: string) => void;
+  onAccountCurrencyChange: (value: string) => void;
+  onAccountTypeChange: (value: string) => void;
+  onAllowNegativeBalanceChange: (value: boolean) => void;
+  onBalanceModeChange: (value: "zero" | "current") => void;
+  onBalanceChange: (value: string) => void;
+  onBalanceDateChange: (value: string) => void;
+  onReopenOnboarding: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+};
+
+function AccountSetupPanel({
+  accounts, accountName, accountCurrency, accountType, allowNegativeBalance, balanceMode, balance, balanceDate, accountError,
+  onAccountNameChange, onAccountCurrencyChange, onAccountTypeChange, onAllowNegativeBalanceChange, onBalanceModeChange,
+  onBalanceChange, onBalanceDateChange, onReopenOnboarding, onSubmit,
+}: Readonly<AccountSetupPanelProps>) {
+  return (
+    <Panel title="Accounts" eyebrow="Local setup">
+      <p className="panel-copy">Create the accounts that manual records may use. This preview keeps them only in the current workspace session.</p>
+      <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
+      <form className="draft-form" noValidate onSubmit={onSubmit}>
+        <label><span>Account name</span><input required pattern=".*\S.*" value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" /></label>
+        <label><span>Currency</span><select value={accountCurrency} onChange={(event) => onAccountCurrencyChange(event.target.value)}><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="USD">USD</option></select></label>
+        <label><span>Account type</span><select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}><option value="cash">Cash</option><option value="bank">Bank account</option><option value="card">Credit card</option><option value="wallet">Stored-value wallet</option><option value="other">Other</option></select></label>
+        <label className="checkbox-row"><input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} /><span>Allow negative balance</span></label>
+        <fieldset>
+          <legend>Starting balance</legend>
+          <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>Start from zero</span></label>
+          <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>Enter current balance</span></label>
+        </fieldset>
+        {balanceMode === "current" ? <div className="onboarding-balance-fields"><AmountField id="settings-current-balance" label="Current balance" required value={balance} onChange={onBalanceChange} placeholder="0" /><label><span>As of date</span><input required type="date" value={balanceDate} onChange={(event) => onBalanceDateChange(event.target.value)} /></label></div> : null}
+        <button className="primary-action align-start" type="submit">Add account</button>
+        {accountError ? <p className="quick-account-error" role="alert">{accountError}</p> : null}
+      </form>
+      {accounts.length === 0 ? <p className="panel-copy">No accounts yet. Add one before creating a manual record.</p> : null}
+      {accounts.length > 0 ? <ul className="account-list" aria-label="Available accounts">{accounts.map((account) => <li key={account.id}><strong>{account.name}</strong><span>{account.currency}</span></li>)}</ul> : null}
+    </Panel>
+  );
+}
+
 function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding, onSignOut }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
@@ -3448,65 +3452,26 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
 
   return (
     <section className="content-grid">
-      <Panel title="Accounts" eyebrow="Local setup">
-        <p className="panel-copy">Create the accounts that manual records may use. This preview keeps them only in the current workspace session.</p>
-        <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
-        <form className="draft-form" noValidate onSubmit={handleAccountSubmit}>
-          <label>
-            <span>Account name</span>
-            <input required pattern=".*\S.*" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Daily wallet" />
-          </label>
-          <label>
-            <span>Currency</span>
-            <select value={accountCurrency} onChange={(event) => setAccountCurrency(event.target.value)}>
-              <option value="TWD">TWD</option>
-              <option value="JPY">JPY</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-          <label>
-            <span>Account type</span>
-            <select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
-              <option value="cash">Cash</option>
-              <option value="bank">Bank account</option>
-              <option value="card">Credit card</option>
-              <option value="wallet">Stored-value wallet</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label className="checkbox-row">
-            <input type="checkbox" checked={allowNegativeBalance} onChange={(event) => setAllowNegativeBalance(event.target.checked)} />
-            <span>Allow negative balance</span>
-          </label>
-          <fieldset>
-            <legend>Starting balance</legend>
-            <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => setBalanceMode("zero")} /> <span>Start from zero</span></label>
-            <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => setBalanceMode("current")} /> <span>Enter current balance</span></label>
-          </fieldset>
-          {balanceMode === "current" ? (
-            <div className="onboarding-balance-fields">
-              <AmountField id="settings-current-balance" label="Current balance" required value={balance} onChange={setBalance} placeholder="0" />
-              <label>
-                <span>As of date</span>
-                <input required type="date" value={balanceDate} onChange={(event) => setBalanceDate(event.target.value)} />
-              </label>
-            </div>
-          ) : null}
-          <button className="primary-action align-start" type="submit">Add account</button>
-          {accountError ? <p className="quick-account-error" role="alert">{accountError}</p> : null}
-        </form>
-        {accounts.length === 0 ? <p className="panel-copy">No accounts yet. Add one before creating a manual record.</p> : null}
-        {accounts.length > 0 ? (
-          <ul className="account-list" aria-label="Available accounts">
-            {accounts.map((account) => (
-              <li key={account.id}>
-                <strong>{account.name}</strong>
-                <span>{account.currency}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </Panel>
+      <AccountSetupPanel
+        accounts={accounts}
+        accountName={accountName}
+        accountCurrency={accountCurrency}
+        accountType={accountType}
+        allowNegativeBalance={allowNegativeBalance}
+        balanceMode={balanceMode}
+        balance={balance}
+        balanceDate={balanceDate}
+        accountError={accountError}
+        onAccountNameChange={setAccountName}
+        onAccountCurrencyChange={setAccountCurrency}
+        onAccountTypeChange={setAccountType}
+        onAllowNegativeBalanceChange={setAllowNegativeBalance}
+        onBalanceModeChange={setBalanceMode}
+        onBalanceChange={setBalance}
+        onBalanceDateChange={setBalanceDate}
+        onReopenOnboarding={onReopenOnboarding}
+        onSubmit={handleAccountSubmit}
+      />
       <AccountSyncPanel onSignOut={onSignOut} />
       <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
     </section>
