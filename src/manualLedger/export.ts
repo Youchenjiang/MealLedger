@@ -217,6 +217,36 @@ function finalizeAccountSummary(summary: AccountSummaryAccumulator, closingBalan
   };
 }
 
+function addSummaryTransfer(
+  record: LocalLedgerRecord,
+  source: AccountSummaryAccumulator,
+  summary: Map<string, AccountSummaryAccumulator>,
+): void {
+  const amount = parseMinorUnits(record.amount, record.currency);
+  if (amount === null) return;
+  source.transferOutMinor += amount;
+  const destination = summary.get(record.transferAccountId);
+  if (!destination) return;
+  const destinationAmount = parseMinorUnits(record.destinationAmount || record.amount, record.destinationCurrency || String(destination.row.currency));
+  if (destinationAmount !== null) destination.transferInMinor += destinationAmount;
+  if (destination.row.account_id !== source.row.account_id) destination.row.record_count = Number(destination.row.record_count) + 1;
+}
+
+function addSummaryRecord(record: LocalLedgerRecord, source: AccountSummaryAccumulator, summary: Map<string, AccountSummaryAccumulator>): void {
+  source.row.record_count = Number(source.row.record_count) + 1;
+  if (record.kind === "transfer") {
+    addSummaryTransfer(record, source, summary);
+    return;
+  }
+  const amount = parseMinorUnits(record.amount, record.currency);
+  if (amount === null) return;
+  if (record.kind === "income") source.incomeMinor += amount;
+  if (record.kind === "expense" || record.kind === "unresolved-expense") source.expenseMinor += amount;
+  if (record.kind === "refund") source.refundMinor += amount;
+  if (record.kind === "fund-addition") source.fundAdditionMinor += amount;
+  if (record.kind === "adjustment") source.adjustmentMinor += amount;
+}
+
 function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedgerRecord[]): AccountSummaryRow[] {
   const summary = new Map(accounts.map((account) => [account.id, emptyAccountSummary(account)]));
 
@@ -226,33 +256,7 @@ function createAccountSummaryRows(accounts: LocalAccount[], records: LocalLedger
       continue;
     }
 
-    source.row.record_count = Number(source.row.record_count) + 1;
-    const amount = parseMinorUnits(record.amount, record.currency);
-    if (amount === null) continue;
-
-    if (record.kind === "income") {
-      source.incomeMinor += amount;
-    } else if (record.kind === "expense" || record.kind === "unresolved-expense") {
-      source.expenseMinor += amount;
-    } else if (record.kind === "refund") {
-      source.refundMinor += amount;
-    } else if (record.kind === "fund-addition") {
-      source.fundAdditionMinor += amount;
-    } else if (record.kind === "adjustment") {
-      source.adjustmentMinor += amount;
-    } else if (record.kind === "transfer") {
-      source.transferOutMinor += amount;
-      const destination = summary.get(record.transferAccountId);
-      if (destination) {
-        const destinationAmount = parseMinorUnits(record.destinationAmount || record.amount, record.destinationCurrency || String(destination.row.currency));
-        if (destinationAmount !== null) {
-          destination.transferInMinor += destinationAmount;
-        }
-        if (destination.row.account_id !== source.row.account_id) {
-          destination.row.record_count = Number(destination.row.record_count) + 1;
-        }
-      }
-    }
+    addSummaryRecord(record, source, summary);
   }
 
   const balances = calculateAccountBalances(accounts, records);

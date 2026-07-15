@@ -81,12 +81,86 @@ function toReport(account: LocalAccount, totals: MinorReportTotals, recordCount:
   };
 }
 
+type ReportAccumulator = {
+  count: number;
+  totals: MinorReportTotals;
+};
+
+function applyStandardReportTotals(
+  source: ReportAccumulator,
+  kind: LocalLedgerRecord["kind"],
+  amount: bigint,
+): void {
+  if (kind === "income") {
+    source.totals.incomeTotal += amount;
+    source.totals.cashFlowTotal += amount;
+    return;
+  }
+  if (kind === "expense" || kind === "unresolved-expense") {
+    source.totals.expenseTotal += amount;
+    source.totals.netSpendingTotal += amount;
+    source.totals.cashFlowTotal -= amount;
+    return;
+  }
+  if (kind === "refund") {
+    source.totals.refundTotal += amount;
+    source.totals.netSpendingTotal -= amount;
+    source.totals.cashFlowTotal += amount;
+    return;
+  }
+  if (kind === "fund-addition") {
+    source.totals.fundAdditionTotal += amount;
+    source.totals.cashFlowTotal += amount;
+    return;
+  }
+  if (kind === "adjustment") {
+    source.totals.adjustmentTotal += amount;
+    source.totals.cashFlowTotal += amount;
+  }
+}
+
+function applyTransferReportTotals(
+  record: LocalLedgerRecord,
+  source: ReportAccumulator,
+  reports: Map<string, ReportAccumulator>,
+  accountCurrencies: Map<string, string>,
+  sourceMinor: bigint,
+): void {
+  source.totals.transferOutTotal += sourceMinor;
+  source.totals.cashFlowTotal -= sourceMinor;
+
+  const destination = reports.get(record.transferAccountId);
+  if (!destination) return;
+  const destinationCurrency = record.destinationCurrency || accountCurrencies.get(record.transferAccountId) || record.currency;
+  const destinationMinor = parseMinorUnits(record.destinationAmount || record.amount, destinationCurrency);
+  if (destinationMinor === null) return;
+  destination.totals.transferInTotal += destinationMinor;
+  destination.totals.cashFlowTotal += destinationMinor;
+  if (record.transferAccountId !== record.accountId) destination.count += 1;
+}
+
+function applyReportRecord(
+  record: LocalLedgerRecord,
+  source: ReportAccumulator,
+  reports: Map<string, ReportAccumulator>,
+  accountCurrencies: Map<string, string>,
+): void {
+  const sourceMinor = parseMinorUnits(record.amount, record.currency);
+  if (sourceMinor === null) return;
+  source.count += 1;
+  if (record.kind === "transfer") {
+    applyTransferReportTotals(record, source, reports, accountCurrencies, sourceMinor);
+    return;
+  }
+  applyStandardReportTotals(source, record.kind, sourceMinor);
+}
+
 export function calculateAccountReports(
   accounts: LocalAccount[],
   records: LocalLedgerRecord[],
 ): AccountReport[] {
   const accountCurrencies = new Map(accounts.map((account) => [account.id, account.currency]));
-  const reports = new Map(accounts.map((account) => [account.id, {
+  const reports = new Map<string, ReportAccumulator>(accounts.map((account) => [account.id, {
     count: 0,
     totals: emptyMinorTotals(),
   }]));
@@ -101,53 +175,7 @@ export function calculateAccountReports(
       continue;
     }
 
-    const sourceMinor = parseMinorUnits(record.amount, record.currency);
-    if (sourceMinor === null) continue;
-    source.count += 1;
-
-    switch (record.kind) {
-      case "income":
-        source.totals.incomeTotal += sourceMinor;
-        source.totals.cashFlowTotal += sourceMinor;
-        break;
-      case "expense":
-      case "unresolved-expense":
-        source.totals.expenseTotal += sourceMinor;
-        source.totals.netSpendingTotal += sourceMinor;
-        source.totals.cashFlowTotal -= sourceMinor;
-        break;
-      case "refund":
-        source.totals.refundTotal += sourceMinor;
-        source.totals.netSpendingTotal -= sourceMinor;
-        source.totals.cashFlowTotal += sourceMinor;
-        break;
-      case "fund-addition":
-        source.totals.fundAdditionTotal += sourceMinor;
-        source.totals.cashFlowTotal += sourceMinor;
-        break;
-      case "adjustment":
-        source.totals.adjustmentTotal += sourceMinor;
-        source.totals.cashFlowTotal += sourceMinor;
-        break;
-      case "transfer": {
-        source.totals.transferOutTotal += sourceMinor;
-        source.totals.cashFlowTotal -= sourceMinor;
-        const destination = reports.get(record.transferAccountId);
-        if (destination) {
-          const destinationCurrency = record.destinationCurrency || accountCurrencies.get(record.transferAccountId) || record.currency;
-          const destinationMinor = parseMinorUnits(record.destinationAmount || record.amount, destinationCurrency);
-          if (destinationMinor === null) break;
-          destination.totals.transferInTotal += destinationMinor;
-          destination.totals.cashFlowTotal += destinationMinor;
-          if (record.transferAccountId !== record.accountId) {
-            destination.count += 1;
-          }
-        }
-        break;
-      }
-      default:
-        break;
-    }
+    applyReportRecord(record, source, reports, accountCurrencies);
   }
 
   const balances = calculateAccountBalances(accounts, records);
