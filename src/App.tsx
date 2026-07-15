@@ -88,6 +88,56 @@ function localDateTime(): string {
   return `${localDate()}T12:00`;
 }
 
+function countLabel(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function metricValue(count: number, noun: string, empty: string): string {
+  return count > 0 ? `${count} ${noun}` : empty;
+}
+
+function metricDetail(count: number, populated: string, empty: string): string {
+  return count > 0 ? populated : empty;
+}
+
+function timePrecisionLabel(precision: DraftForm["timePrecision"]): string {
+  if (precision === "day") return "Day";
+  if (precision === "month") return "Month";
+  return "Period";
+}
+
+function selectedRefundIdsFor(form: DraftForm): string[] {
+  if (form.refundLinkedRecordIds?.length) return form.refundLinkedRecordIds;
+  return form.refundLinkedRecordId ? [form.refundLinkedRecordId] : [];
+}
+
+function missingExpenseFieldPatch(field: "counterparty" | "itemName", missing: boolean): Partial<DraftForm> {
+  if (field === "counterparty") {
+    return { counterpartyMissing: missing, counterparty: missing ? missingCounterpartyLabel : "" };
+  }
+  return { itemNameMissing: missing, itemName: missing ? missingItemNameLabel : "" };
+}
+
+function importStatus(kind: "confirmed" | "kept-separate" | "merged", imported: boolean): ImportReviewItem["status"] {
+  return imported ? kind : "failed";
+}
+
+function exportStageMessage(stage: "preparing" | "building" | "complete"): string {
+  if (stage === "complete") return "ZIP export ready.";
+  if (stage === "building") return "Building ZIP export...";
+  return "Preparing ZIP export...";
+}
+
+function duplicateCandidateName(duplicate: ImportDuplicate): string {
+  return duplicate.candidateType === "existing-record"
+    ? duplicate.candidateId
+    : `row ${duplicate.candidateRowNumber}`;
+}
+
+function duplicateCandidateLabel(duplicate: ImportDuplicate): string {
+  return `${duplicateCandidateName(duplicate)}: ${duplicate.reason}`;
+}
+
 function downloadTextFile(content: string, fileName: string, mimeType: string): void {
   const urlApi = window.URL;
   if (!urlApi.createObjectURL) {
@@ -1055,7 +1105,7 @@ function SignedOutShell({ authState, authMessage, configurationError, onSignIn }
           </p>
         </div>
         {authControl}
-        {authMessage ? <p className="auth-message" role={authState === "auth-error" ? "alert" : "status"}>{authMessage}</p> : null}
+        {authMessage ? <p className="auth-message" aria-live={authState === "auth-error" ? "assertive" : "polite"}>{authMessage}</p> : null}
       </section>
     </main>
   );
@@ -1293,12 +1343,12 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
   return (
     <div className="route-stack">
       <section className="summary-grid">
-        <EmptyMetric label="Account summary" value={accountBalances.length > 0 ? `${accountBalances.length} account${accountBalances.length === 1 ? "" : "s"}` : "No balances yet"} detail={accountDetail} />
-        <EmptyMetric label="Ledger records" value={recordCount > 0 ? `${recordCount} saved` : "No records"} detail={recordCount > 0 ? "Official local records are ready in Ledger." : "Your confirmed transactions will appear here."} />
+        <EmptyMetric label="Account summary" value={metricValue(accountBalances.length, "account", "No balances yet")} detail={accountDetail} />
+        <EmptyMetric label="Ledger records" value={metricValue(recordCount, "saved", "No records")} detail={metricDetail(recordCount, "Official local records are ready in Ledger.", "Your confirmed transactions will appear here.")} />
         <EmptyMetric
           label="Draft reviews"
-          value={draftCount > 0 ? `${draftCount} waiting` : "None"}
-          detail={draftCount > 0 ? "Drafts are ready to review." : "Scans and imports will wait for review."}
+          value={metricValue(draftCount, "waiting", "None")}
+          detail={metricDetail(draftCount, "Drafts are ready to review.", "Scans and imports will wait for review.")}
         />
       </section>
       {syncIssues.length > 0 ? (
@@ -1333,7 +1383,7 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
               <div className="report-row" key={report.id}>
                 <div>
                   <strong>{report.name}</strong>
-                  <span>{report.currency} · {report.recordCount} record{report.recordCount === 1 ? "" : "s"}</span>
+                  <span>{report.currency} · {countLabel(report.recordCount, "record")}</span>
                 </div>
                 <dl>
                   <div><dt>Balance</dt><dd>{formatAccountBalance(report.closingBalance, report.currency)}</dd></div>
@@ -2375,8 +2425,31 @@ function ManualLedgerMoneyFields({
       {isTransfer && form.transferMode === "cross-currency" ? <><AmountField id="entry-destination-amount" label="Destination amount" required value={form.destinationAmount} onChange={(value) => updateForm("destinationAmount", value)} /><div className="form-field"><span>Destination currency</span><output className="derived-value">{form.destinationCurrency}</output></div></> : null}
       {isTransfer ? <label className="full-span checkbox-field"><input type="checkbox" checked={form.feeEnabled} onChange={(event) => setForm((current) => ({ ...current, feeEnabled: event.target.checked }))} /><span>Add transfer fee</span></label> : null}
       {isTransfer && form.feeEnabled ? <FeeFields form={form} accounts={accounts} quickAccountField={quickAccountField} quickAccountProps={quickAccountProps} onBeginQuickAccountSetup={beginQuickAccountSetup} onSelectFeeAccount={selectFeeAccount} onUpdateForm={updateForm} /> : null}
-      {form.kind === "refund" ? <><label className="full-span"><span>Refund reason</span><textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} /></label>{refundDifferenceNeedsClassification ? <label className="full-span warning-field"><span>{refundDifferenceLabel}</span><select aria-label={refundDifferenceLabel} value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}><option value="unclassified">Choose a classification</option><option value="income">Classify excess as income</option><option value="negative-expense">Classify excess as additional negative expense</option><option value="exchange_difference">Classify as exchange difference</option></select><small>{selectedRefundHasDifferentCurrency ? "The linked expense uses another currency; classify the difference before saving this payback." : "This payback exceeds the linked expense and needs an explicit classification."}</small></label> : null}</> : null}
+      {form.kind === "refund" ? <RefundFields form={form} selectedRefundHasDifferentCurrency={selectedRefundHasDifferentCurrency} refundDifferenceNeedsClassification={refundDifferenceNeedsClassification} refundDifferenceLabel={refundDifferenceLabel} updateForm={updateForm} /> : null}
       {form.kind === "adjustment" ? <label className="full-span"><span>Adjustment reason</span><textarea required value={form.reason} onChange={(event) => updateForm("reason", event.target.value)} /></label> : null}
+    </>
+  );
+}
+
+function RefundFields({ form, selectedRefundHasDifferentCurrency, refundDifferenceNeedsClassification, refundDifferenceLabel, updateForm }: Readonly<Pick<ManualLedgerMoneyFieldsProps, "form" | "selectedRefundHasDifferentCurrency" | "refundDifferenceNeedsClassification" | "refundDifferenceLabel" | "updateForm">>) {
+  const differenceDescription = selectedRefundHasDifferentCurrency
+    ? "The linked expense uses another currency; classify the difference before saving this payback."
+    : "This payback exceeds the linked expense and needs an explicit classification.";
+  return (
+    <>
+      <label className="full-span"><span>Refund reason</span><textarea required value={form.refundReason} onChange={(event) => updateForm("refundReason", event.target.value)} /></label>
+      {refundDifferenceNeedsClassification ? (
+        <label className="full-span warning-field">
+          <span>{refundDifferenceLabel}</span>
+          <select aria-label={refundDifferenceLabel} value={form.refundExcessHandling} onChange={(event) => updateForm("refundExcessHandling", event.target.value as DraftForm["refundExcessHandling"])}>
+            <option value="unclassified">Choose a classification</option>
+            <option value="income">Classify excess as income</option>
+            <option value="negative-expense">Classify excess as additional negative expense</option>
+            <option value="exchange_difference">Classify as exchange difference</option>
+          </select>
+          <small>{differenceDescription}</small>
+        </label>
+      ) : null}
     </>
   );
 }
@@ -2429,7 +2502,7 @@ function ManualLedgerTimingFields({
               {(["day", "month", "period"] as const).map((precision) => (
                 <label className={form.timePrecision === precision ? "active" : ""} key={precision}>
                   <input checked={form.timePrecision === precision} name="time-precision" type="radio" value={precision} onChange={() => setTimePrecision(precision)} />
-                  <span>{precision === "day" ? "Day" : precision === "month" ? "Month" : "Period"}</span>
+                  <span>{timePrecisionLabel(precision)}</span>
                 </label>
               ))}
             </div>
@@ -2743,7 +2816,7 @@ function CapturePage({
   const itemSuggestions = form.itemName.trim()
     ? records.filter((record) => record.recordState !== "voided" && record.itemName && record.itemName.toLocaleLowerCase().includes(form.itemName.trim().toLocaleLowerCase())).slice(0, 5)
     : [];
-  const selectedRefundIds = form.refundLinkedRecordIds?.length ? form.refundLinkedRecordIds : (form.refundLinkedRecordId ? [form.refundLinkedRecordId] : []);
+  const selectedRefundIds = selectedRefundIdsFor(form);
   const selectedRefundRecords = refundableRecords.filter((record) => selectedRefundIds.includes(record.id));
   const selectedRefundHasDifferentCurrency = selectedRefundRecords.some((record) => record.currency !== form.currency);
   const linkedRefundAmount = selectedRefundRecords
@@ -2873,9 +2946,7 @@ function CapturePage({
     setSavedMessage("");
     setForm((current) => ({
       ...current,
-      ...(field === "counterparty"
-        ? { counterpartyMissing: missing, counterparty: missing ? missingCounterpartyLabel : "" }
-        : { itemNameMissing: missing, itemName: missing ? missingItemNameLabel : "" }),
+      ...missingExpenseFieldPatch(field, missing),
     }));
   };
 
@@ -3193,11 +3264,11 @@ function MealCaptureForm({
       <MealPhotoPicker onOpenCamera={onOpenCamera} onAppendPhotos={onAppendPhotos} />
       {isCameraOpen ? <MealCameraDialog cameraVideoRef={cameraVideoRef} onCapturePhoto={onCapturePhoto} onStopCamera={onStopCamera} /> : null}
       {cameraError ? <p className="quick-account-error" role="alert">{cameraError}</p> : null}
-      {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
+      {mealPhotoFiles.length > 0 ? <p className="field-help">{countLabel(mealPhotoFiles.length, "photo")} ready for this meal. You can add more before saving.</p> : null}
       <button className="primary-action align-start" type="submit">Save meal</button>
       {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
       {mealSavedMessage ? <p className="auth-message" aria-live="polite">{mealSavedMessage}</p> : null}
-      {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
+      {uploadQueue.length > 0 ? <p className="field-help">{countLabel(uploadQueue.length, "media file")} queued locally for a future upload.</p> : null}
     </form>
   );
 }
@@ -3325,11 +3396,11 @@ function ScanCapturePanel({
           <span>Scan images</span>
           <input accept="image/*" multiple type="file" onChange={(event) => onScanFilesChange(Array.from(event.target.files ?? []))} />
         </label>
-        {scanFiles.length > 0 ? <p className="field-help">Selected {scanFiles.length} image{scanFiles.length === 1 ? "" : "s"}.</p> : null}
+        {scanFiles.length > 0 ? <p className="field-help">Selected {countLabel(scanFiles.length, "image")}.</p> : null}
         <button className="primary-action align-start" type="submit">Save scan drafts</button>
         {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
         {scanSavedMessage ? <p className="auth-message" aria-live="polite">{scanSavedMessage}</p> : null}
-        {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
+        {uploadQueue.length > 0 ? <p className="field-help">{countLabel(uploadQueue.length, "media file")} queued locally for a future upload.</p> : null}
       </form>
       <div className="source-list" aria-label="Temporary scans">
         {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => (
@@ -3361,7 +3432,7 @@ function SavedRecordPanel({ recordCount, navigate }: Readonly<{ recordCount: num
   if (recordCount === 0) return null;
   return (
     <Panel title="Record saved" eyebrow="Local ledger">
-      <p className="panel-copy">{recordCount} official local record{recordCount === 1 ? "" : "s"} stored on this device.</p>
+      <p className="panel-copy">{countLabel(recordCount, "official local record")} stored on this device.</p>
       <button className="secondary-action align-start" type="button" onClick={() => navigate(navItemFor("ledger"))}>
         Open Ledger
       </button>
@@ -3602,7 +3673,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     }
 
     const imported = onImportRecord(item.normalized, item.reviewId);
-    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: imported ? "confirmed" : "failed" } : candidate));
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: importStatus("confirmed", imported) } : candidate));
     setImportMessage(imported ? `Imported row ${item.rowNumber} into the local ledger.` : `Row ${item.rowNumber} could not be imported and remains in review.`);
   };
 
@@ -3612,7 +3683,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     }
 
     const imported = onImportRecord(item.normalized, item.reviewId);
-    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: imported ? "kept-separate" : "failed" } : candidate));
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: importStatus("kept-separate", imported) } : candidate));
     setImportMessage(imported ? `Kept row ${item.rowNumber} as a separate local ledger record.` : `Row ${item.rowNumber} could not be kept and remains in review.`);
   };
 
@@ -3623,7 +3694,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     }
 
     setImportItems((current) => current.map((reviewItem) => reviewItem.reviewId === item.reviewId ? { ...reviewItem, status: "linked" } : reviewItem));
-    setImportMessage(`Linked row ${item.rowNumber} to ${candidate.candidateType === "existing-record" ? candidate.candidateId : `row ${candidate.candidateRowNumber}`} without changing the ledger.`);
+    setImportMessage(`Linked row ${item.rowNumber} to ${duplicateCandidateName(candidate)} without changing the ledger.`);
   };
 
   const mergeIntoDraft = (item: ImportReviewItem) => {
@@ -3632,7 +3703,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     }
 
     const merged = onMergeImportDraft(item.normalized, item.reviewId);
-    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: merged ? "merged" : "failed" } : candidate));
+    setImportItems((current) => current.map((candidate) => candidate.reviewId === item.reviewId ? { ...candidate, status: importStatus("merged", merged) } : candidate));
     setImportMessage(merged ? `Moved row ${item.rowNumber} into local review drafts without changing the ledger.` : `Row ${item.rowNumber} could not become a draft and remains in review.`);
   };
 
@@ -3652,7 +3723,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     try {
       const bundle = await createMultiTableExportWithProgress(accounts, records, (percentage, stage) => {
         setExportProgress(percentage);
-        setExportMessage(stage === "complete" ? "ZIP export ready." : stage === "building" ? "Building ZIP export..." : "Preparing ZIP export...");
+        setExportMessage(exportStageMessage(stage));
       });
       downloadBinaryFile(bundle.zip, "mealledger-export.zip", "application/zip");
     } finally {
@@ -3691,7 +3762,7 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
                 <span>{item.normalized.date || item.normalized.period_start || "No date"} · {item.normalized.account || "No account"} · {item.normalized.amount || "No amount"}</span>
                 {item.errors.length > 0 ? <span>{item.errors.join(" ")}</span> : null}
                 {item.aliasReview ? <span>{item.aliasReview}</span> : null}
-                {item.duplicates.length > 0 ? <span>Duplicate candidate: {item.duplicates.map((duplicate) => `${duplicate.candidateType === "existing-record" ? duplicate.candidateId : `row ${duplicate.candidateRowNumber}`}: ${duplicate.reason}`).join("; ")}</span> : null}
+                {item.duplicates.length > 0 ? <span>Duplicate candidate: {item.duplicates.map(duplicateCandidateLabel).join("; ")}</span> : null}
                 {item.status !== "pending" ? <span>Status: {item.status}</span> : null}
               </div>
                 <div className="record-actions">
