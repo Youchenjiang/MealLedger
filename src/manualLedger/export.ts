@@ -158,6 +158,12 @@ function recordsForKind(records: LocalLedgerRecord[], kind: LocalLedgerRecord["k
   return activeRecords(records).filter((record) => record.kind === kind);
 }
 
+function compareStrings(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
 type AccountSummaryAccumulator = {
   row: AccountSummaryRow;
   incomeMinor: bigint;
@@ -353,7 +359,7 @@ export function createMultiTableExport(
     "ledger/adjustments.csv": recordsForKind(records, "adjustment"),
   };
   const summaryRows = createAccountSummaryRows(accounts, records);
-  const dates = active.map((record) => record.localDate).sort((left, right) => left.localeCompare(right));
+  const dates = active.map((record) => record.localDate).sort(compareStrings);
   const recordCounts = Object.fromEntries(Object.entries(byPath).map(([path, rows]) => [path, rows.length]));
   recordCounts["reports/account_summary.csv"] = summaryRows.length;
   const manifest = {
@@ -366,7 +372,7 @@ export function createMultiTableExport(
     currency_modes: [...new Set([
       ...accounts.map((account) => account.currency),
       ...active.flatMap((record) => [record.currency, record.destinationCurrency].filter(Boolean)),
-    ])].sort((left, right) => left.localeCompare(right)),
+    ])].sort(compareStrings),
     files: ["manifest.json", ...multiTablePaths],
     record_counts: recordCounts,
   };

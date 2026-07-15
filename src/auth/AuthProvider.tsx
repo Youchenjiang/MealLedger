@@ -29,6 +29,13 @@ function useStableEffect(effect: EffectCallback, dependencies: DependencyList): 
 
 type SessionLike = { user?: { id?: string } } | null;
 
+function initialAuthState(): AuthState {
+  if (isLocalDevelopmentMode) {
+    return "signed-out";
+  }
+  return configurationError ? "auth-error" : "loading";
+}
+
 function applySession(
   session: SessionLike,
   setUserId: Dispatch<SetStateAction<string>>,
@@ -39,7 +46,7 @@ function applySession(
 }
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
-  const [state, setState] = useState<AuthState>(isLocalDevelopmentMode ? "signed-out" : configurationError ? "auth-error" : "loading");
+  const [state, setState] = useState<AuthState>(initialAuthState);
   const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState(configurationError ? configurationMessage : "");

@@ -1378,11 +1378,11 @@ function ConfirmActionButton({ label, message, onConfirm }: Readonly<{
   }
 
   return (
-    <span className="confirm-action" role="group" aria-label={message}>
+    <div className="confirm-action" aria-label={message}>
       <span>{message}</span>
       <button className="text-action danger-action" type="button" onClick={() => { onConfirm(); setConfirming(false); }}>Confirm</button>
       <button className="text-action" type="button" onClick={() => setConfirming(false)}>Cancel</button>
-    </span>
+    </div>
   );
 }
 
@@ -1566,7 +1566,7 @@ function LedgerPage({
           ))}
         </section>
       ) : null}
-      {draftMessage ? <p className="inline-message" role="status">{draftMessage}</p> : null}
+        {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
       <section className="table-card" aria-label="Ledger table fields">
         <div className="table-row table-head">
           {ledgerColumns.map((column) => (
@@ -1847,7 +1847,7 @@ function QuickAccountSetup({
 }>) {
   return (
     <div className="quick-account-backdrop">
-    <section className="quick-account" aria-label="Add account" role="dialog" aria-modal="true">
+    <dialog className="quick-account" aria-label="Add account" open>
       <QuickAccountHeading />
       <QuickAccountFields
         accountName={accountName}
@@ -1865,7 +1865,7 @@ function QuickAccountSetup({
       />
       <QuickAccountActions onConfirm={onConfirm} onCancel={onCancel} />
       {error ? <p className="quick-account-error" role="alert">{error}</p> : null}
-    </section>
+    </dialog>
     </div>
   );
 }
@@ -2517,7 +2517,7 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
                   addQuickSource={addQuickSource}
                 />
               ) : (
-                <div className="entry-details-locked full-span" role="status" aria-live="polite">
+                <div className="entry-details-locked full-span" aria-live="polite">
                   <strong>Select an account to continue</strong>
                   <span>Choose an existing account or use the plus button above. The record fields will appear next.</span>
                 </div>
@@ -2562,18 +2562,18 @@ function ManualLedgerForm(props: Readonly<ManualLedgerFormProps>) {
                 </fieldset>
               ) : null}
               {formError ? <p className="form-error full-span" role="alert">{formError}</p> : null}
-              {savedMessage ? <p className="form-success full-span" role="status">{savedMessage}</p> : null}
+              {savedMessage ? <p className="form-success full-span" aria-live="polite">{savedMessage}</p> : null}
               {hasSelectedAccount ? (
                 <>
                   {showCancelChoices ? (
-                    <section className="cancel-choice full-span" aria-label="Cancel entry" role="dialog">
+                    <dialog className="cancel-choice full-span" aria-label="Cancel entry" open>
                       <strong>What should happen to this entry?</strong>
                       <div className="quick-account-actions">
                         <button className="danger-action" type="button" onClick={resetEntry}>Discard changes</button>
                         <button className="secondary-action" type="button" onClick={keepEntryAsDraft}>Keep as draft</button>
                         <button className="quiet-action" type="button" onClick={() => setShowCancelChoices(false)}>Continue editing</button>
                       </div>
-                    </section>
+                    </dialog>
                   ) : null}
                   <div className="quick-account-actions full-span">
                     <button className="quiet-action" type="button" onClick={() => hasUnsavedChanges ? setShowCancelChoices(true) : resetEntry()}>Cancel entry</button>
@@ -2590,7 +2590,7 @@ function ManualLedgerPanel(props: Readonly<ManualLedgerFormProps>) {
   return (
     <Panel key="manual-ledger" title="Manual ledger record" eyebrow="Official local record">
       {accounts.length === 0 ? (
-        <section className="manual-empty-state" aria-label="Account required" role="status">
+        <section className="manual-empty-state" aria-label="Account required" aria-live="polite">
           <span className="eyebrow">Account required</span>
           <h3>Create your first account</h3>
           <p>Your ledger needs a wallet, bank account, card, or other balance source before a record can be saved.</p>
@@ -3196,7 +3196,7 @@ function MealCaptureForm({
       {mealPhotoFiles.length > 0 ? <p className="field-help">{mealPhotoFiles.length} photo{mealPhotoFiles.length === 1 ? "" : "s"} ready for this meal. You can add more before saving.</p> : null}
       <button className="primary-action align-start" type="submit">Save meal</button>
       {mealError ? <p className="quick-account-error" role="alert">{mealError}</p> : null}
-      {mealSavedMessage ? <p className="auth-message" role="status">{mealSavedMessage}</p> : null}
+      {mealSavedMessage ? <p className="auth-message" aria-live="polite">{mealSavedMessage}</p> : null}
       {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
     </form>
   );
@@ -3216,10 +3216,10 @@ function MealPhotoPicker({ onOpenCamera, onAppendPhotos }: Readonly<{ onOpenCame
 
 function MealCameraDialog({ cameraVideoRef, onCapturePhoto, onStopCamera }: Readonly<{ cameraVideoRef: React.RefObject<HTMLVideoElement>; onCapturePhoto: () => void; onStopCamera: () => void }>) {
   return (
-    <div className="camera-capture-dialog" role="dialog" aria-modal="true" aria-label="Take meal photo">
+    <dialog className="camera-capture-dialog" aria-label="Take meal photo" open>
       <video className="camera-preview" ref={cameraVideoRef} autoPlay playsInline muted aria-label="Camera preview" />
       <div className="camera-capture-actions"><button className="primary-action" type="button" onClick={onCapturePhoto}>Capture photo</button><button className="secondary-action" type="button" onClick={onStopCamera}>Cancel</button></div>
-    </div>
+    </dialog>
   );
 }
 
@@ -3328,7 +3328,7 @@ function ScanCapturePanel({
         {scanFiles.length > 0 ? <p className="field-help">Selected {scanFiles.length} image{scanFiles.length === 1 ? "" : "s"}.</p> : null}
         <button className="primary-action align-start" type="submit">Save scan drafts</button>
         {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
-        {scanSavedMessage ? <p className="auth-message" role="status">{scanSavedMessage}</p> : null}
+        {scanSavedMessage ? <p className="auth-message" aria-live="polite">{scanSavedMessage}</p> : null}
         {uploadQueue.length > 0 ? <p className="field-help">{uploadQueue.length} media file{uploadQueue.length === 1 ? "" : "s"} queued locally for a future upload.</p> : null}
       </form>
       <div className="source-list" aria-label="Temporary scans">

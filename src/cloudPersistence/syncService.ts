@@ -62,6 +62,22 @@ function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedger
 type SyncState = SyncLocalChangesResult;
 type SyncContext = { input: SyncLocalChangesInput; references: CloudReferenceMap };
 
+function markMediaSynced(media: UploadQueueItem[], id: string): UploadQueueItem[] {
+  return media.map((candidate) => candidate.id === id ? { ...candidate, metadataStatus: "synced" as const } : candidate);
+}
+
+function markScansSynced(scans: TemporaryScan[], id: string): TemporaryScan[] {
+  return scans.map((candidate) => candidate.id === id ? { ...candidate, cloudStatus: "synced" as const } : candidate);
+}
+
+function markMealsSynced(meals: MealEntry[], id: string): MealEntry[] {
+  return meals.map((candidate) => candidate.id === id ? { ...candidate, status: "synced" as const } : candidate);
+}
+
+function markRecordsSynced(records: LocalLedgerRecord[], id: string): LocalLedgerRecord[] {
+  return records.map((candidate) => candidate.id === id ? { ...candidate, status: "synced" as const } : candidate);
+}
+
 function applyPersistenceResult(
   queue: CloudSyncQueueItem[],
   item: CloudSyncQueueItem,
@@ -89,9 +105,7 @@ async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, sta
   const media = input.media.find((candidate) => candidate.id === item.targetId);
   if (!media) return applyItemFailure(state, item, "Local media metadata is no longer available.", input.now);
   const result = await persistMediaAsset(input.client, mapMediaAsset(media, input.userId, input.now));
-  const nextMedia = result.ok
-    ? state.media.map((candidate) => candidate.id === media.id ? { ...candidate, metadataStatus: "synced" as const } : candidate)
-    : state.media;
+  const nextMedia = result.ok ? markMediaSynced(state.media, media.id) : state.media;
   return { ...state, media: nextMedia, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
@@ -103,9 +117,7 @@ async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, stat
     ? [mapTemporaryScanMediaLink(scan, input.userId)]
     : [];
   const result = await persistSourcePayload(input.client, mapTemporaryScan(scan, input.userId), mediaLink);
-  const nextScans = result.ok
-    ? state.scans.map((candidate) => candidate.id === scan.id ? { ...candidate, cloudStatus: "synced" as const } : candidate)
-    : state.scans;
+  const nextScans = result.ok ? markScansSynced(state.scans, scan.id) : state.scans;
   return { ...state, scans: nextScans, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
@@ -116,9 +128,7 @@ async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, stat
   const mappedMeal = mapMealEntry(meal, input.userId, references);
   if (!mappedMeal.ok) return applyItemFailure(state, item, mappedMeal.issues.map((entry) => entry.message).join(" "), input.now);
   const result = await persistMealBundle(input.client, mappedMeal.value);
-  const nextMeals = result.ok
-    ? state.meals.map((candidate) => candidate.id === meal.id ? { ...candidate, status: "synced" as const } : candidate)
-    : state.meals;
+  const nextMeals = result.ok ? markMealsSynced(state.meals, meal.id) : state.meals;
   return { ...state, meals: nextMeals, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
@@ -138,9 +148,7 @@ async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, st
     requestHash: item.requestHash,
     expiresAt: new Date(new Date(input.now).getTime() + 180 * 24 * 60 * 60 * 1000).toISOString(),
   }, mapped.value);
-  const nextRecords = result.ok
-    ? state.records.map((candidate) => candidate.id === record.id ? { ...candidate, status: "synced" as const } : candidate)
-    : state.records;
+  const nextRecords = result.ok ? markRecordsSynced(state.records, record.id) : state.records;
   return { ...state, records: nextRecords, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 

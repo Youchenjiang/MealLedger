@@ -20,6 +20,16 @@ function isUuid(value: string): boolean {
   return uuidPattern.test(value);
 }
 
+function uploadStatus(status: UploadQueueItem["status"]): "failed" | "uploaded" | "queued" {
+  if (status === "failed") {
+    return "failed";
+  }
+  if (status === "uploaded") {
+    return "uploaded";
+  }
+  return "queued";
+}
+
 export function stableCloudUuid(value: string): string {
   const seeds = [2166136261, 2246822519, 3266489917, 668265263];
   const parts = seeds.map((seed) => {
@@ -109,7 +119,7 @@ export function mapMediaAsset(item: UploadQueueItem, userId: string, now: string
     media_kind: kind,
     retention_kind: temporary ? "temporary-scan" : "permanent",
     expires_at: temporary ? new Date(new Date(now).getTime() + 24 * 60 * 60 * 1000).toISOString() : null,
-    upload_status: item.status === "failed" ? "failed" : item.status === "uploaded" ? "uploaded" : "queued",
+    upload_status: uploadStatus(item.status),
   };
 }
 
@@ -298,7 +308,10 @@ function mapRefundLinks(
     return issues.length > 0 ? { ok: false, issues } : { ok: true, value: rows };
   }
 
-  const linkedIds = record.refundLinkedRecordIds ?? (record.refundLinkedRecordId ? [record.refundLinkedRecordId] : []);
+  const linkedIds = record.refundLinkedRecordIds ?? [];
+  if (linkedIds.length === 0 && record.refundLinkedRecordId) {
+    linkedIds.push(record.refundLinkedRecordId);
+  }
   if (linkedIds.length !== 1) {
     return { ok: false, issues: [issue("missing-refund-allocation", "refundLinkedRecordIds", "Multiple refund links require explicit per-record amounts.")] };
   }
