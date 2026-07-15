@@ -51,7 +51,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState(configurationError ? configurationMessage : "");
 
-  useStableEffect(function initializeAuth() {
+  useStableEffect(() => {
     if (isLocalDevelopmentMode || !supabase) {
       return undefined;
     }
@@ -77,10 +77,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       handleSession(session);
     });
 
-    function cleanupAuthSubscription(): void {
+    const cleanupAuthSubscription = (): void => {
       mounted = false;
       authStateChange.data.subscription.unsubscribe();
-    }
+    };
     return cleanupAuthSubscription;
   }, []);
 
