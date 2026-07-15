@@ -1,6 +1,6 @@
 export type MagicLinkClient = {
   auth: {
-    signInWithOtp: (options: { email: string; options: { emailRedirectTo: string } }) => Promise<{ error: unknown | null }>;
+    signInWithOtp: (options: { email: string; options: { emailRedirectTo: string } }) => Promise<{ error: unknown }>;
   };
 };
 

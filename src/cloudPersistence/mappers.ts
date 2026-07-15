@@ -35,7 +35,7 @@ export function stableCloudUuid(value: string): string {
   const parts = seeds.map((seed) => {
     let hash = seed;
     for (const character of value) {
-      hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+      hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0;
     }
     return hash.toString(16).padStart(8, "0");
   });
@@ -254,9 +254,7 @@ function mapTransferDetails(
     "destination_amount",
     true,
   );
-  const feeId = feeLedgerRecordId
-    ? ledgerReference(references.ledgerRecordIds, feeLedgerRecordId, userId, "fee_ledger_record_id")
-    : undefined;
+  const feeId = feeLedgerRecordId ? ledgerReference(references.ledgerRecordIds, feeLedgerRecordId, userId, "fee_ledger_record_id") : undefined;
   const issues = collect([destinationId, destinationAmount]);
   if (feeId && !feeId.ok) issues.push(...feeId.issues);
   if (issues.length > 0 || !destinationId.ok || !destinationAmount.ok) {
@@ -270,7 +268,7 @@ function mapTransferDetails(
       destination_account_id: destinationId.value,
       destination_amount_minor: destinationAmount.value,
       destination_currency: (record.destinationCurrency || record.currency).toUpperCase(),
-      fee_ledger_record_id: feeId?.ok ? feeId.value : null,
+      fee_ledger_record_id: feeId && feeId.ok ? feeId.value : null,
     },
   };
 }
@@ -366,16 +364,18 @@ function optionalReference(
   return { ok: true, value: result.value };
 }
 
-function createLedgerRow(
-  record: LocalLedgerRecord,
-  userId: string,
-  timezone: string,
-  accountId: string,
-  amount: string,
-  categoryId: string | undefined,
-  eventId: string | undefined,
-  recordId: string,
-): CloudRow {
+type LedgerRowInput = {
+  record: LocalLedgerRecord;
+  userId: string;
+  timezone: string;
+  accountId: string;
+  amount: string;
+  categoryId: string | undefined;
+  eventId: string | undefined;
+  recordId: string;
+};
+
+function createLedgerRow({ record, userId, timezone, accountId, amount, categoryId, eventId, recordId }: LedgerRowInput): CloudRow {
   const isDay = record.timePrecision === "day";
   const source = record.kind === "income" || record.kind === "fund-addition" ? optionalText(record.counterparty) : null;
   return {
@@ -460,7 +460,16 @@ export function mapLedgerRecord(
     return { ok: false, issues };
   }
 
-  const ledgerRecord = createLedgerRow(record, userId, timezone, accountId.value, amount.value, categoryId.value, eventId.value, recordId.value);
+  const ledgerRecord = createLedgerRow({
+    record,
+    userId,
+    timezone,
+    accountId: accountId.value,
+    amount: amount.value,
+    categoryId: categoryId.value,
+    eventId: eventId.value,
+    recordId: recordId.value,
+  });
 
   const bundle: CloudRecordBundle = {
     ledgerRecord,

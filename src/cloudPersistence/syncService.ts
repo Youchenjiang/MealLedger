@@ -59,8 +59,8 @@ function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedger
   });
 }
 
-type SyncState = SyncLocalChangesResult;
 type SyncContext = { input: SyncLocalChangesInput; references: CloudReferenceMap };
+
 
 function markMediaSynced(media: UploadQueueItem[], id: string): UploadQueueItem[] {
   return media.map((candidate) => candidate.id === id ? { ...candidate, metadataStatus: "synced" as const } : candidate);
@@ -88,11 +88,11 @@ function applyPersistenceResult(
   return markCloudSyncFailure(queue, item.id, result.failure.message, result.failure.retryable, now, result.failure.code === "conflict" ? "conflict" : undefined);
 }
 
-function applyItemFailure(state: SyncState, item: CloudSyncQueueItem, message: string, now: string, retryable = false): SyncState {
+function applyItemFailure(state: SyncLocalChangesResult, item: CloudSyncQueueItem, message: string, now: string, retryable = false): SyncLocalChangesResult {
   return { ...state, queue: markCloudSyncFailure(state.queue, item.id, message, retryable, now) };
 }
 
-async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const draft = input.drafts.find((candidate) => candidate.id === item.targetId);
   if (!draft) return applyItemFailure(state, item, "Local draft is no longer available.", input.now);
@@ -100,7 +100,7 @@ async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, sta
   return { ...state, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
-async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const media = input.media.find((candidate) => candidate.id === item.targetId);
   if (!media) return applyItemFailure(state, item, "Local media metadata is no longer available.", input.now);
@@ -109,7 +109,7 @@ async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, sta
   return { ...state, media: nextMedia, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
-async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const scan = input.scans.find((candidate) => candidate.id === item.targetId);
   if (!scan) return applyItemFailure(state, item, "Local scan metadata is no longer available.", input.now);
@@ -121,7 +121,7 @@ async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, stat
   return { ...state, scans: nextScans, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
-async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input, references } = context;
   const meal = input.meals.find((candidate) => candidate.id === item.targetId);
   if (!meal) return applyItemFailure(state, item, "Local meal metadata is no longer available.", input.now);
@@ -132,7 +132,7 @@ async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, stat
   return { ...state, meals: nextMeals, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
-async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input, references } = context;
   const record = input.records.find((candidate) => candidate.id === item.targetId);
   if (!record) return applyItemFailure(state, item, "Local record is no longer available.", input.now);
@@ -152,7 +152,7 @@ async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, st
   return { ...state, records: nextRecords, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
-async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncState): Promise<SyncState> {
+async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   if (item.target === "draft") return await syncDraftItem(item, context, state);
   if (item.target === "media") return await syncMediaItem(item, context, state);
   if (item.target === "scan") return await syncScanItem(item, context, state);
@@ -162,7 +162,7 @@ async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: S
 
 export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<SyncLocalChangesResult> {
   const pending = orderPendingSyncItems(pendingCloudSyncItems(input.queue, input.now), input.records);
-  let state: SyncState = { records: input.records, meals: input.meals, media: input.media, scans: input.scans, queue: input.queue };
+  let state: SyncLocalChangesResult = { records: input.records, meals: input.meals, media: input.media, scans: input.scans, queue: input.queue };
   if (pending.length === 0) return state;
 
   const bootstrap = await bootstrapReferences(input.referenceClient, {
