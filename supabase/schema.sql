@@ -134,12 +134,15 @@ create table public.ledger_records (
   deleted_at timestamptz,
   voided_at timestamptz,
   void_reason text,
+  replaces_record_id uuid references public.ledger_records(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (
     (kind = 'adjustment' and amount_minor <> 0)
     or (kind <> 'adjustment' and amount_minor > 0)
   ),
+  check (kind <> 'adjustment' or coalesce(length(trim(reason)), 0) > 0),
+  check (replaces_record_id is null or record_state = 'voided'),
   check (
     (time_precision = 'day' and local_date is not null)
     or (time_precision in ('month', 'period') and period_start is not null and period_end is not null and period_end >= period_start)
@@ -221,7 +224,9 @@ create table public.media_assets (
   thumbnail_object_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (storage_provider, bucket, object_key)
+  unique (storage_provider, bucket, object_key),
+  check (checksum_sha256 is null or checksum_sha256 ~ '^[0-9a-fA-F]{64}$'),
+  check (retention_kind <> 'temporary-scan' or expires_at is not null)
 );
 
 create table public.media_links (
@@ -246,7 +251,8 @@ create table public.source_payloads (
   discarded_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (octet_length(payload_json::text) <= 65536 or payload_object_key is not null)
+  check (octet_length(payload_json::text) <= 65536 or payload_object_key is not null),
+  check (source_state <> 'temporary' or expires_at is not null)
 );
 
 create table public.drafts (
@@ -379,6 +385,39 @@ $$;
 create trigger ledger_currency_matches_account
 before insert or update on public.ledger_records
 for each row execute function public.validate_ledger_currency();
+
+create or replace function public.validate_ledger_replacement()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  replacement_owner uuid;
+begin
+  if new.replaces_record_id is null then
+    return new;
+  end if;
+
+  if new.replaces_record_id = new.id then
+    raise exception 'a ledger record cannot replace itself';
+  end if;
+
+  select user_id into replacement_owner
+  from public.ledger_records
+  where id = new.replaces_record_id;
+
+  if replacement_owner is null or replacement_owner <> new.user_id then
+    raise exception 'replacement ledger record must belong to the same user';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger ledger_replacement_valid
+before insert or update of replaces_record_id, user_id on public.ledger_records
+for each row execute function public.validate_ledger_replacement();
 
 create or replace function public.validate_transfer_details()
 returns trigger
@@ -567,6 +606,8 @@ declare
   request_action text := p_request->>'action_type';
   request_expires timestamptz := (p_request->>'expires_at')::timestamptz;
   existing_hash text;
+  existing_expires timestamptz;
+  existing_response jsonb;
   existing_version integer;
   desired_version integer := (p_ledger_record->>'version')::integer;
   record_id uuid := (p_ledger_record->>'id')::uuid;
@@ -578,13 +619,24 @@ begin
     raise exception 'bundle user does not match authenticated user' using errcode = '42501';
   end if;
 
-  select request_hash into existing_hash
+  select request_hash, expires_at, response_json
+    into existing_hash, existing_expires, existing_response
   from public.idempotency_keys
   where user_id = request_user and idempotency_key = request_key;
+
+  if existing_hash is not null and existing_expires <= now() and existing_response is null then
+    delete from public.idempotency_keys
+    where user_id = request_user and idempotency_key = request_key;
+    existing_hash := null;
+    existing_response := null;
+  end if;
 
   if existing_hash is not null then
     if existing_hash <> request_hash then
       raise exception 'idempotency key was reused with a different request hash' using errcode = 'ME001';
+    end if;
+    if existing_response is not null then
+      return existing_response || jsonb_build_object('replayed', true);
     end if;
     was_replayed := true;
   else
@@ -608,7 +660,7 @@ begin
       time_precision, period_start, period_end, account_id, amount_minor,
       currency, category_id, merchant_id, merchant_text, item_name, source,
       reason, event_id, source_label, note, version, idempotency_key,
-      deleted_at, voided_at, void_reason, created_at, updated_at
+      deleted_at, voided_at, void_reason, replaces_record_id, created_at, updated_at
     ) values (
       ledger_row.id, ledger_row.user_id, ledger_row.kind, ledger_row.record_state,
       ledger_row.local_date, ledger_row.local_time, ledger_row.timezone,
@@ -618,7 +670,8 @@ begin
       ledger_row.item_name, ledger_row.source, ledger_row.reason, ledger_row.event_id,
       ledger_row.source_label, ledger_row.note, ledger_row.version,
       ledger_row.idempotency_key, ledger_row.deleted_at, ledger_row.voided_at,
-      ledger_row.void_reason, ledger_row.created_at, ledger_row.updated_at
+      ledger_row.void_reason, ledger_row.replaces_record_id, ledger_row.created_at,
+      ledger_row.updated_at
     );
   elsif existing_version = desired_version - 1 then
     update public.ledger_records set
@@ -647,6 +700,7 @@ begin
       deleted_at = ledger_row.deleted_at,
       voided_at = ledger_row.voided_at,
       void_reason = ledger_row.void_reason,
+      replaces_record_id = ledger_row.replaces_record_id,
       updated_at = ledger_row.updated_at
     where id = record_id and user_id = request_user;
   end if;
@@ -681,6 +735,12 @@ begin
   from jsonb_populate_recordset(null::public.audit_events, coalesce(p_audit_events, '[]'::jsonb))
   on conflict (id) do nothing;
 
+  update public.idempotency_keys
+  set response_json = jsonb_build_object('replayed', was_replayed, 'ledger_record_id', record_id),
+      result_type = 'ledger-record',
+      result_id = record_id
+  where user_id = request_user and idempotency_key = request_key;
+
   return jsonb_build_object('replayed', was_replayed);
 end;
 $$;
@@ -696,8 +756,10 @@ create index ledger_records_user_kind_date_idx on public.ledger_records (user_id
 create index ledger_records_user_idempotency_idx on public.ledger_records (user_id, idempotency_key) where idempotency_key is not null;
 create index drafts_user_state_idx on public.drafts (user_id, state, updated_at desc);
 create index media_assets_cleanup_idx on public.media_assets (user_id, retention_kind, expires_at);
+create unique index media_assets_user_checksum_idx on public.media_assets (user_id, checksum_sha256) where checksum_sha256 is not null;
 create index media_links_target_idx on public.media_links (user_id, target_type, target_id);
 create index source_payloads_cleanup_idx on public.source_payloads (user_id, source_state, expires_at);
+create index idempotency_keys_expiry_idx on public.idempotency_keys (expires_at);
 create index audit_events_target_idx on public.audit_events (user_id, target_type, target_id, created_at desc);
 create index meal_entries_user_time_idx on public.meal_entries (user_id, meal_at desc);
 create index meal_transaction_links_record_idx on public.meal_transaction_links (user_id, ledger_record_id);
