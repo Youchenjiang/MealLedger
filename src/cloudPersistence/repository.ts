@@ -165,6 +165,71 @@ export async function persistMealBundle(
   return { ok: true, replayed: false, tables };
 }
 
+async function persistTransferBundle(
+  client: CloudPersistenceClient,
+  request: IdempotencyRequest,
+  bundle: CloudRecordBundle,
+  replayed: boolean,
+): Promise<CloudPersistenceResult> {
+  if (!client.rpc) {
+    return {
+      ok: false,
+      failure: {
+        code: "validation",
+        message: "Transfer bundles require the atomic cloud RPC boundary and were kept local-only.",
+        retryable: false,
+        table: "transfer_details",
+      },
+    };
+  }
+
+  const rpcResult = await client.rpc("persist_ledger_record_bundle", {
+    p_request: request,
+    p_ledger_record: bundle.ledgerRecord,
+    p_transfer_details: bundle.transferDetails,
+    p_refund_links: bundle.refundLinks,
+    p_ledger_record_tags: bundle.ledgerRecordTags,
+    p_audit_events: bundle.auditEvents,
+  });
+  if (rpcResult.error) return failure(rpcResult.error, "persist_ledger_record_bundle");
+
+  const rpcData = rpcResult.data;
+  const rpcReplayed = rpcData && typeof rpcData === "object" && "replayed" in rpcData ? Boolean(rpcData.replayed) : replayed;
+  const tables = ["idempotency_keys", "ledger_records", "transfer_details"];
+  if (bundle.refundLinks.length > 0) tables.push("refund_links");
+  if (bundle.ledgerRecordTags.length > 0) tables.push("ledger_record_tags");
+  if (bundle.auditEvents.length > 0) tables.push("audit_events");
+  return { ok: true, replayed: rpcReplayed, tables };
+}
+
+async function persistRecordChildren(
+  client: CloudPersistenceClient,
+  bundle: CloudRecordBundle,
+  tables: string[],
+): Promise<CloudPersistenceFailure | null> {
+  if (bundle.transferDetails) {
+    const error = await upsert(client, "transfer_details", bundle.transferDetails, "ledger_record_id");
+    if (error) return error;
+    tables.push("transfer_details");
+  }
+  if (bundle.refundLinks.length > 0) {
+    const error = await upsert(client, "refund_links", bundle.refundLinks, "refund_record_id,original_record_id");
+    if (error) return error;
+    tables.push("refund_links");
+  }
+  if (bundle.ledgerRecordTags.length > 0) {
+    const error = await upsert(client, "ledger_record_tags", bundle.ledgerRecordTags, "ledger_record_id,tag_id");
+    if (error) return error;
+    tables.push("ledger_record_tags");
+  }
+  if (bundle.auditEvents.length > 0) {
+    const error = await upsert(client, "audit_events", bundle.auditEvents, "id");
+    if (error) return error;
+    tables.push("audit_events");
+  }
+  return null;
+}
+
 export async function persistRecordBundle(
   client: CloudPersistenceClient,
   request: IdempotencyRequest,
@@ -174,36 +239,7 @@ export async function persistRecordBundle(
   if (existing && !existing.ok) return existing;
   const replayed = existing?.ok === true && existing.replayed;
 
-  if (bundle.transferDetails) {
-    if (!client.rpc) {
-      return {
-        ok: false,
-        failure: {
-          code: "validation",
-          message: "Transfer bundles require the atomic cloud RPC boundary and were kept local-only.",
-          retryable: false,
-          table: "transfer_details",
-        },
-      };
-    }
-
-    const rpcResult = await client.rpc("persist_ledger_record_bundle", {
-      p_request: request,
-      p_ledger_record: bundle.ledgerRecord,
-      p_transfer_details: bundle.transferDetails,
-      p_refund_links: bundle.refundLinks,
-      p_ledger_record_tags: bundle.ledgerRecordTags,
-      p_audit_events: bundle.auditEvents,
-    });
-    if (rpcResult.error) return failure(rpcResult.error, "persist_ledger_record_bundle");
-    return {
-      ok: true,
-      replayed: rpcResult.data && typeof rpcResult.data === "object" && "replayed" in rpcResult.data
-        ? Boolean(rpcResult.data.replayed)
-        : replayed,
-      tables: ["idempotency_keys", "ledger_records", "transfer_details", ...(bundle.refundLinks.length > 0 ? ["refund_links"] : []), ...(bundle.ledgerRecordTags.length > 0 ? ["ledger_record_tags"] : []), ...(bundle.auditEvents.length > 0 ? ["audit_events"] : [])],
-    };
-  }
+  if (bundle.transferDetails) return persistTransferBundle(client, request, bundle, replayed);
 
   const versionFailure = await checkLedgerVersion(client, bundle.ledgerRecord);
   if (versionFailure) return versionFailure;
@@ -222,29 +258,8 @@ export async function persistRecordBundle(
   if (parentError) return parentError;
   tables.push("ledger_records");
 
-  if (bundle.transferDetails) {
-    const transferError = await upsert(client, "transfer_details", bundle.transferDetails, "ledger_record_id");
-    if (transferError) return transferError;
-    tables.push("transfer_details");
-  }
-
-  if (bundle.refundLinks.length > 0) {
-    const refundError = await upsert(client, "refund_links", bundle.refundLinks, "refund_record_id,original_record_id");
-    if (refundError) return refundError;
-    tables.push("refund_links");
-  }
-
-  if (bundle.ledgerRecordTags.length > 0) {
-    const tagError = await upsert(client, "ledger_record_tags", bundle.ledgerRecordTags, "ledger_record_id,tag_id");
-    if (tagError) return tagError;
-    tables.push("ledger_record_tags");
-  }
-
-  if (bundle.auditEvents.length > 0) {
-    const auditError = await upsert(client, "audit_events", bundle.auditEvents, "id");
-    if (auditError) return auditError;
-    tables.push("audit_events");
-  }
+  const childError = await persistRecordChildren(client, bundle, tables);
+  if (childError) return childError;
 
   return { ok: true, replayed, tables };
 }

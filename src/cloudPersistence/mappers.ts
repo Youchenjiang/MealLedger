@@ -238,15 +238,12 @@ function mapLedgerTags(
   return { rows, issues };
 }
 
-function mapTransferDetails(
+function transferReferences(
   record: LocalLedgerRecord,
   userId: string,
   references: CloudReferenceMap,
-  recordId: string,
   feeLedgerRecordId?: string,
-): CloudMappingResult<CloudRow | undefined> {
-  if (record.kind !== "transfer") return { ok: true, value: undefined };
-
+): CloudMappingResult<{ destinationId: string; destinationAmount: string; destinationCurrency: string; feeId: string | null }> {
   const destinationId = reference(references.accountIds, record.transferAccountId, "destination_account_id");
   const destinationAmount = money(
     record.destinationAmount || record.amount,
@@ -264,11 +261,34 @@ function mapTransferDetails(
   return {
     ok: true,
     value: {
+      destinationId: destinationId.value,
+      destinationAmount: destinationAmount.value,
+      destinationCurrency: (record.destinationCurrency || record.currency).toUpperCase(),
+      feeId: feeId?.ok ? feeId.value : null,
+    },
+  };
+}
+
+function mapTransferDetails(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: string,
+  feeLedgerRecordId?: string,
+): CloudMappingResult<CloudRow | undefined> {
+  if (record.kind !== "transfer") return { ok: true, value: undefined };
+
+  const mapped = transferReferences(record, userId, references, feeLedgerRecordId);
+  if (!mapped.ok) return mapped;
+
+  return {
+    ok: true,
+    value: {
       ledger_record_id: recordId,
-      destination_account_id: destinationId.value,
-      destination_amount_minor: destinationAmount.value,
-      destination_currency: (record.destinationCurrency || record.currency).toUpperCase(),
-      fee_ledger_record_id: feeId?.ok ? feeId.value : null,
+      destination_account_id: mapped.value.destinationId,
+      destination_amount_minor: mapped.value.destinationAmount,
+      destination_currency: mapped.value.destinationCurrency,
+      fee_ledger_record_id: mapped.value.feeId,
     },
   };
 }

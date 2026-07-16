@@ -59,73 +59,74 @@ function isBlankRow(row: string[]): boolean {
   return row.every((cell) => cell.trim() === "");
 }
 
+type CsvParserState = {
+  rows: string[][];
+  errors: string[];
+  row: string[];
+  field: string;
+  quoted: boolean;
+  line: number;
+};
+
+function pushCsvField(state: CsvParserState): void {
+  state.row.push(state.field);
+  state.field = "";
+}
+
+function pushCsvRow(state: CsvParserState): void {
+  pushCsvField(state);
+  if (!isBlankRow(state.row)) state.rows.push(state.row);
+  state.row = [];
+}
+
+function consumeQuotedCsvCharacter(text: string, index: number, state: CsvParserState): number {
+  const character = text[index];
+  if (character !== '"') {
+    state.field += character;
+    if (character === "\n") state.line += 1;
+    return index;
+  }
+
+  if (text[index + 1] === '"') {
+    state.field += '"';
+    return index + 1;
+  }
+
+  state.quoted = false;
+  return index;
+}
+
+function consumeUnquotedCsvCharacter(text: string, index: number, state: CsvParserState): number {
+  const character = text[index];
+  if (character === '"') {
+    if (state.field.length === 0) state.quoted = true;
+    else state.errors.push(`Line ${state.line}: unexpected quote.`);
+    return index;
+  }
+  if (character === ",") {
+    pushCsvField(state);
+    return index;
+  }
+  if (character === "\r" || character === "\n") {
+    pushCsvRow(state);
+    state.line += 1;
+    return character === "\r" && text[index + 1] === "\n" ? index + 1 : index;
+  }
+  state.field += character;
+  return index;
+}
+
 function parseCsv(text: string): { rows: string[][]; errors: string[] } {
-  const rows: string[][] = [];
-  const errors: string[] = [];
-  let row: string[] = [];
-  let field = "";
-  let quoted = false;
-  let line = 1;
-
-  const pushField = () => {
-    row.push(field);
-    field = "";
-  };
-
-  const pushRow = () => {
-    pushField();
-    if (!isBlankRow(row)) {
-      rows.push(row);
-    }
-    row = [];
-  };
-
+  const state: CsvParserState = { rows: [], errors: [], row: [], field: "", quoted: false, line: 1 };
   for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-
-    if (quoted) {
-      if (character === '"') {
-        if (text[index + 1] === '"') {
-          field += '"';
-          index += 1;
-        } else {
-          quoted = false;
-        }
-      } else {
-        field += character;
-        if (character === "\n") {
-          line += 1;
-        }
-      }
-      continue;
-    }
-
-    if (character === '"') {
-      if (field.length === 0) {
-        quoted = true;
-      } else {
-        errors.push(`Line ${line}: unexpected quote.`);
-      }
-    } else if (character === ",") {
-      pushField();
-    } else if (character === "\r" || character === "\n") {
-      pushRow();
-      if (character === "\r" && text[index + 1] === "\n") {
-        index += 1;
-      }
-      line += 1;
-    } else {
-      field += character;
-    }
+    index = state.quoted
+      ? consumeQuotedCsvCharacter(text, index, state)
+      : consumeUnquotedCsvCharacter(text, index, state);
   }
 
-  if (quoted) {
-    errors.push(`Line ${line}: unclosed quoted field.`);
-  } else if (field.length > 0 || row.length > 0) {
-    pushRow();
-  }
-
-  return { rows, errors };
+  if (state.quoted) state.errors.push(`Line ${state.line}: unclosed quoted field.`);
+  else if (state.field.length > 0 || state.row.length > 0) pushCsvRow(state);
+  return { rows: state.rows, errors: state.errors };
 }
 
 function decodeUtf8(bytes: Uint8Array): string | null {

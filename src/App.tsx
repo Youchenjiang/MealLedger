@@ -450,6 +450,14 @@ function draftReviewCopy(draftCount: number): string {
   return `${draftCount} ${noun} waiting. Continue in Capture or confirm a complete draft here.`;
 }
 
+function formatAliasReviewMessage(items: Array<{ rowNumber: number; summary: string }>): string {
+  return items.length === 0 ? "" : ` Category review: ${items.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ")}`;
+}
+
+function formatDuplicateReviewMessage(rowNumbers: number[]): string {
+  return rowNumbers.length === 0 ? "" : ` Duplicate review: ${rowNumbers.map((rowNumber) => `Row ${rowNumber}`).join(", ")}.`;
+}
+
 function counterpartyLabelForKind(kind: DraftForm["kind"]): string {
   switch (kind) {
     case "income":
@@ -503,6 +511,89 @@ function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (
 }
 
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
+
+function syncStatusItem({
+  enabled,
+  blocked,
+  online,
+  pendingCount,
+  conflictCount,
+  errorCount,
+  firstError,
+}: Readonly<{
+  enabled: boolean;
+  blocked: boolean;
+  online: boolean;
+  pendingCount: number;
+  conflictCount: number;
+  errorCount: number;
+  firstError?: string;
+}>): StatusItem {
+  if (blocked) {
+    return { label: "Local data review required", detail: "This signed-in workspace will not claim data from another local user automatically.", icon: CloudOff, tone: "danger" };
+  }
+  if (!enabled) {
+    return { label: online ? "Sync not enabled" : "Offline", detail: online ? "This preview keeps changes on this device." : "Drafts and records stay visible on this device while offline.", icon: online ? Wifi : WifiOff, tone: "neutral" };
+  }
+  if (conflictCount > 0) {
+    return { label: `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
+  }
+  if (errorCount > 0) {
+    return { label: `${errorCount} cloud sync error${errorCount === 1 ? "" : "s"}`, detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
+  }
+  if (pendingCount > 0) {
+    return { label: `${pendingCount} cloud sync pending`, detail: "Local changes are queued for the configured Supabase workspace.", icon: CloudOff, tone: "warn" };
+  }
+  return { label: "Cloud sync ready", detail: "Cloud writes use the authenticated workspace.", icon: Wifi, tone: "neutral" };
+}
+
+function buildStatusItems({
+  authState,
+  userId,
+  cloudDataOwnerMatches,
+  cloudSyncQueue,
+  isOnline,
+  draftCount,
+  persistenceWarning,
+  uploadCount,
+  recordCount,
+}: Readonly<{
+  authState: AuthState;
+  userId: string;
+  cloudDataOwnerMatches: boolean;
+  cloudSyncQueue: CloudSyncQueueItem[];
+  isOnline: boolean;
+  draftCount: number;
+  persistenceWarning: boolean;
+  uploadCount: number;
+  recordCount: number;
+}>): StatusItem[] {
+  const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
+  const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
+  const items: StatusItem[] = [
+    syncStatusItem({
+      enabled: cloudSyncEnabled,
+      blocked: cloudSyncEnabled && !cloudDataOwnerMatches,
+      online: isOnline,
+      pendingCount: cloudSyncQueue.filter((item) => item.state !== "synced").length,
+      conflictCount: cloudSyncQueue.filter((item) => item.state === "conflict").length,
+      errorCount: errorItems.length,
+      firstError: errorItems.find((item) => item.lastError)?.lastError,
+    }),
+    {
+      label: draftCountLabel(draftCount),
+      detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
+      icon: draftCount > 0 ? AlertCircle : CheckCircle2,
+      tone: draftCount > 0 ? "warn" : "good",
+    },
+  ];
+
+  if (persistenceWarning) items.push({ label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" });
+  if (draftCount > 0) items.push({ label: "Local-only data", detail: "These drafts stay on this device until a future sync workflow is enabled.", icon: CloudOff, tone: "warn" });
+  if (uploadCount > 0) items.push({ label: "Media metadata only", detail: `${uploadCount} image${uploadCount === 1 ? "" : "s"} queued locally; image bytes are not backed up in this local-only preview.`, icon: CloudOff, tone: "warn" });
+  if (recordCount > 0) items.push({ label: `${recordCount} local record${recordCount === 1 ? "" : "s"}`, detail: "Official manual records are stored locally until cloud sync is enabled.", icon: CloudOff, tone: "warn" });
+  return items;
+}
 
 function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
   return (
@@ -677,39 +768,37 @@ function AuthenticatedApp() {
     const referenceClient = createSupabaseReferenceBootstrapClient(rawClient);
     const now = new Date().toISOString();
 
-    const run = async () => {
-      const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
-      const tags = [...new Set(records.flatMap((record) => record.tags ?? []).map((value) => value.trim()).filter(Boolean))];
-      const events = [...new Set(records.map((record) => record.event ?? "").map((value) => value.trim()).filter(Boolean))];
-      const result = await syncLocalChanges({
-        client,
-        referenceClient,
-        userId,
-        accounts,
-        categories,
-        tags,
-        events,
-        auditEvents,
-        records,
-        drafts,
-        meals,
-        media: uploadQueue,
-        scans,
-        queue: cloudSyncQueue,
-        now,
-      });
+    const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
+    const tags = [...new Set(records.flatMap((record) => record.tags ?? []).map((value) => value.trim()).filter(Boolean))];
+    const events = [...new Set(records.map((record) => record.event ?? "").map((value) => value.trim()).filter(Boolean))];
+    syncLocalChanges({
+      client,
+      referenceClient,
+      userId,
+      accounts,
+      categories,
+      tags,
+      events,
+      auditEvents,
+      records,
+      drafts,
+      meals,
+      media: uploadQueue,
+      scans,
+      queue: cloudSyncQueue,
+      now,
+    }).then((result) => {
       setRecords(result.records);
       setMeals(result.meals);
       setUploadQueue(result.media);
       setScans(result.scans);
       setCloudSyncQueue(result.queue);
-    };
-
-    run().catch((error: unknown) => {
+    }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Cloud synchronization failed.";
-      setCloudSyncQueue((current) => current.map((item) => item.state === "pending" || item.state === "retryable-error"
-        ? { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() }
-        : item));
+      setCloudSyncQueue((current) => current.map((item) => {
+        if (item.state !== "pending" && item.state !== "retryable-error") return item;
+        return { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() };
+      }));
     }).finally(() => {
       cloudSyncInFlight.current = false;
     });
@@ -743,98 +832,17 @@ function AuthenticatedApp() {
     ));
   };
 
-  const statusItems = useMemo(() => {
-    const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
-    const cloudDataBlocked = cloudSyncEnabled && !cloudDataOwnerMatches;
-    const pendingCloudCount = cloudSyncQueue.filter((item) => item.state !== "synced").length;
-    const conflictCount = cloudSyncQueue.filter((item) => item.state === "conflict").length;
-    const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
-    const firstSyncError = errorItems.find((item) => item.lastError)?.lastError;
-    let syncLabel = "Cloud sync ready";
-    let syncDetail = "Cloud writes use the authenticated workspace.";
-    let syncIcon: LucideIcon = Wifi;
-    let syncTone = "neutral";
-    if (cloudDataBlocked) {
-      syncLabel = "Local data review required";
-      syncDetail = "This signed-in workspace will not claim data from another local user automatically.";
-      syncIcon = CloudOff;
-      syncTone = "danger";
-    } else if (!cloudSyncEnabled) {
-      syncLabel = isOnline ? "Sync not enabled" : "Offline";
-      syncDetail = isOnline ? "This preview keeps changes on this device." : "Drafts and records stay visible on this device while offline.";
-      syncIcon = isOnline ? Wifi : WifiOff;
-    } else if (conflictCount > 0) {
-      syncLabel = `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`;
-      syncDetail = "Conflicting local and cloud versions are held for review before either one is replaced.";
-      syncIcon = CloudOff;
-      syncTone = "danger";
-    } else if (errorItems.length > 0) {
-      syncLabel = `${errorItems.length} cloud sync error${errorItems.length === 1 ? "" : "s"}`;
-      syncDetail = firstSyncError ? `The latest sync attempt failed: ${firstSyncError}` : "A cloud write failed and will be retried when possible.";
-      syncIcon = CloudOff;
-      syncTone = "danger";
-    } else if (pendingCloudCount > 0) {
-      syncLabel = `${pendingCloudCount} cloud sync pending`;
-      syncDetail = "Local changes are queued for the configured Supabase workspace.";
-      syncIcon = CloudOff;
-      syncTone = "warn";
-    }
-    const items = [
-      {
-        label: syncLabel,
-        detail: syncDetail,
-        icon: syncIcon,
-        tone: syncTone,
-      },
-      {
-        label: draftCountLabel(draftCount),
-        detail:
-          draftCount > 0
-            ? "Continue incomplete drafts in Capture, or confirm a complete draft here."
-            : "Nothing is waiting for review.",
-        icon: draftCount > 0 ? AlertCircle : CheckCircle2,
-        tone: draftCount > 0 ? "warn" : "good",
-      },
-    ];
-
-    if (persistenceWarning) {
-      items.push({
-        label: "Local storage unavailable",
-        detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.",
-        icon: AlertCircle,
-        tone: "warn",
-      });
-    }
-
-    if (draftCount > 0) {
-      items.push({
-        label: "Local-only data",
-        detail: "These drafts stay on this device until a future sync workflow is enabled.",
-        icon: CloudOff,
-        tone: "warn",
-      });
-    }
-
-    if (uploadQueue.length > 0) {
-      items.push({
-        label: "Media metadata only",
-        detail: `${uploadQueue.length} image${uploadQueue.length === 1 ? "" : "s"} queued locally; image bytes are not backed up in this local-only preview.`,
-        icon: CloudOff,
-        tone: "warn",
-      });
-    }
-
-    if (recordCount > 0) {
-      items.push({
-        label: `${recordCount} local record${recordCount === 1 ? "" : "s"}`,
-        detail: "Official manual records are stored locally until cloud sync is enabled.",
-        icon: CloudOff,
-        tone: "warn",
-      });
-    }
-
-    return items;
-  }, [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, uploadQueue.length, userId]);
+  const statusItems = useMemo(() => buildStatusItems({
+    authState,
+    userId,
+    cloudDataOwnerMatches,
+    cloudSyncQueue,
+    isOnline,
+    draftCount,
+    persistenceWarning,
+    uploadCount: uploadQueue.length,
+    recordCount,
+  }), [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, uploadQueue.length, userId]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -3773,8 +3781,8 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
     const reviewedRowNumbers = new Set([...reviewRows, ...aliasReviews.map((item) => item.rowNumber)]);
     duplicateReviews.forEach((_, rowNumber) => reviewedRowNumbers.add(rowNumber));
     const reviewCount = reviewedRowNumbers.size;
-    const aliasMessage = aliasReviews.length > 0 ? ` Category review: ${aliasReviews.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ")}` : "";
-    const duplicateMessage = duplicateReviews.size > 0 ? ` Duplicate review: ${[...duplicateReviews.keys()].map((rowNumber) => `Row ${rowNumber}`).join(", ")}.` : "";
+    const aliasMessage = formatAliasReviewMessage(aliasReviews);
+    const duplicateMessage = formatDuplicateReviewMessage([...duplicateReviews.keys()]);
     setImportItems(rowResults.map((row) => ({
       ...row,
       reviewId: `import-row-${Date.now()}-${row.rowNumber}`,
