@@ -118,10 +118,12 @@ function consumeUnquotedCsvCharacter(text: string, index: number, state: CsvPars
 
 function parseCsv(text: string): { rows: string[][]; errors: string[] } {
   const state: CsvParserState = { rows: [], errors: [], row: [], field: "", quoted: false, line: 1 };
-  for (let index = 0; index < text.length; index += 1) {
-    index = state.quoted
+  let index = 0;
+  while (index < text.length) {
+    const nextIndex = state.quoted
       ? consumeQuotedCsvCharacter(text, index, state)
       : consumeUnquotedCsvCharacter(text, index, state);
+    index = nextIndex + 1;
   }
 
   if (state.quoted) state.errors.push(`Line ${state.line}: unclosed quoted field.`);

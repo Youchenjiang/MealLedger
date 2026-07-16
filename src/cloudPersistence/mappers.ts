@@ -293,6 +293,45 @@ function mapTransferDetails(
   };
 }
 
+type RefundAllocation = { originalRecordId: string; amount: string; currency: string };
+
+function mapRefundAllocation(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: string,
+  allocation: RefundAllocation,
+): CloudMappingResult<CloudRow> {
+  const originalId = ledgerReference(references.ledgerRecordIds, allocation.originalRecordId, userId, "original_record_id");
+  const linkedAmount = money(allocation.amount, allocation.currency, "refund_link.amount", true);
+  const issues = collect([originalId, linkedAmount]);
+  if (issues.length > 0 || !originalId.ok || !linkedAmount.ok) return { ok: false, issues };
+  return {
+    ok: true,
+    value: {
+      refund_record_id: recordId,
+      original_record_id: originalId.value,
+      amount_minor: linkedAmount.value,
+      currency: allocation.currency.toUpperCase(),
+      refund_subtype: record.refundSubtype,
+      difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
+    },
+  };
+}
+
+function mapRefundAllocations(
+  record: LocalLedgerRecord,
+  userId: string,
+  references: CloudReferenceMap,
+  recordId: string,
+  allocations: RefundAllocation[],
+): CloudMappingResult<CloudRow[]> {
+  const mapped = allocations.map((allocation) => mapRefundAllocation(record, userId, references, recordId, allocation));
+  const issues = mapped.flatMap((result) => result.ok ? [] : result.issues);
+  if (issues.length > 0) return { ok: false, issues };
+  return { ok: true, value: mapped.flatMap((result) => result.ok ? [result.value] : []) };
+}
+
 function mapRefundLinks(
   record: LocalLedgerRecord,
   userId: string,
@@ -303,28 +342,7 @@ function mapRefundLinks(
   if (record.kind !== "refund") return { ok: true, value: [] };
 
   const allocations = references.refundAllocations?.[record.id];
-  if (allocations && allocations.length > 0) {
-    const rows: CloudRow[] = [];
-    const issues: CloudMappingIssue[] = [];
-    for (const allocation of allocations) {
-      const originalId = ledgerReference(references.ledgerRecordIds, allocation.originalRecordId, userId, "original_record_id");
-      const linkedAmount = money(allocation.amount, allocation.currency, "refund_link.amount", true);
-      const allocationIssues = collect([originalId, linkedAmount]);
-      if (allocationIssues.length > 0 || !originalId.ok || !linkedAmount.ok) {
-        issues.push(...allocationIssues);
-        continue;
-      }
-      rows.push({
-        refund_record_id: recordId,
-        original_record_id: originalId.value,
-        amount_minor: linkedAmount.value,
-        currency: allocation.currency.toUpperCase(),
-        refund_subtype: record.refundSubtype,
-        difference_kind: record.refundExcessHandling === "unclassified" ? null : record.refundExcessHandling,
-      });
-    }
-    return issues.length > 0 ? { ok: false, issues } : { ok: true, value: rows };
-  }
+  if (allocations && allocations.length > 0) return mapRefundAllocations(record, userId, references, recordId, allocations);
 
   const linkedIds = record.refundLinkedRecordIds ?? [];
   if (linkedIds.length === 0 && record.refundLinkedRecordId) {

@@ -451,11 +451,15 @@ function draftReviewCopy(draftCount: number): string {
 }
 
 function formatAliasReviewMessage(items: Array<{ rowNumber: number; summary: string }>): string {
-  return items.length === 0 ? "" : ` Category review: ${items.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ")}`;
+  if (items.length === 0) return "";
+  const details = items.map((item) => `Row ${item.rowNumber}: ${item.summary}`).join(" ");
+  return ` Category review: ${details}`;
 }
 
 function formatDuplicateReviewMessage(rowNumbers: number[]): string {
-  return rowNumbers.length === 0 ? "" : ` Duplicate review: ${rowNumbers.map((rowNumber) => `Row ${rowNumber}`).join(", ")}.`;
+  if (rowNumbers.length === 0) return "";
+  const details = rowNumbers.map((rowNumber) => `Row ${rowNumber}`).join(", ");
+  return ` Duplicate review: ${details}.`;
 }
 
 function counterpartyLabelForKind(kind: DraftForm["kind"]): string {
@@ -512,6 +516,17 @@ function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (
 
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
 
+function disabledSyncStatus(online: boolean): StatusItem {
+  return { label: online ? "Sync not enabled" : "Offline", detail: online ? "This preview keeps changes on this device." : "Drafts and records stay visible on this device while offline.", icon: online ? Wifi : WifiOff, tone: "neutral" };
+}
+
+function enabledSyncStatus(pendingCount: number, conflictCount: number, errorCount: number, firstError?: string): StatusItem {
+  if (conflictCount > 0) return { label: `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
+  if (errorCount > 0) return { label: `${errorCount} cloud sync error${errorCount === 1 ? "" : "s"}`, detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
+  if (pendingCount > 0) return { label: `${pendingCount} cloud sync pending`, detail: "Local changes are queued for the configured Supabase workspace.", icon: CloudOff, tone: "warn" };
+  return { label: "Cloud sync ready", detail: "Cloud writes use the authenticated workspace.", icon: Wifi, tone: "neutral" };
+}
+
 function syncStatusItem({
   enabled,
   blocked,
@@ -532,19 +547,14 @@ function syncStatusItem({
   if (blocked) {
     return { label: "Local data review required", detail: "This signed-in workspace will not claim data from another local user automatically.", icon: CloudOff, tone: "danger" };
   }
-  if (!enabled) {
-    return { label: online ? "Sync not enabled" : "Offline", detail: online ? "This preview keeps changes on this device." : "Drafts and records stay visible on this device while offline.", icon: online ? Wifi : WifiOff, tone: "neutral" };
-  }
-  if (conflictCount > 0) {
-    return { label: `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
-  }
-  if (errorCount > 0) {
-    return { label: `${errorCount} cloud sync error${errorCount === 1 ? "" : "s"}`, detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
-  }
-  if (pendingCount > 0) {
-    return { label: `${pendingCount} cloud sync pending`, detail: "Local changes are queued for the configured Supabase workspace.", icon: CloudOff, tone: "warn" };
-  }
-  return { label: "Cloud sync ready", detail: "Cloud writes use the authenticated workspace.", icon: Wifi, tone: "neutral" };
+  return enabled ? enabledSyncStatus(pendingCount, conflictCount, errorCount, firstError) : disabledSyncStatus(online);
+}
+
+function markCloudSyncRetryable(items: CloudSyncQueueItem[], message: string): CloudSyncQueueItem[] {
+  return items.map((item) => {
+    if (item.state !== "pending" && item.state !== "retryable-error") return item;
+    return { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() };
+  });
 }
 
 function buildStatusItems({
@@ -795,10 +805,7 @@ function AuthenticatedApp() {
       setCloudSyncQueue(result.queue);
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Cloud synchronization failed.";
-      setCloudSyncQueue((current) => current.map((item) => {
-        if (item.state !== "pending" && item.state !== "retryable-error") return item;
-        return { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() };
-      }));
+      setCloudSyncQueue((current) => markCloudSyncRetryable(current, message));
     }).finally(() => {
       cloudSyncInFlight.current = false;
     });
@@ -1509,6 +1516,21 @@ type LedgerRecordCardProps = {
   onVoid: () => void;
 };
 
+function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onVoid }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onVoid"> & { isVoided: boolean }>) {
+  if (isVoided) return <span className="record-state-label">Voided</span>;
+
+  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  return (
+    <div className="record-actions">
+      {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>Complete details</button> : null}
+      {isRecurring ? <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>{record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}</button> : null}
+      {isRecurring ? <ConfirmActionButton label="Cancel recurring" message="Cancel future recurrence?" onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
+      <button className="text-action" type="button" onClick={onEdit}>Edit</button>
+      <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onVoid} />
+    </div>
+  );
+}
+
 function LedgerRecordCard({
   record,
   isEditing,
@@ -1531,7 +1553,6 @@ function LedgerRecordCard({
   }
 
   const isVoided = record.recordState === "voided";
-  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
   return (
     <article className={`draft-card ${isVoided ? "voided-record" : ""}`}>
       <div>
@@ -1542,19 +1563,7 @@ function LedgerRecordCard({
         <strong>{record.currency} {record.amount}</strong>
         <span>{record.kind} · {isVoided ? "voided" : record.status}</span>
       </div>
-      {isVoided ? <span className="record-state-label">Voided</span> : (
-        <div className="record-actions">
-          {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>Complete details</button> : null}
-          {isRecurring ? (
-            <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>
-              {record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}
-            </button>
-          ) : null}
-          {isRecurring ? <ConfirmActionButton label="Cancel recurring" message="Cancel future recurrence?" onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
-          <button className="text-action" type="button" onClick={onEdit}>Edit</button>
-          <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onVoid} />
-        </div>
-      )}
+      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onVoid={onVoid} />
     </article>
   );
 }
