@@ -18,6 +18,8 @@ Expected verification:
 
 ## Task 3: Define Import Alias Behavior
 
+Status: Complete for local classification and review suggestions.
+
 Implement or specify alias matching for old spreadsheet labels.
 
 Expected verification:

@@ -103,3 +103,7 @@ Test multi-table ZIP includes account summary.
 Test account summary totals reconcile by account and currency.
 
 Test large export path shows progress or uses long-running export behavior.
+
+Test plural refund links round-trip through clean export and CSV import using `|`.
+
+Test voided records and media bytes remain excluded from every export mode.

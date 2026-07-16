@@ -43,6 +43,8 @@ The spreadsheet-style import path may also accept separated tables for expenses,
 
 V1 should provide a default mapping for the user's existing spreadsheet headers, including `日期`, `帳戶`, `金額`, `來源`, `店家`, `名稱`, `種類`, `原帳戶`, and `後帳戶`.
 
+For the existing expense layout, `種類` maps to the expense `category`, while transaction kind maps from `kind` or `類型`. Transfer `原帳戶` and `後帳戶` map to the source and target account fields.
+
 Saving custom import mappings is post-V1 unless it is simple to keep as local browser preference.
 
 Multi-value import fields such as `tags` should use `|` as the default separator. Import should trim whitespace, drop empty values, and remove duplicates while preserving the first seen order.
@@ -90,6 +92,8 @@ Duplicate handling options are skip, keep separate, merge into draft, or link to
 ## Import Limits
 
 V1 CSV import should allow up to 5,000 rows per batch.
+
+V1 CSV files should be limited to 10 MB. File encoding, header shape, row width, and limits must be validated before any draft or official ledger record is created.
 
 V1 scan or media batch import should allow up to 20 files, 10 MB per file, and 100 MB per batch.
 

@@ -1,10 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
+import { isUsableSupabaseConfig } from "./supabaseConfig";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = isUsableSupabaseConfig(
+  { url: supabaseUrl, anonKey: supabaseAnonKey },
+  { allowHttp: import.meta.env.DEV },
+);
+export const isLocalDevelopmentMode = import.meta.env.DEV && !isSupabaseConfigured;
 
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
   : null;

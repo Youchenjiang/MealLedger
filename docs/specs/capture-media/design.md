@@ -1,5 +1,9 @@
 # Capture Media Design
 
+## Current V1 Boundary
+
+This document describes the future cloud-backed media design. The current V1 branch only stores local metadata and a local upload queue; it does not claim that image bytes have been uploaded or durably backed up.
+
 ## Capture Choices
 
 Capture page choices:

@@ -1,5 +1,9 @@
 # Capture Media Test Plan
 
+## Current V1 Status
+
+Capture currently verifies local metadata and queue behavior. Cloud object upload completion, permanent retention, cleanup jobs, OCR/manual takeover, and batch grouping are future-spec cases and must not be reported as implemented by the current branch.
+
 ## Capture Intent
 
 Test Capture page shows manual entry, scan receipt, scan invoice, record meal, and attach photo.
@@ -71,3 +75,16 @@ Test local-only media warning is visible.
 Test persistent-storage denied state warns before large media capture.
 
 Test queued media sync preserves idempotency and does not duplicate metadata.
+
+## Implemented V1 Coverage
+
+- `src/captureMedia/intents.test.ts` verifies all five entry intents.
+- `src/captureMedia/meals.test.ts` verifies time-required meals, multiple photo links, and optional transaction links.
+- `src/captureMedia/media.test.ts` verifies temporary, retained, discarded, and 24-hour expired scan states.
+- `src/captureMedia/upload.test.ts` verifies 20-file/100 MB limits, local queue metadata, and the signed upload boundary response.
+- `src/App.test.tsx` verifies meal and scan UI flows never create official ledger records.
+- `tests/e2e/app-shell.spec.ts` verifies desktop/mobile browser flows and console cleanliness.
+
+## V1 Boundary
+
+The V1 implementation stores source metadata and local queue state only. It does not run OCR, write provider invoice data, or expose a permanent public media URL. Those cases remain follow-up specs.

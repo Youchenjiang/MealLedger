@@ -61,22 +61,12 @@ The app-shell spec includes one real, local-only path so the shell is not a dead
 1. The user opens Overview.
 2. The user selects Start a record.
 3. Capture shows a minimal manual transaction draft form.
-4. The user enters date, account, type, category, merchant/source, amount, currency, and optional note.
+4. Capture hands the user into a local draft preview.
 5. The submitted record appears as a local draft in the Ledger review queue.
 6. The user can discard a local draft from the Ledger review queue.
 7. The confirmed ledger table stays empty because confirmation and official ledger writes belong to later specs.
 
-The form is intentionally a draft capture surface, not final accounting CRUD. It does not create accounts or categories, calculate balances, persist to Supabase, or export data.
-
-The first draft form supports these initial draft kinds:
-
-- expense
-- income
-- transfer
-- refund
-- adjustment
-
-Transfer drafts require a transfer account so the draft does not lose the counter-account intent. Full transfer balancing, transfer pair IDs, refund linking, and adjustment reason workflows belong to later ledger specs.
+The preview is intentionally not final accounting CRUD. It does not create official records, calculate balances, persist to Supabase, or export data. Its detailed fields, account/category setup affordances, record-kind validation, and local draft shape are defined and accepted by the Manual Ledger spec. App Shell only verifies that Capture, the review queue, and the empty confirmed-ledger state remain connected.
 
 ## State Model
 
@@ -104,7 +94,7 @@ The shell may keep inline English copy until the localization spec is implemente
 
 This spec should not define database schema.
 
-This spec should implement only minimal HTML-required checks for the local draft form. Domain validation belongs to the manual-ledger and schema-core specs.
+This spec should not claim acceptance of record-kind validation beyond the local-draft handoff. Domain validation belongs to the manual-ledger and schema-core specs.
 
 This spec should not decide AI/OCR provider behavior.
 

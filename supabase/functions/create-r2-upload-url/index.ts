@@ -8,15 +8,15 @@ const R2_ACCOUNT_ID = requireEnv("R2_ACCOUNT_ID");
 const R2_ACCESS_KEY_ID = requireEnv("R2_ACCESS_KEY_ID");
 const R2_SECRET_ACCESS_KEY = requireEnv("R2_SECRET_ACCESS_KEY");
 const R2_BUCKET = requireEnv("R2_BUCKET");
-const R2_PUBLIC_BASE_URL = Deno.env.get("R2_PUBLIC_BASE_URL") ?? "";
+const ALLOWED_ORIGIN = Deno.env.get("APP_ORIGIN") ?? "";
 
 const corsHeaders = {
-  "access-control-allow-origin": "*",
+  "access-control-allow-origin": ALLOWED_ORIGIN,
   "access-control-allow-headers": "authorization, content-type",
   "access-control-allow-methods": "POST, OPTIONS",
 };
 
-const allowedKinds = ["meal_photo", "receipt", "other"] as const;
+const allowedKinds = ["meal-photo", "receipt-scan", "invoice-scan", "attachment"] as const;
 type MediaKind = (typeof allowedKinds)[number];
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => null);
   const contentType = cleanImageContentType(body?.contentType);
-  const kind = body?.kind ?? "meal_photo";
+  const kind = body?.kind ?? "attachment";
   const capturedAt = body?.capturedAt ?? null;
   const extension = getExtensionFromContentType(contentType);
 
@@ -99,11 +99,11 @@ Deno.serve(async (req) => {
   const { error: insertError } = await supabase.from("media_assets").insert({
     id: mediaId,
     user_id: userData.user.id,
-    kind,
+    media_kind: kind,
     storage_provider: "r2",
     bucket: R2_BUCKET,
     object_key: objectKey,
-    thumbnail_key: thumbnailKey,
+    thumbnail_object_key: thumbnailKey,
     content_type: contentType,
     captured_at: capturedAt,
   });
@@ -117,6 +117,5 @@ Deno.serve(async (req) => {
     expiresInSeconds: 900,
     objectKey,
     thumbnailKey,
-    publicUrl: R2_PUBLIC_BASE_URL ? `${R2_PUBLIC_BASE_URL}/${objectKey}` : null,
   });
 });
