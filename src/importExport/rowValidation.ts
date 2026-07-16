@@ -197,7 +197,7 @@ function validateTransferFields(normalized: NormalizedImportRow, account: Import
   const targetName = required(normalized, "target_account", "Target account", errors);
   const targetAccount = accountFor(accounts, targetName);
   if (targetName && !targetAccount) errors.push(`Target account '${targetName}' does not exist.`);
-  if (account?.name === targetAccount?.name && account && targetAccount) errors.push("Source and target accounts must be different.");
+  if (account?.name && account.name === targetAccount?.name) errors.push("Source and target accounts must be different.");
   const targetCurrency = text(normalized, "target_currency") || targetAccount?.currency || "";
   const isCrossCurrency = Boolean(targetAccount && account && targetAccount.currency !== account.currency);
   if (isCrossCurrency) {
