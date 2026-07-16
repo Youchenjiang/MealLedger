@@ -18,6 +18,7 @@ export type IdempotencyRequest = {
 export type CloudPersistenceSuccess = {
   ok: true;
   replayed: boolean;
+  completed?: boolean;
   tables: string[];
 };
 
@@ -38,13 +39,15 @@ async function readExistingIdempotency(
 ): Promise<CloudPersistenceResult | null> {
   const result = await client
     .from("idempotency_keys")
-    .select("request_hash")
+    .select("request_hash, expires_at, response_json")
     .eq("user_id", request.userId)
     .eq("idempotency_key", request.idempotencyKey)
     .maybeSingle();
 
   if (result.error) return failure(result.error, "idempotency_keys");
   if (!result.data) return null;
+  const expiresAt = typeof result.data.expires_at === "string" ? Date.parse(result.data.expires_at) : Number.POSITIVE_INFINITY;
+  if (Number.isFinite(expiresAt) && expiresAt <= Date.now() && !result.data.response_json) return null;
   if (result.data.request_hash !== request.requestHash) {
     return {
       ok: false,
@@ -57,7 +60,12 @@ async function readExistingIdempotency(
     };
   }
 
-  return { ok: true, replayed: true, tables: ["idempotency_keys"] };
+  return {
+    ok: true,
+    replayed: true,
+    completed: Boolean(result.data.response_json),
+    tables: ["idempotency_keys"],
+  };
 }
 
 async function upsert(
@@ -230,6 +238,24 @@ async function persistRecordChildren(
   return null;
 }
 
+async function persistIdempotencyResponse(
+  client: CloudPersistenceClient,
+  request: IdempotencyRequest,
+  bundle: CloudRecordBundle,
+  tables: string[],
+): Promise<CloudPersistenceFailure | null> {
+  return upsert(client, "idempotency_keys", {
+    user_id: request.userId,
+    idempotency_key: request.idempotencyKey,
+    action_type: request.actionType,
+    request_hash: request.requestHash,
+    response_json: { ledger_record_id: bundle.ledgerRecord.id, tables },
+    result_type: "ledger-record",
+    result_id: bundle.ledgerRecord.id,
+    expires_at: request.expiresAt,
+  }, "user_id,idempotency_key");
+}
+
 export async function persistRecordBundle(
   client: CloudPersistenceClient,
   request: IdempotencyRequest,
@@ -237,6 +263,7 @@ export async function persistRecordBundle(
 ): Promise<CloudPersistenceResult> {
   const existing = await readExistingIdempotency(client, request);
   if (existing && !existing.ok) return existing;
+  if (existing?.ok && existing.completed) return existing;
   const replayed = existing?.ok === true && existing.replayed;
 
   if (bundle.transferDetails) return persistTransferBundle(client, request, bundle, replayed);
@@ -260,6 +287,9 @@ export async function persistRecordBundle(
 
   const childError = await persistRecordChildren(client, bundle, tables);
   if (childError) return childError;
+
+  const responseError = await persistIdempotencyResponse(client, request, bundle, tables);
+  if (responseError) return responseError;
 
   return { ok: true, replayed, tables };
 }

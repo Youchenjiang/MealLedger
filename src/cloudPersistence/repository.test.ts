@@ -52,7 +52,7 @@ describe("cloud persistence repository", () => {
     const result = await persistRecordBundle(mock, request, bundle());
 
     expect(result).toMatchObject({ ok: true, replayed: false });
-    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events"]);
+    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events", "idempotency_keys"]);
   });
 
   test("persists record tags after the ledger parent", async () => {
@@ -63,7 +63,7 @@ describe("cloud persistence repository", () => {
     });
 
     expect(result).toMatchObject({ ok: true, tables: ["idempotency_keys", "ledger_records", "ledger_record_tags", "audit_events"] });
-    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "ledger_record_tags", "audit_events"]);
+    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "ledger_record_tags", "audit_events", "idempotency_keys"]);
   });
 
   test("replays the same idempotency key without writing again", async () => {
@@ -71,7 +71,7 @@ describe("cloud persistence repository", () => {
     const result = await persistRecordBundle(mock, request, bundle());
 
     expect(result).toMatchObject({ ok: true, replayed: true, tables: ["idempotency_keys", "ledger_records", "audit_events"] });
-    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events"]);
+    expect(mock.calls).toEqual(["idempotency_keys", "ledger_records", "audit_events", "idempotency_keys"]);
   });
 
   test("rejects a reused key with a different request hash", async () => {
@@ -79,6 +79,22 @@ describe("cloud persistence repository", () => {
     const result = await persistRecordBundle(mock, request, bundle());
 
     expect(result).toMatchObject({ ok: false, failure: { code: "idempotency", retryable: false } });
+  });
+
+  test("allows an expired key to be reused with a new request hash", async () => {
+    const mock = client({ existing: { request_hash: "old-hash", expires_at: "2000-01-01T00:00:00.000Z" } });
+    const result = await persistRecordBundle(mock, request, bundle());
+
+    expect(result).toMatchObject({ ok: true, replayed: false });
+    expect(mock.calls).toContain("ledger_records");
+  });
+
+  test("does not reuse an expired key after a successful result was stored", async () => {
+    const mock = client({ existing: { request_hash: "hash-1", expires_at: "2000-01-01T00:00:00.000Z", response_json: { ledger_record_id: "record-1" } } });
+    const result = await persistRecordBundle(mock, request, bundle());
+
+    expect(result).toMatchObject({ ok: true, replayed: true, completed: true, tables: ["idempotency_keys"] });
+    expect(mock.calls).toEqual([]);
   });
 
   test("keeps child failure retryable and does not report success", async () => {
