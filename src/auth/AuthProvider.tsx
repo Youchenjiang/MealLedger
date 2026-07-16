@@ -53,7 +53,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   useStableEffect(() => {
     if (isLocalDevelopmentMode || !supabase) {
-      return undefined;
+      return () => undefined;
     }
 
     let mounted = true;
