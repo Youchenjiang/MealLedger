@@ -516,7 +516,7 @@ h2 {
 }
 
 .primary-action:disabled {
-  color: #8b867d;
+  color: #4f4a43;
   background: #dedbd3;
   cursor: not-allowed;
 }
@@ -1042,7 +1042,7 @@ h2 {
 
 .amount-step:disabled {
   border-color: #e5dfd5;
-  color: #aaa49b;
+  color: #5e5a54;
   background: #f5f2ec;
   cursor: not-allowed;
 }

@@ -63,6 +63,9 @@ type ImportReviewItem = ImportRowValidation & {
   status: "pending" | "confirmed" | "skipped" | "failed" | "kept-separate" | "linked" | "merged";
 };
 
+type PhotoInput = FileList | File[] | null;
+type QuickAccountField = "account" | "transferAccount" | "feeAccount";
+
 const routeDefinitions: RouteDefinition[] = [
   { segments: [], route: "overview" },
   { segments: ["overview"], route: "overview" },
@@ -2019,7 +2022,7 @@ function useMealCapture(
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
 
-  const appendMealPhotos = (files: FileList | File[] | null) => {
+  const appendMealPhotos = (files: PhotoInput) => {
     const incoming = Array.from(files ?? []);
     if (incoming.length === 0) return;
     setMealPhotoFiles((current) => {
@@ -2232,7 +2235,7 @@ type ManualLedgerFormProps = {
   showCancelChoices: boolean;
   formError: string | null;
   savedMessage: string;
-  quickAccountField: "account" | "transferAccount" | "feeAccount" | null;
+  quickAccountField: QuickAccountField | null;
   quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>;
   isAddingCategory: boolean;
   quickCategoryName: string;
@@ -2245,7 +2248,7 @@ type ManualLedgerFormProps = {
   setSavedMessage: Dispatch<SetStateAction<string>>;
   updateForm: (field: keyof DraftForm, value: string) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  beginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void;
+  beginQuickAccountSetup: (field: QuickAccountField) => void;
   setTimePrecision: (precision: DraftForm["timePrecision"]) => void;
   setMonthRange: (month: string) => void;
   selectSourceAccount: (name: string) => void;
@@ -2720,7 +2723,7 @@ function CapturePage({
   const [cleanForm, setCleanForm] = useState<DraftForm>(initialForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [showCancelChoices, setShowCancelChoices] = useState(false);
-  const [quickAccountField, setQuickAccountField] = useState<"account" | "transferAccount" | "feeAccount" | null>(null);
+  const [quickAccountField, setQuickAccountField] = useState<QuickAccountField | null>(null);
   const [quickAccountName, setQuickAccountName] = useState("");
   const [quickAccountCurrency, setQuickAccountCurrency] = useState("TWD");
   const [quickAccountType, setQuickAccountType] = useState("cash");
@@ -2814,7 +2817,7 @@ function CapturePage({
     ? records.filter((record) => record.recordState !== "voided" && record.counterparty.toLocaleLowerCase().includes(form.counterparty.trim().toLocaleLowerCase())).slice(0, 5)
     : [];
   const itemSuggestions = form.itemName.trim()
-    ? records.filter((record) => record.recordState !== "voided" && record.itemName && record.itemName.toLocaleLowerCase().includes(form.itemName.trim().toLocaleLowerCase())).slice(0, 5)
+    ? records.filter((record) => record.recordState !== "voided" && record.itemName?.toLocaleLowerCase().includes(form.itemName.trim().toLocaleLowerCase())).slice(0, 5)
     : [];
   const selectedRefundIds = selectedRefundIdsFor(form);
   const selectedRefundRecords = refundableRecords.filter((record) => selectedRefundIds.includes(record.id));
@@ -2877,7 +2880,7 @@ function CapturePage({
     });
   };
 
-  const beginQuickAccountSetup = (field: "account" | "transferAccount" | "feeAccount") => {
+  const beginQuickAccountSetup = (field: QuickAccountField) => {
     setQuickAccountField(field);
     setQuickAccountName("");
     setQuickAccountType("cash");
@@ -3245,7 +3248,7 @@ function MealCaptureForm({
   uploadQueue: UploadQueueItem[];
   onMealTimeChange: (value: string) => void;
   onMealNoteChange: (value: string) => void;
-  onAppendPhotos: (files: FileList | File[] | null) => void;
+   onAppendPhotos: (files: PhotoInput) => void;
   onOpenCamera: () => Promise<void>;
   onCapturePhoto: () => void;
   onStopCamera: () => void;
@@ -3273,7 +3276,7 @@ function MealCaptureForm({
   );
 }
 
-function MealPhotoPicker({ onOpenCamera, onAppendPhotos }: Readonly<{ onOpenCamera: () => Promise<void>; onAppendPhotos: (files: FileList | File[] | null) => void }>) {
+function MealPhotoPicker({ onOpenCamera, onAppendPhotos }: Readonly<{ onOpenCamera: () => Promise<void>; onAppendPhotos: (files: PhotoInput) => void }>) {
   return (
     <div className="meal-photo-picker">
       <span className="meal-field-label">Meal photos</span>
@@ -3314,9 +3317,9 @@ function TransferFields({
 }: Readonly<{
   form: DraftForm;
   accounts: LocalAccount[];
-  quickAccountField: "account" | "transferAccount" | "feeAccount" | null;
+  quickAccountField: QuickAccountField | null;
   quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>;
-  onBeginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void;
+  onBeginQuickAccountSetup: (field: QuickAccountField) => void;
   onSelectDestinationAccount: (name: string) => void;
   onSetTransferMode: (mode: DraftForm["transferMode"]) => void;
 }>) {
@@ -3332,7 +3335,7 @@ function TransferModeField({ transferMode, onSetTransferMode }: Readonly<{ trans
   return <section className="transfer-mode full-span" aria-label="Transfer type"><fieldset className="segmented-fieldset"><legend>Transfer type</legend><div className="segmented-control">{(["same-currency", "cross-currency"] as const).map((mode) => <label className={transferMode === mode ? "active" : ""} key={mode}><input checked={transferMode === mode} name="transfer-mode" type="radio" value={mode} onChange={() => onSetTransferMode(mode)} /><span>{mode === "same-currency" ? "Same currency" : "Cross currency"}</span></label>)}</div></fieldset></section>;
 }
 
-function TransferDestinationField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectDestinationAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: "account" | "transferAccount" | "feeAccount" | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void; onSelectDestinationAccount: (name: string) => void }>) {
+function TransferDestinationField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectDestinationAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: QuickAccountField | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: QuickAccountField) => void; onSelectDestinationAccount: (name: string) => void }>) {
   return <div className="form-field"><label htmlFor="entry-destination-account"><span>Destination account</span></label><div className="field-control-row"><select id="entry-destination-account" required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => onSelectDestinationAccount(event.target.value)}><option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>{accounts.filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency)).map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => onBeginQuickAccountSetup("transferAccount")}><Plus size={18} aria-hidden="true" /></button></div>{quickAccountField === "transferAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
 }
 
@@ -3347,9 +3350,9 @@ function FeeFields({
 }: Readonly<{
   form: DraftForm;
   accounts: LocalAccount[];
-  quickAccountField: "account" | "transferAccount" | "feeAccount" | null;
+  quickAccountField: QuickAccountField | null;
   quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>;
-  onBeginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void;
+  onBeginQuickAccountSetup: (field: QuickAccountField) => void;
   onSelectFeeAccount: (name: string) => void;
   onUpdateForm: (field: keyof DraftForm, value: string) => void;
 }>) {
@@ -3363,7 +3366,7 @@ function FeeFields({
   );
 }
 
-function FeeAccountField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectFeeAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: "account" | "transferAccount" | "feeAccount" | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: "account" | "transferAccount" | "feeAccount") => void; onSelectFeeAccount: (name: string) => void }>) {
+function FeeAccountField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectFeeAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: QuickAccountField | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: QuickAccountField) => void; onSelectFeeAccount: (name: string) => void }>) {
   return <div className="form-field"><label htmlFor="entry-fee-account"><span>Fee account</span></label><div className="field-control-row"><select id="entry-fee-account" value={form.feeAccount} onChange={(event) => onSelectFeeAccount(event.target.value)}><option value="">Select fee account</option>{accounts.map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label="Add fee account" title="Add fee account" onClick={() => onBeginQuickAccountSetup("feeAccount")}><Plus size={18} aria-hidden="true" /></button></div>{quickAccountField === "feeAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
 }
 

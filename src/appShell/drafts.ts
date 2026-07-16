@@ -1,7 +1,7 @@
-import { manualRecordKinds, type ManualRecordKind } from "../manualLedger/kinds";
+import type { ManualRecordKind } from "../manualLedger/kinds";
 import { isNonZeroMoney, isPositiveMoney } from "../manualLedger/money";
 
-export { manualRecordKinds as draftKinds };
+export { manualRecordKinds as draftKinds } from "../manualLedger/kinds";
 
 export type DraftKind = ManualRecordKind;
 export type TransferMode = "same-currency" | "cross-currency";
@@ -150,7 +150,7 @@ function accountFor(accounts: DraftAccount[], name: string): DraftAccount | unde
 
 function hasMatchingAccountCurrency(form: DraftForm, accounts: DraftAccount[]): boolean {
   const account = accountFor(accounts, form.account);
-  return Boolean(account && account.currency === form.currency);
+  return account?.currency === form.currency;
 }
 
 function hasValidFeeAccount(form: DraftForm, accounts: DraftAccount[]): boolean {
@@ -159,7 +159,7 @@ function hasValidFeeAccount(form: DraftForm, accounts: DraftAccount[]): boolean 
   }
 
   const account = accountFor(accounts, form.feeAccount);
-  return Boolean(account && account.currency === form.feeCurrency);
+  return account?.currency === form.feeCurrency;
 }
 
 function validateExpenseDraft(form: DraftForm): boolean {

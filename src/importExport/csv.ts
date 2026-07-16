@@ -156,7 +156,7 @@ export function validateCsvBytes(bytes: Uint8Array): CsvValidationResult {
   const duplicateHeaders = normalizedHeaders.filter((header, index) => normalizedHeaders.indexOf(header) !== index);
   const headerErrors = [
     ...errors,
-    ...(headers.some((header) => header === "") ? ["CSV headers cannot be empty."] : []),
+    ...(headers.includes("") ? ["CSV headers cannot be empty."] : []),
     ...(duplicateHeaders.length > 0 ? ["CSV headers cannot contain duplicates."] : []),
     ...(headers.some((header) => supportedHeaders.has(header) || supportedHeaders.has(header.toLocaleLowerCase()))
       ? []
