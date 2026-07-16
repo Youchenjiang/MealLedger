@@ -1204,6 +1204,31 @@ function renderRoute({
   const draftCount = drafts.length;
   const recordCount = records.length;
 
+  const saveOfficialRecord = (
+    draft: TransactionDraft,
+    recordAccounts: LocalAccount[],
+    idempotencyKey: string,
+    recordId = `record-${draft.id}`,
+    feeRecordId?: string,
+  ): boolean => {
+    const bundle = createOfficialRecordBundle(draft, recordAccounts, {
+      userId: "local-user",
+      recordId,
+      idempotencyKey,
+      createdAt: new Date().toISOString(),
+      ...(feeRecordId ? { feeRecordId } : {}),
+    });
+
+    if (!bundle) {
+      return false;
+    }
+
+    setRecords((current) => appendIdempotentRecords(current, bundle));
+    setAuditEvents((current) => [...current, ...bundle.auditEvents]);
+    queueRecordBundle(bundle.records);
+    return true;
+  };
+
   switch (route) {
     case "overview":
       return <OverviewPage draftCount={draftCount} recordCount={recordCount} accountBalances={calculateAccountBalances(accounts, records)} accountReports={calculateAccountReports(accounts, records)} syncIssues={cloudSyncIssues} onRetrySyncItem={onRetryCloudSyncItem} navigate={navigate} />;
@@ -1219,21 +1244,11 @@ function renderRoute({
             navigate(navItemFor("capture"));
           }}
           onConfirmDraft={(draft) => {
-            const now = new Date().toISOString();
-            const bundle = createOfficialRecordBundle(draft, accounts, {
-              userId: "local-user",
-              recordId: `record-${draft.id}`,
-              idempotencyKey: `draft:${draft.id}`,
-              createdAt: now,
-            });
-            if (!bundle) {
+            if (!saveOfficialRecord(draft, accounts, `draft:${draft.id}`)) {
               return false;
             }
 
-            setRecords((current) => appendIdempotentRecords(current, bundle));
-            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
             setDrafts((current) => current.filter((item) => item.id !== draft.id));
-            queueRecordBundle(bundle.records);
             return true;
           }}
           onUpdateRecord={(id, patch) => {
@@ -1283,42 +1298,8 @@ function renderRoute({
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => {
-            const now = new Date().toISOString();
-            const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
-              userId: "local-user",
-              recordId: `record-${draft.id}`,
-              idempotencyKey: `capture:${draft.id}`,
-              createdAt: now,
-            });
-
-            if (!bundle) {
-              return false;
-            }
-
-            setRecords((current) => appendIdempotentRecords(current, bundle));
-            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
-            queueRecordBundle(bundle.records);
-            return true;
-          }}
-          onSaveRecord={(draft) => {
-            const now = new Date().toISOString();
-            const bundle = createOfficialRecordBundle(draft, accounts, {
-              userId: "local-user",
-              recordId: `record-${draft.id}`,
-              idempotencyKey: `manual:${draft.id}`,
-              createdAt: now,
-            });
-
-            if (!bundle) {
-              return false;
-            }
-
-            setRecords((current) => appendIdempotentRecords(current, bundle));
-            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
-            queueRecordBundle(bundle.records);
-            return true;
-          }}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`)}
+          onSaveRecord={(draft) => saveOfficialRecord(draft, accounts, `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
           onSaveMeal={onSaveMeal}
           scans={scans}
@@ -1334,46 +1315,14 @@ function renderRoute({
           accounts={accounts}
           records={records}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => {
-            const now = new Date().toISOString();
-            const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
-              userId: "local-user",
-              recordId: `record-${draft.id}`,
-              idempotencyKey: `settings:${draft.id}`,
-              createdAt: now,
-            });
-
-            if (!bundle) {
-              return false;
-            }
-
-            setRecords((current) => appendIdempotentRecords(current, bundle));
-            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
-            queueRecordBundle(bundle.records);
-            return true;
-          }}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
               return false;
             }
 
-            const now = new Date().toISOString();
-            const bundle = createOfficialRecordBundle(draft, accounts, {
-              userId: "local-user",
-              recordId: `record-${importId}`,
-              idempotencyKey: `import:${importId}`,
-              createdAt: now,
-              feeRecordId: `record-${importId}-fee`,
-            });
-            if (!bundle) {
-              return false;
-            }
-
-            setRecords((current) => appendIdempotentRecords(current, bundle));
-            setAuditEvents((current) => [...current, ...bundle.auditEvents]);
-            queueRecordBundle(bundle.records);
-            return true;
+            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`);
           }}
           onMergeImportDraft={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
