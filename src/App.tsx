@@ -897,7 +897,30 @@ function AuthenticatedApp() {
 
       <section className="workspace">
         <WorkspaceHeader route={route} statusItems={statusItems} />
-        {renderRoute(route, drafts, setDrafts, draftToEdit, setDraftToEdit, records, setRecords, setAuditEvents, queueRecordBundle, cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"), (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())), accounts, setAccounts, navigate, () => setOnboardingOpen(true), signOut, (meal) => setMeals((current) => [...current, meal]), scans, (nextScans) => setScans((current) => [...current, ...nextScans]), (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)), uploadQueue, (items) => setUploadQueue((current) => [...current, ...items]))}
+        {renderRoute({
+          route,
+          drafts,
+          setDrafts,
+          draftToEdit,
+          setDraftToEdit,
+          records,
+          setRecords,
+          setAuditEvents,
+          queueRecordBundle,
+          cloudSyncIssues: cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed" || item.state === "conflict"),
+          onRetryCloudSyncItem: (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())),
+          accounts,
+          setAccounts,
+          navigate,
+          onReopenOnboarding: () => setOnboardingOpen(true),
+          onSignOut: signOut,
+          onSaveMeal: (meal) => setMeals((current) => [...current, meal]),
+          scans,
+          onSaveScans: (nextScans) => setScans((current) => [...current, ...nextScans]),
+          onUpdateScan: (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)),
+          uploadQueue,
+          onQueueUploads: (items) => setUploadQueue((current) => [...current, ...items]),
+        })}
       </section>
     </main>
   );
@@ -1114,30 +1137,55 @@ function SignedOutShell({ authState, authMessage, configurationError, onSignIn }
   );
 }
 
-function renderRoute(
-  route: AppRoute,
-  drafts: TransactionDraft[],
-  setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>,
-  draftToEdit: TransactionDraft | null,
-  setDraftToEdit: Dispatch<SetStateAction<TransactionDraft | null>>,
-  records: LocalLedgerRecord[],
-  setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>,
-  setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>,
-  queueRecordBundle: (records: LocalLedgerRecord[]) => void,
-  cloudSyncIssues: CloudSyncQueueItem[],
-  onRetryCloudSyncItem: (id: string) => void,
-  accounts: LocalAccount[],
-  setAccounts: Dispatch<SetStateAction<LocalAccount[]>>,
-  navigate: (item: NavItem) => void,
-  onReopenOnboarding: () => void,
-  onSignOut: () => Promise<void>,
-  onSaveMeal: (meal: MealEntry) => void,
-  scans: TemporaryScan[],
-  onSaveScans: (scans: TemporaryScan[]) => void,
-  onUpdateScan: (scan: TemporaryScan) => void,
-  uploadQueue: UploadQueueItem[],
-  onQueueUploads: (items: UploadQueueItem[]) => void,
-) {
+type RouteRenderContext = {
+  route: AppRoute;
+  drafts: TransactionDraft[];
+  setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>;
+  draftToEdit: TransactionDraft | null;
+  setDraftToEdit: Dispatch<SetStateAction<TransactionDraft | null>>;
+  records: LocalLedgerRecord[];
+  setRecords: Dispatch<SetStateAction<LocalLedgerRecord[]>>;
+  setAuditEvents: Dispatch<SetStateAction<LocalAuditEvent[]>>;
+  queueRecordBundle: (records: LocalLedgerRecord[]) => void;
+  cloudSyncIssues: CloudSyncQueueItem[];
+  onRetryCloudSyncItem: (id: string) => void;
+  accounts: LocalAccount[];
+  setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
+  navigate: (item: NavItem) => void;
+  onReopenOnboarding: () => void;
+  onSignOut: () => Promise<void>;
+  onSaveMeal: (meal: MealEntry) => void;
+  scans: TemporaryScan[];
+  onSaveScans: (scans: TemporaryScan[]) => void;
+  onUpdateScan: (scan: TemporaryScan) => void;
+  uploadQueue: UploadQueueItem[];
+  onQueueUploads: (items: UploadQueueItem[]) => void;
+};
+
+function renderRoute({
+  route,
+  drafts,
+  setDrafts,
+  draftToEdit,
+  setDraftToEdit,
+  records,
+  setRecords,
+  setAuditEvents,
+  queueRecordBundle,
+  cloudSyncIssues,
+  onRetryCloudSyncItem,
+  accounts,
+  setAccounts,
+  navigate,
+  onReopenOnboarding,
+  onSignOut,
+  onSaveMeal,
+  scans,
+  onSaveScans,
+  onUpdateScan,
+  uploadQueue,
+  onQueueUploads,
+}: Readonly<RouteRenderContext>) {
   const draftCount = drafts.length;
   const recordCount = records.length;
 
@@ -1439,6 +1487,70 @@ function ConfirmActionButton({ label, message, onConfirm }: Readonly<{
   );
 }
 
+type LedgerRecordCardProps = {
+  record: LocalLedgerRecord;
+  isEditing: boolean;
+  isEditingUnresolved: boolean;
+  onEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (patch: Partial<EditableRecordFields>) => void;
+  onCompleteDetails: () => void;
+  onCancelDetails: () => void;
+  onConvertDetails: (fields: UnresolvedExpenseConversion) => boolean;
+  onUpdate: (patch: Partial<EditableRecordFields>) => void;
+  onVoid: () => void;
+};
+
+function LedgerRecordCard({
+  record,
+  isEditing,
+  isEditingUnresolved,
+  onEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onCompleteDetails,
+  onCancelDetails,
+  onConvertDetails,
+  onUpdate,
+  onVoid,
+}: Readonly<LedgerRecordCardProps>) {
+  if (isEditingUnresolved && record.recordState !== "voided") {
+    return <UnresolvedExpenseEditor record={record} onCancel={onCancelDetails} onConvert={onConvertDetails} />;
+  }
+
+  if (isEditing && record.recordState !== "voided") {
+    return <RecordEditor record={record} onCancel={onCancelEdit} onSave={onSaveEdit} />;
+  }
+
+  const isVoided = record.recordState === "voided";
+  const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  return (
+    <article className={`draft-card ${isVoided ? "voided-record" : ""}`}>
+      <div>
+        <strong>{recordDisplayName(record)}</strong>
+        <span>{record.localDate} · {record.accountName} · {record.category || record.reason || "No category"}</span>
+      </div>
+      <div className="draft-amount">
+        <strong>{record.currency} {record.amount}</strong>
+        <span>{record.kind} · {isVoided ? "voided" : record.status}</span>
+      </div>
+      {isVoided ? <span className="record-state-label">Voided</span> : (
+        <div className="record-actions">
+          {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>Complete details</button> : null}
+          {isRecurring ? (
+            <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>
+              {record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}
+            </button>
+          ) : null}
+          {isRecurring ? <ConfirmActionButton label="Cancel recurring" message="Cancel future recurrence?" onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
+          <button className="text-action" type="button" onClick={onEdit}>Edit</button>
+          <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onVoid} />
+        </div>
+      )}
+    </article>
+  );
+}
+
 function LedgerPage({
   records,
   drafts,
@@ -1507,72 +1619,24 @@ function LedgerPage({
             <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
           </div>
           {records.map((record) => (
-            editingUnresolvedId === record.id && record.recordState !== "voided" ? (
-              <UnresolvedExpenseEditor
-                key={record.id}
-                record={record}
-                onCancel={() => setEditingUnresolvedId(null)}
-                onConvert={(fields) => {
-                  const converted = onConvertUnresolved(record.id, fields);
-                  if (converted) {
-                    setEditingUnresolvedId(null);
-                  }
-                  return converted;
-                }}
-              />
-            ) : editingRecordId === record.id && record.recordState !== "voided" ? (
-              <RecordEditor
-                key={record.id}
-                record={record}
-                onCancel={() => setEditingRecordId(null)}
-                onSave={(patch) => {
-                  onUpdateRecord(record.id, patch);
-                  setEditingRecordId(null);
-                }}
-              />
-            ) : (
-              <article className={`draft-card ${record.recordState === "voided" ? "voided-record" : ""}`} key={record.id}>
-                <div>
-                  <strong>{recordDisplayName(record)}</strong>
-                  <span>{record.localDate} · {record.accountName} · {record.category || record.reason || "No category"}</span>
-                </div>
-                <div className="draft-amount">
-                  <strong>{record.currency} {record.amount}</strong>
-                  <span>{record.kind} · {record.recordState === "voided" ? "voided" : record.status}</span>
-                </div>
-                {record.recordState === "voided" ? (
-                  <span className="record-state-label">Voided</span>
-                ) : (
-                  <div className="record-actions">
-                    {record.kind === "unresolved-expense" ? (
-                      <button className="text-action" type="button" onClick={() => setEditingUnresolvedId(record.id)}>Complete details</button>
-                    ) : null}
-                    {record.recurrenceStatus === "active" || record.recurrenceStatus === "paused" ? (
-                      <button
-                        className="text-action"
-                        type="button"
-                        onClick={() => onUpdateRecord(record.id, { recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}
-                      >
-                        {record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}
-                      </button>
-                    ) : null}
-                    {record.recurrenceStatus === "active" || record.recurrenceStatus === "paused" ? (
-                      <ConfirmActionButton
-                        label="Cancel recurring"
-                        message="Cancel future recurrence?"
-                        onConfirm={() => onUpdateRecord(record.id, { recurrenceStatus: "cancelled" })}
-                      />
-                    ) : null}
-                    <button className="text-action" type="button" onClick={() => setEditingRecordId(record.id)}>Edit</button>
-                    <ConfirmActionButton
-                      label="Void"
-                      message="Void this record? It remains in history but leaves active totals."
-                      onConfirm={() => onVoidRecord(record.id)}
-                    />
-                  </div>
-                )}
-              </article>
-            )
+            <LedgerRecordCard
+              key={record.id}
+              record={record}
+              isEditing={editingRecordId === record.id}
+              isEditingUnresolved={editingUnresolvedId === record.id}
+              onEdit={() => setEditingRecordId(record.id)}
+              onCancelEdit={() => setEditingRecordId(null)}
+              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); setEditingRecordId(null); }}
+              onCompleteDetails={() => setEditingUnresolvedId(record.id)}
+              onCancelDetails={() => setEditingUnresolvedId(null)}
+              onConvertDetails={(fields) => {
+                const converted = onConvertUnresolved(record.id, fields);
+                if (converted) setEditingUnresolvedId(null);
+                return converted;
+              }}
+              onUpdate={(patch) => onUpdateRecord(record.id, patch)}
+              onVoid={() => onVoidRecord(record.id)}
+            />
           ))}
         </section>
       ) : null}
@@ -2356,38 +2420,22 @@ function ManualLedgerPartyFields({
         </div>
       ) : null}
       {needsCounterparty ? (
-        form.kind === "income" || form.kind === "fund-addition" ? (
-          <div className="form-field">
-            <label htmlFor="entry-source">Source</label>
-            <div className="field-control-row">
-              <select id="entry-source" required value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)}>
-                <option value="">Select a source</option>
-                {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
-              </select>
-              <button className="icon-button" type="button" aria-label="Add source" title="Add source" onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
-                <Plus size={18} aria-hidden="true" />
-              </button>
-            </div>
-            {isAddingSource ? (
-              <section className="quick-category" aria-label="Quick source setup">
-                <label htmlFor="quick-source-name">New source</label>
-                <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder="Parent" />
-                <div className="quick-account-actions">
-                  <button className="primary-action" type="button" onClick={addQuickSource}>Add and select</button>
-                  <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>Cancel</button>
-                </div>
-                {quickSourceError ? <p className="quick-account-error" role="alert">{quickSourceError}</p> : null}
-              </section>
-            ) : null}
-          </div>
-        ) : (
-          <div className="form-field">
-            <label htmlFor="entry-counterparty"><span>{counterpartyLabel}</span></label>
-            <input id="entry-counterparty" required pattern=".*\S.*" title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`} value={form.counterparty} disabled={form.kind === "expense" && form.counterpartyMissing} onChange={(event) => updateForm("counterparty", event.target.value)} />
-            {form.kind === "expense" ? <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} /><span>Merchant unavailable</span></label> : null}
-            {form.kind === "expense" && merchantSuggestions.length > 0 && !form.counterpartyMissing ? <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} /> : null}
-          </div>
-        )
+        <ManualLedgerCounterpartyField
+          form={form}
+          counterpartyLabel={counterpartyLabel}
+          sourceOptions={sourceOptions}
+          merchantSuggestions={merchantSuggestions}
+          isAddingSource={isAddingSource}
+          quickSourceName={quickSourceName}
+          quickSourceError={quickSourceError}
+          updateForm={updateForm}
+          setMissingExpenseField={setMissingExpenseField}
+          applySuggestion={applySuggestion}
+          setIsAddingSource={setIsAddingSource}
+          setQuickSourceName={setQuickSourceName}
+          setQuickSourceError={setQuickSourceError}
+          addQuickSource={addQuickSource}
+        />
       ) : null}
       {form.kind === "refund" ? (
         <>
@@ -2406,6 +2454,56 @@ function ManualLedgerPartyFields({
         </div>
       ) : null}
     </>
+  );
+}
+
+type ManualLedgerCounterpartyFieldProps = Pick<ManualLedgerPartyFieldsProps,
+  | "form" | "counterpartyLabel" | "sourceOptions" | "merchantSuggestions" | "isAddingSource"
+  | "quickSourceName" | "quickSourceError" | "updateForm" | "setMissingExpenseField" | "applySuggestion"
+  | "setIsAddingSource" | "setQuickSourceName" | "setQuickSourceError" | "addQuickSource"
+>;
+
+function ManualLedgerCounterpartyField({
+  form, counterpartyLabel, sourceOptions, merchantSuggestions, isAddingSource, quickSourceName, quickSourceError,
+  updateForm, setMissingExpenseField, applySuggestion, setIsAddingSource, setQuickSourceName, setQuickSourceError,
+  addQuickSource,
+}: Readonly<ManualLedgerCounterpartyFieldProps>) {
+  const isIncomeSource = form.kind === "income" || form.kind === "fund-addition";
+  if (isIncomeSource) {
+    return (
+      <div className="form-field">
+        <label htmlFor="entry-source">Source</label>
+        <div className="field-control-row">
+          <select id="entry-source" required value={form.counterparty} onChange={(event) => updateForm("counterparty", event.target.value)}>
+            <option value="">Select a source</option>
+            {sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+          </select>
+          <button className="icon-button" type="button" aria-label="Add source" title="Add source" onClick={() => { setIsAddingSource(true); setQuickSourceError(""); }}>
+            <Plus size={18} aria-hidden="true" />
+          </button>
+        </div>
+        {isAddingSource ? (
+          <section className="quick-category" aria-label="Quick source setup">
+            <label htmlFor="quick-source-name">New source</label>
+            <input id="quick-source-name" required value={quickSourceName} onChange={(event) => { setQuickSourceName(event.target.value); setQuickSourceError(""); }} placeholder="Parent" />
+            <div className="quick-account-actions">
+              <button className="primary-action" type="button" onClick={addQuickSource}>Add and select</button>
+              <button className="quiet-action" type="button" onClick={() => { setIsAddingSource(false); setQuickSourceError(""); }}>Cancel</button>
+            </div>
+            {quickSourceError ? <p className="quick-account-error" role="alert">{quickSourceError}</p> : null}
+          </section>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="form-field">
+      <label htmlFor="entry-counterparty"><span>{counterpartyLabel}</span></label>
+      <input id="entry-counterparty" required pattern=".*\S.*" title={`Enter a ${counterpartyLabel.toLocaleLowerCase()}.`} value={form.counterparty} disabled={form.kind === "expense" && form.counterpartyMissing} onChange={(event) => updateForm("counterparty", event.target.value)} />
+      {form.kind === "expense" ? <label className="checkbox-field inline-checkbox"><input type="checkbox" checked={form.counterpartyMissing} onChange={(event) => setMissingExpenseField("counterparty", event.target.checked)} /><span>Merchant unavailable</span></label> : null}
+      {form.kind === "expense" && merchantSuggestions.length > 0 && !form.counterpartyMissing ? <HistorySuggestions records={merchantSuggestions} source="merchant" onApply={applySuggestion} /> : null}
+    </div>
   );
 }
 
@@ -3178,45 +3276,62 @@ function CapturePage({
         actionIcons={actionIcons}
         onSelectIntent={setCaptureIntent}
       />
-      {captureIntent === "manual-ledger" ? (
-        <ManualLedgerPanel {...manualLedgerProps} />
-      ) : captureIntent === "record-meal" ? (
-        <MealCapturePanel
-          mealOccurredAt={mealOccurredAt}
-          mealNote={mealNote}
-          mealPhotoFiles={mealPhotoFiles}
-          mealError={mealError}
-          mealSavedMessage={mealSavedMessage}
-          isCameraOpen={isCameraOpen}
-          cameraError={cameraError}
-          cameraVideoRef={cameraVideoRef}
-          uploadQueue={uploadQueue}
-          onMealTimeChange={(value) => { setMealOccurredAt(value); setMealError(""); }}
-          onMealNoteChange={setMealNote}
-          onAppendPhotos={appendMealPhotos}
-          onOpenCamera={openCamera}
-          onCapturePhoto={captureCameraPhoto}
-          onStopCamera={stopCamera}
-          onSubmit={handleMealSubmit}
-        />
-      ) : captureIntent === "scan-invoice" || captureIntent === "scan-receipt" ? (
-        <ScanCapturePanel
-          captureIntent={captureIntent}
-          scanFiles={scanFiles}
-          scanError={scanError}
-          scanSavedMessage={scanSavedMessage}
-          scans={scans}
-          uploadQueue={uploadQueue}
-          onScanFilesChange={(files) => { setScanFiles(files); setScanError(""); }}
-          onSubmit={handleScanSubmit}
-          onUpdateScan={onUpdateScan}
-        />
-      ) : (
-        <CaptureWorkspacePanel captureIntent={captureIntent} />
-      )}
+      <CaptureIntentPanel
+        captureIntent={captureIntent}
+        manualLedgerProps={manualLedgerProps}
+        mealProps={{
+          mealOccurredAt,
+          mealNote,
+          mealPhotoFiles,
+          mealError,
+          mealSavedMessage,
+          isCameraOpen,
+          cameraError,
+          cameraVideoRef,
+          uploadQueue,
+          onMealTimeChange: (value) => { setMealOccurredAt(value); setMealError(""); },
+          onMealNoteChange: setMealNote,
+          onAppendPhotos: appendMealPhotos,
+          onOpenCamera: openCamera,
+          onCapturePhoto: captureCameraPhoto,
+          onStopCamera: stopCamera,
+          onSubmit: handleMealSubmit,
+        }}
+        scanProps={{
+          captureIntent: captureIntent === "scan-invoice" || captureIntent === "scan-receipt" ? captureIntent : "scan-receipt",
+          scanFiles,
+          scanError,
+          scanSavedMessage,
+          scans,
+          uploadQueue,
+          onScanFilesChange: (files) => { setScanFiles(files); setScanError(""); },
+          onSubmit: handleScanSubmit,
+          onUpdateScan,
+        }}
+      />
       <SavedRecordPanel recordCount={recordCount} navigate={navigate} />
     </section>
   );
+}
+
+type CaptureIntentPanelProps = {
+  captureIntent: CaptureIntent;
+  manualLedgerProps: React.ComponentProps<typeof ManualLedgerPanel>;
+  mealProps: React.ComponentProps<typeof MealCapturePanel>;
+  scanProps: React.ComponentProps<typeof ScanCapturePanel>;
+};
+
+function CaptureIntentPanel({ captureIntent, manualLedgerProps, mealProps, scanProps }: Readonly<CaptureIntentPanelProps>) {
+  if (captureIntent === "manual-ledger") {
+    return <ManualLedgerPanel {...manualLedgerProps} />;
+  }
+  if (captureIntent === "record-meal") {
+    return <MealCapturePanel {...mealProps} />;
+  }
+  if (captureIntent === "scan-invoice" || captureIntent === "scan-receipt") {
+    return <ScanCapturePanel {...scanProps} />;
+  }
+  return <CaptureWorkspacePanel captureIntent={captureIntent} />;
 }
 
 function MealCaptureForm({
