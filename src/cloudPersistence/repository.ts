@@ -238,7 +238,7 @@ async function persistRecordChildren(
   return null;
 }
 
-async function persistIdempotencyResponse(
+function persistIdempotencyResponse(
   client: CloudPersistenceClient,
   request: IdempotencyRequest,
   bundle: CloudRecordBundle,
