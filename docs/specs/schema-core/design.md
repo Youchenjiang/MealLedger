@@ -19,6 +19,7 @@ Official or auditable tables may also include:
 - `voided_at`
 - `void_reason`
 - `replaces_record_id`
+- `replaces_record_id`
 - `source_label`
 - `idempotency_key`
 
@@ -334,8 +335,10 @@ Core indexes:
 - `ledger_records(user_id, idempotency_key)` when populated
 - `drafts(user_id, status, updated_at desc)`
 - `media_assets(user_id, retention_kind, expires_at)`
+- `media_assets(user_id, checksum_sha256)` unique when a checksum is present
 - `media_links(target_type, target_id)`
 - `idempotency_keys(user_id, idempotency_key)` unique
+- `idempotency_keys(expires_at)` for expiry cleanup
 
 ## Deferred Tables
 

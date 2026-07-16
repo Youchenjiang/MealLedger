@@ -60,6 +60,9 @@ Expected verification:
 
 - Canonical SQL: `supabase/schema.sql` and `supabase/migrations/0001_schema_core.sql`.
 - Contract checks: `src/schemaCore/schemaContract.test.ts`.
+- Hardening now enforces adjustment reasons, replacement-record ownership,
+  temporary source/media expiry, checksum shape/uniqueness, and idempotency
+  replay metadata/expiry behavior.
 - TypeScript domain contracts: `src/schemaCore/contracts.ts`.
 - Root and nested category names use a generated parent key so NULL roots are
   also protected by the canonical uniqueness constraint.
