@@ -65,6 +65,60 @@ function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedger
 
 type SyncContext = { input: SyncLocalChangesInput; references: CloudReferenceMap };
 
+function normalizedName(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function accountsForBootstrap(accounts: LocalAccount[], records: LocalLedgerRecord[]): LocalAccount[] {
+  const result = [...accounts];
+  const names = new Set(result.map((account) => normalizedName(account.name)));
+
+  const addRecordAccount = (id: string, name: string, currency: string) => {
+    const trimmedName = name.trim();
+    const normalized = normalizedName(trimmedName);
+    if (!trimmedName || names.has(normalized)) return;
+    result.push({ id: id || `sync-account:${normalized}`, name: trimmedName, currency: currency.trim() || "TWD" });
+    names.add(normalized);
+  };
+
+  for (const record of records) {
+    addRecordAccount(record.accountId, record.accountName, record.currency);
+    if (record.kind === "transfer") {
+      addRecordAccount(record.transferAccountId, record.transferAccountName, record.destinationCurrency || record.currency);
+    }
+    if (record.feeAccountName) {
+      addRecordAccount(record.feeAccountId, record.feeAccountName, record.feeCurrency || record.currency);
+    }
+  }
+
+  return result;
+}
+
+function rebindAccountReferences(
+  references: CloudReferenceMap,
+  accounts: LocalAccount[],
+  records: LocalLedgerRecord[],
+): CloudReferenceMap {
+  const idsByName = new Map<string, string>();
+  for (const account of accounts) {
+    const cloudId = references.accountIds[account.id];
+    if (cloudId) idsByName.set(normalizedName(account.name), cloudId);
+  }
+
+  const accountIds = { ...references.accountIds };
+  for (const record of records) {
+    const sourceId = idsByName.get(normalizedName(record.accountName));
+    if (sourceId) accountIds[record.accountId] = sourceId;
+
+    if (record.kind === "transfer") {
+      const destinationId = idsByName.get(normalizedName(record.transferAccountName));
+      if (destinationId) accountIds[record.transferAccountId] = destinationId;
+    }
+  }
+
+  return { ...references, accountIds };
+}
+
 
 function markMediaSynced(media: UploadQueueItem[], id: string): UploadQueueItem[] {
   return media.map((candidate) => candidate.id === id ? { ...candidate, metadataStatus: "synced" as const } : candidate);
@@ -178,9 +232,11 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
   let state: SyncLocalChangesResult = { records: input.records, meals: input.meals, media: input.media, scans: input.scans, queue: input.queue };
   if (pending.length === 0) return state;
 
+  const syncAccounts = accountsForBootstrap(input.accounts, input.records);
+
   const profileResult = await persistProfile(input.client, {
     user_id: input.userId,
-    default_currency: input.accounts[0]?.currency.toUpperCase() ?? "TWD",
+    default_currency: syncAccounts[0]?.currency.toUpperCase() ?? "TWD",
     default_timezone: "Asia/Taipei",
   });
   if (!profileResult.ok) {
@@ -195,7 +251,7 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
 
   const bootstrap = await bootstrapReferences(input.referenceClient, {
     userId: input.userId,
-    accounts: input.accounts,
+    accounts: syncAccounts,
     categories: input.categories,
     aliases: input.aliases,
     merchants: input.merchants,
@@ -210,7 +266,8 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
     return state;
   }
 
-  const context: SyncContext = { input, references: bootstrap.references };
+  const references = rebindAccountReferences(bootstrap.references, syncAccounts, input.records);
+  const context: SyncContext = { input, references };
   for (const item of pending) {
     state = { ...state, queue: markCloudSyncing(state.queue, item.id, input.now) };
     state = await syncItem(item, context, state);

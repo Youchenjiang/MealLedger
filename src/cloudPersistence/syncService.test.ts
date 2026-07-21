@@ -108,6 +108,74 @@ describe("cloud sync service", () => {
     expect(result.queue[0].state).toBe("synced");
   });
 
+  test("rebinds a stale local account id by its current account name", async () => {
+    const staleRecord = { ...baseRecord, accountId: "old-user-account-uuid" };
+    const result = await syncLocalChanges(input({
+      records: [staleRecord],
+      queue: enqueueLocalChanges([], [], [staleRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+    }));
+
+    expect(result.records[0].status).toBe("synced");
+    expect(result.queue[0].state).toBe("synced");
+  });
+
+  test("rebinds an existing but incorrect account mapping by the record name", async () => {
+    const transfer: LocalLedgerRecord = {
+      ...baseRecord,
+      id: "transfer-1",
+      kind: "transfer",
+      transferAccountId: "account-2",
+      transferAccountName: "Cash",
+      destinationAmount: "100",
+      destinationCurrency: "TWD",
+    };
+    const rpcArgs: Record<string, unknown>[] = [];
+    const result = await syncLocalChanges(input({
+      accounts: [account, { id: "account-2", name: "Bank", currency: "TWD" }],
+      records: [transfer],
+      queue: enqueueLocalChanges([], [], [transfer], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      client: Object.assign(persistenceClient(), {
+        rpc: vi.fn((_name: string, args: Record<string, unknown>) => {
+          rpcArgs.push(args);
+          return Promise.resolve({ data: { replayed: false }, error: null });
+        }),
+      }),
+    }));
+
+    expect(result.records[0].status).toBe("synced");
+    expect(result.queue[0].state).toBe("synced");
+    expect((rpcArgs[0].p_transfer_details as Record<string, unknown>).destination_account_id).toBe("remote-accounts-0");
+  });
+
+  test("bootstraps account references discovered from ledger records", async () => {
+    const remoteRecord: LocalLedgerRecord = {
+      ...baseRecord,
+      accountId: "stale-remote-account",
+      accountName: "Remote wallet",
+      kind: "transfer",
+      transferAccountId: "account-1",
+      transferAccountName: "Cash",
+      destinationAmount: "100",
+      destinationCurrency: "TWD",
+    };
+    const rpcArgs: Record<string, unknown>[] = [];
+    const result = await syncLocalChanges(input({
+      records: [remoteRecord],
+      queue: enqueueLocalChanges([], [], [remoteRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      client: Object.assign(persistenceClient(), {
+        rpc: vi.fn((_name: string, args: Record<string, unknown>) => {
+          rpcArgs.push(args);
+          return Promise.resolve({ data: { replayed: false }, error: null });
+        }),
+      }),
+    }));
+
+    expect(result.records[0].status).toBe("synced");
+    expect(result.queue[0].state).toBe("synced");
+    expect(rpcArgs[0].p_ledger_record).toMatchObject({ account_id: "remote-accounts-1" });
+    expect(rpcArgs[0].p_transfer_details).toMatchObject({ destination_account_id: "remote-accounts-0" });
+  });
+
   test("reorders a persisted transfer queue behind its linked fee record", async () => {
     const transfer: LocalLedgerRecord = {
       ...baseRecord,
@@ -138,7 +206,7 @@ describe("cloud sync service", () => {
       queue,
     }));
 
-    expect(client.calls.indexOf("ledger_records")).toBeLessThan(client.calls.indexOf("persist_ledger_record_bundle"));
+    expect(client.calls.indexOf("ledger_records")).toBeLessThan(client.calls.indexOf("persist_ledger_record_bundle_resolved"));
     expect(result.records.every((record) => record.status === "synced")).toBe(true);
   });
 
