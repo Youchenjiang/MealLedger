@@ -43,6 +43,9 @@
 
 - Local-only mode can create and review a record without a network request.
 - Configured-mode auth/loading/error states remain reachable.
+- After email/password sign-in, the browser can create a record, show cloud
+  sync readiness, and flush that record through the authenticated Supabase
+  client.
 - Offline/local-only status is visible when the cloud queue is pending.
 - Desktop and mobile layouts do not expose raw Supabase errors or console
   errors.

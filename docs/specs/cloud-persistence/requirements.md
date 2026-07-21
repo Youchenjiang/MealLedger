@@ -33,7 +33,8 @@ making cloud availability a prerequisite for recording locally.
 - Ministry of Finance invoice synchronization.
 - Bank, credit-card, or statement synchronization.
 - R2 object upload, signed URL generation, image bytes, OCR, or AI processing.
-- Anonymous cloud accounts or a second authentication provider.
+- Authentication provider selection and account verification flow; those belong
+  to the auth spec. Cloud persistence only consumes an authenticated session.
 - Automatic conflict merging. A version mismatch becomes a retry/conflict
   result and never silently overwrites a newer cloud row.
 
