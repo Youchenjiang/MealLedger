@@ -64,6 +64,15 @@ confirms scan drafts, or runs provider synchronization. Existing local data
 owned by another authenticated user remains blocked for explicit review rather
 than being claimed automatically.
 
+## Production Deployment Rule
+
+Production Supabase schema changes use the repository migration path described
+in [Supabase Deployment Policy](../../engineering/supabase-deployment.md).
+The GitHub integration watches `main`; new migrations are deployed from
+reviewed Git history. The dashboard SQL Editor and direct production
+`supabase db push` are break-glass-only paths and must be followed by a tracked
+forward-only migration.
+
 ## Verification Evidence
 
 The current branch was re-verified after the meal/media/source queue slice,

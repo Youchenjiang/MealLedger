@@ -2,6 +2,8 @@
 
 MealLedger separates structured financial records from large media files. The backend is designed around clear ownership boundaries so ledger exports stay small, media storage can grow independently, and future invoice providers can be swapped without rewriting the core ledger.
 
+Production database changes follow the [Supabase Deployment Policy](supabase-deployment.md): versioned migrations in Git are reviewed through pull requests and deployed to `main` through the Supabase GitHub integration. The production dashboard is not a parallel source of truth.
+
 ## Backend Components
 
 | Component | Technology | Responsibility |
