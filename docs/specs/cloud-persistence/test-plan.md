@@ -71,6 +71,9 @@ git status --short
 Supabase database. It creates isolated test identities, verifies owner-only
 visibility, rejects cross-owner ledger references, rejects cross-owner media
 links, and cleans up its rows in the same transaction.
+The runner discovers the sole active `supabase_db_*` container. When multiple
+local Supabase projects are running, set `SUPABASE_DB_CONTAINER` to the intended
+database container before running the command.
 
 `npm run test:remote` is a manual release-gate command. It requires a temporary
 server-only Supabase secret or service-role key in the process environment,
