@@ -216,6 +216,8 @@ Deliverables:
 - Typed persistence boundary and local-to-canonical row mappers.
 - Idempotent account, record, draft, meal, media metadata, and source payload
   writes.
+- Signed private R2 upload for available local image bytes before media metadata
+  synchronization.
 - Retryable queue state with bounded backoff and visible local-only status.
 - Version-conflict result without silent overwrite.
 
@@ -227,8 +229,8 @@ Exit criteria:
 - Failed child writes are not reported as fully synced.
 - Meal/photo/source links are persisted as metadata only; image bytes remain
   outside Supabase and clean ledger exports.
-- R2 bytes, provider invoice sync, bank sync, and multi-device merge remain
-  outside this spec.
+- R2 object deletion/cleanup, provider invoice sync, bank sync, and multi-device
+  merge remain outside this spec.
 
 ## Deferred Until V2 Or Spike
 

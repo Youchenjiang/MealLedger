@@ -23,6 +23,8 @@ making cloud availability a prerequisite for recording locally.
   the local queue contains the corresponding objects. Client-only identifiers
   are converted to deterministic UUIDs at the cloud boundary; image bytes are
   never placed in Supabase rows.
+- Upload available local image bytes to private R2 objects through short-lived
+  signed PUT URLs before marking their media metadata as synced.
 - Use the local idempotency key as the stable action key for retries.
 - Keep failed writes in the local queue and expose a retryable error state.
 - Use Supabase RLS as the ownership boundary; the browser never uses a service
@@ -32,7 +34,8 @@ making cloud availability a prerequisite for recording locally.
 
 - Ministry of Finance invoice synchronization.
 - Bank, credit-card, or statement synchronization.
-- R2 object upload, signed URL generation, image bytes, OCR, or AI processing.
+- R2 object deletion/retention jobs, thumbnail generation, OCR, or AI
+  processing.
 - Authentication provider selection and account verification flow; those belong
   to the auth spec. Cloud persistence only consumes an authenticated session.
 - Automatic conflict merging. A version mismatch becomes a retry/conflict
@@ -54,6 +57,9 @@ making cloud availability a prerequisite for recording locally.
    a scan remains a source/draft until the user confirms it.
 7. An account has its own queue target, so creating an account does not require
    a ledger record before the account reference is persisted.
+8. Media metadata is persisted only after its corresponding R2 upload succeeds.
+   A missing local byte payload remains visible for re-selection and is not
+   reported as uploaded.
 
 ## Write Order
 
@@ -130,8 +136,10 @@ non-retryable cloud boundary error.
   accept or store a service-role client in frontend code.
 - Every mutation includes the authenticated user ownership fields expected by
   RLS. Client-side IDs are not treated as proof of ownership.
-- The adapter persists metadata only. Temporary scan cleanup and signed media
-  URL behavior remain in the capture-media boundary until the cloud media slice.
+- Browser code requests signed upload URLs from the authenticated Edge Function;
+  R2 credentials never enter the browser. Temporary scan lifecycle remains in
+  the capture-media boundary, while physical R2 deletion is deferred to a
+  cleanup job.
 - If the authenticated user differs from the local data owner, automatic claim
   and sync are blocked until an explicit migration/review flow exists.
 
@@ -150,3 +158,5 @@ non-retryable cloud boundary error.
 - Transfers without the atomic RPC boundary remain local-only rather than being
   reported as synced.
 - Tests prove that clean exports remain unchanged and contain no media bytes.
+- Tests prove that media metadata is not marked synced before its R2 upload
+  succeeds and stale upload results cannot restore discarded lifecycle state.

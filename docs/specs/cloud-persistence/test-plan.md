@@ -36,6 +36,10 @@
 - No Supabase configuration continues to save records locally.
 - A missing session never displays a synced state.
 - A cloud failure keeps the local record and queue item available.
+- A media item uploads available local bytes before its metadata is marked
+  synced; a missing byte payload stays pending for explicit re-selection.
+- A late upload or metadata result does not recreate a scan the user already
+  discarded.
 - Existing clean CSV, JSON, and ZIP exports contain ledger fields only and no
   image bytes or base64 payloads.
 
@@ -68,9 +72,10 @@ Supabase database. It creates isolated test identities, verifies owner-only
 visibility, rejects cross-owner ledger references, rejects cross-owner media
 links, and cleans up its rows in the same transaction.
 
-`npm run test:remote` is a manual release-gate command. It requires a
-temporary `SUPABASE_SERVICE_ROLE_KEY` in the process environment, creates an
-isolated confirmed test user, uses that user's authenticated session for all
+`npm run test:remote` is a manual release-gate command. It requires a temporary
+server-only Supabase secret or service-role key in the process environment,
+creates an isolated confirmed test user, and uses that user's authenticated
+session for all
 application writes, verifies the canonical persistence entities and transfer
 idempotency replay against the remote project, removes the smoke rows in
 dependency order, then deletes the test user. The key is never read from a

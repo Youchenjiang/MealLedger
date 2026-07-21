@@ -31,6 +31,10 @@
 - [x] Map temporary receipt and invoice links to the canonical media-link enum values.
 - [x] Add an authenticated atomic RPC for transfer bundles and version checks.
 - [x] Connect the adapter to the local queue without changing local-first commit.
+- [x] Upload available image bytes through authenticated signed R2 PUT URLs
+      before persisting media metadata.
+- [x] Preserve discard/retain decisions when an earlier async upload or metadata
+      sync result completes late.
 - [x] Add authenticated-style integration tests with a mocked Supabase client.
 
 ## Verification
@@ -51,7 +55,7 @@
 ## Deferred
 
 - [ ] Invoice and statement provider synchronization.
-- [ ] R2 upload and media cleanup jobs.
+- [ ] R2 object deletion, thumbnail, and scheduled cleanup jobs.
 - [ ] Multi-device conflict merge UI.
 - [ ] Capacitor/SQLite offline guarantee.
 
@@ -59,8 +63,10 @@
 
 The local-first adapter is wired into the authenticated App path. It persists
 canonical ledger/draft rows plus meal, media metadata, and temporary source
-payload metadata when Supabase is configured. It never uploads image bytes,
-confirms scan drafts, or runs provider synchronization. Existing local data
+payload metadata when Supabase is configured. Available local image bytes are
+uploaded to private R2 objects before media metadata is marked synced. It does
+not confirm scan drafts, delete retained R2 objects, or run provider
+synchronization. Existing local data
 owned by another authenticated user remains blocked for explicit review rather
 than being claimed automatically.
 
@@ -83,10 +89,10 @@ Pending queue execution also reorders legacy transfer items behind linked fee
 records. Temporary scan links now use
 `receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
-- `npm run test`: 35 files, 226 tests passed.
-- `npm run test:coverage`: 84.33% statements, 75.22% branches, 86.68% functions,
-  87.04% lines.
-- `npm run test:e2e`: 8 browser smoke tests passed.
+- `npm run test`: 36 files, 243 tests passed.
+- `npm run test:coverage`: 83.19% statements, 72.43% branches, 84.78% functions,
+  86.19% lines.
+- `npm run test:e2e`: 9 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - `npm run test:rls`: local Supabase execution passed with two authenticated
   identities, owner-only visibility, cross-owner rejection, and cleanup.
@@ -98,6 +104,9 @@ records. Temporary scan links now use
   covering profile, account/reference, ledger, transfer RPC replay,
   idempotency, draft, source, media, and meal writes. Smoke rows are removed
   in dependency order before the temporary user is deleted.
+- Remote smoke user administration uses the Supabase SDK so both legacy
+  service-role JWTs and current secret keys follow the supported server-only
+  boundary.
 - The frontend remote endpoint is configured only through ignored local
   environment files; no project secret is tracked in Git.
 
