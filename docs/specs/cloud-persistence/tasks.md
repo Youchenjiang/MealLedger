@@ -89,9 +89,9 @@ Pending queue execution also reorders legacy transfer items behind linked fee
 records. Temporary scan links now use
 `receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
-- `npm run test`: 36 files, 243 tests passed.
-- `npm run test:coverage`: 83.19% statements, 72.43% branches, 84.78% functions,
-  86.19% lines.
+- `npm run test`: 36 files, 245 tests passed.
+- `npm run test:coverage`: 83.23% statements, 72.47% branches, 84.78% functions,
+  86.23% lines.
 - `npm run test:e2e`: 9 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - `npm run test:rls`: local Supabase execution passed with two authenticated
