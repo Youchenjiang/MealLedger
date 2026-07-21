@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:rls": "node scripts/test-rls.mjs",
+    "test:remote": "node scripts/test-remote-persistence.mjs",
     "test:e2e": "playwright test",
     "typecheck": "tsc -b"
   },
