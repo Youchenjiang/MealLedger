@@ -15,6 +15,8 @@
 
 - Creating an account without a ledger record still queues and persists the
   owned account reference.
+- Merchant names are normalized and expense-like ledger rows retain their
+  owned `merchant_id` reference.
 - A successful account/record bundle calls tables in dependency order.
 - Replaying the same idempotency key returns the original result and does not
   insert a second parent or fee record.

@@ -13,6 +13,7 @@
 - [x] Add typed persistence client boundary.
 - [x] Add local account, record, draft, meal, media, and source metadata row mappers.
 - [x] Queue account references even when no ledger record exists yet.
+- [x] Bootstrap normalized merchant references for expense-like records.
 - [x] Add idempotent account, draft, record, meal, media, and source persistence.
 - [x] Add retry classification and bounded backoff policy.
 - [x] Re-queue edited, voided, and unresolved-converted local targets by version/hash;
@@ -38,6 +39,7 @@
 - [x] Integration-style tests with a mocked Supabase client.
 - [x] Queue meal, media metadata, and temporary source payload writes independently.
 - [x] Verify account-only synchronization closes after the owned reference is returned.
+- [x] Verify merchant bootstrap and ledger `merchant_id` mapping.
 - [x] Existing local app, import/export, E2E, and build gates remain green.
 - [ ] Real RLS integration run is deferred until Supabase CLI/project
       credentials are intentionally enabled.
