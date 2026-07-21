@@ -52,7 +52,9 @@ function reference(
   localId: string,
   field: string,
 ): CloudMappingResult<string> {
-  const remoteId = values?.[localId] ?? (isUuid(localId) ? localId : undefined);
+  // A local UUID is not evidence that the row belongs to the current cloud user.
+  // Only bootstrap-resolved references are safe to send to an ownership-checked RPC.
+  const remoteId = values?.[localId];
   return remoteId
     ? { ok: true, value: remoteId }
     : { ok: false, issues: [issue("missing-reference", field, `No cloud reference was resolved for ${localId}.`)] };
@@ -84,7 +86,7 @@ function collect<T>(results: CloudMappingResult<T>[]): CloudMappingIssue[] {
 
 export function mapLocalAccount(account: LocalAccount, userId: string): CloudRow {
   return {
-    ...(isUuid(account.id) ? { id: account.id } : {}),
+    id: stableCloudUuid(`account:${userId}:${account.id}`),
     user_id: userId,
     name: account.name,
     currency: account.currency.toUpperCase(),
@@ -286,6 +288,7 @@ function mapTransferDetails(
     value: {
       ledger_record_id: recordId,
       destination_account_id: mapped.value.destinationId,
+      destination_account_name: record.transferAccountName,
       destination_amount_minor: mapped.value.destinationAmount,
       destination_currency: mapped.value.destinationCurrency,
       fee_ledger_record_id: mapped.value.feeId,
@@ -517,6 +520,7 @@ export function mapLedgerRecord(
     eventId: eventId.value,
     recordId: recordId.value,
   });
+  ledgerRecord.account_name = record.accountName;
 
   const bundle: CloudRecordBundle = {
     ledgerRecord,
