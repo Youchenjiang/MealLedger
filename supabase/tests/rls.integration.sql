@@ -107,6 +107,7 @@ $$;
 do $$
 declare
   insert_succeeded boolean := false;
+  ownership_error_raised boolean := false;
 begin
   begin
     insert into public.ledger_records (
@@ -121,10 +122,10 @@ begin
     );
     insert_succeeded := true;
   exception when raise_exception then
-    null;
+    ownership_error_raised := true;
   end;
 
-  if insert_succeeded then
+  if insert_succeeded or not ownership_error_raised then
     raise exception 'user B inserted a ledger record using user A account';
   end if;
 end;
@@ -133,6 +134,7 @@ $$;
 do $$
 declare
   insert_succeeded boolean := false;
+  privilege_error_raised boolean := false;
 begin
   begin
     insert into public.media_links (
@@ -145,10 +147,10 @@ begin
     );
     insert_succeeded := true;
   exception when insufficient_privilege then
-    null;
+    privilege_error_raised := true;
   end;
 
-  if insert_succeeded then
+  if insert_succeeded or not privilege_error_raised then
     raise exception 'user B inserted a media link to user A parents';
   end if;
 end;
