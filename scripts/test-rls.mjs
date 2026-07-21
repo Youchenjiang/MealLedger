@@ -21,7 +21,7 @@ function resolveDatabaseContainer() {
   );
   if (discovery.status !== 0) {
     process.stderr.write("Could not inspect local Supabase database containers.\n");
-    process.exit(1);
+    return null;
   }
 
   const candidates = discovery.stdout.split(/\r?\n/u).map((name) => name.trim()).filter(Boolean);
@@ -32,11 +32,12 @@ function resolveDatabaseContainer() {
       ? "No local Supabase database container is running. Start Supabase before running RLS tests.\n"
       : "Multiple local Supabase database containers are running. Set SUPABASE_DB_CONTAINER explicitly.\n",
   );
-  process.exit(1);
+  return null;
 }
 
 const sql = readFileSync("supabase/tests/rls.integration.sql", "utf8");
 const databaseContainer = resolveDatabaseContainer();
+if (!databaseContainer) process.exit(1);
 const result = spawnSync(
   dockerExecutable,
   ["exec", "-i", databaseContainer, "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"],
