@@ -83,6 +83,12 @@ records. Temporary scan links now use
   identities, owner-only visibility, cross-owner rejection, and cleanup.
 - Mocked authenticated persistence tests continue to cover adapter failure and
   retry behavior that is independent of the local database runtime.
+- Remote Supabase migration `0001_schema_core.sql` is applied and matches the
+  local migration list.
+- Remote Auth and RLS smoke passed with a temporary authenticated user; the
+  temporary user and profile row were deleted after verification.
+- The frontend remote endpoint is configured only through ignored local
+  environment files; no project secret is tracked in Git.
 
 The Supabase configuration boundary also rejects template placeholders and
 keeps production deployments fail-closed when cloud authentication is missing.
