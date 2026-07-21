@@ -2,11 +2,40 @@
 
 ## Supabase
 
-1. Create a new Supabase project.
-2. Open SQL editor and run `supabase/schema.sql`.
-3. Create a user account through Supabase Auth.
-4. Confirm RLS is enabled on all app tables.
-5. Deploy the Edge Function:
+Production deployment follows the [Supabase Deployment Policy](supabase-deployment.md).
+Do not use the production SQL Editor as a normal setup step.
+
+### Local verification
+
+1. Install or invoke the Supabase CLI through the repository's `npx supabase`
+   commands.
+2. Start or link a non-production development environment.
+3. Apply migrations with `npx supabase db reset` for a local database, or
+   `npx supabase db push` only when the linked project is explicitly non-
+   production.
+4. Run the schema contract and RLS checks.
+
+`supabase/schema.sql` is a canonical schema reference for review and local
+bootstrap. Versioned files under `supabase/migrations/` are the deployment
+source of truth.
+
+### Production
+
+1. Connect the Supabase project to `Youchenjiang/MealLedger`.
+2. Set Working directory to `.` and production branch to `main`.
+3. Enable Deploy to production.
+4. Merge reviewed migration changes into `main`; the integration applies new
+   migrations after the merge.
+5. Verify the deployment result and migration history.
+
+Do not run `npx supabase db push` against the production project during normal
+development. Follow the emergency procedure in the deployment policy if a
+direct production change is unavoidable.
+
+### Server-side functions
+
+When an Edge Function is in the active spec, deploy it through the approved
+release path:
 
 ```powershell
 supabase functions deploy create-r2-upload-url
