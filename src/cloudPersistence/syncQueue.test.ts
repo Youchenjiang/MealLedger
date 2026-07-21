@@ -51,7 +51,16 @@ describe("cloud sync queue", () => {
     const transfer = { ...record, id: "transfer-1", kind: "transfer" } as LocalLedgerRecord;
     const fee = { ...record, id: "fee-1", linkedRecordId: "transfer-1" } as LocalLedgerRecord;
 
-    expect(enqueueLocalChanges([], [], [transfer, fee], [], [], [], [], now).map((item) => item.targetId)).toEqual(["fee-1", "transfer-1"]);
+    expect(enqueueLocalChanges({
+      queue: [],
+      accounts: [],
+      records: [transfer, fee],
+      drafts: [],
+      meals: [],
+      media: [],
+      scans: [],
+      now,
+    }).map((item) => item.targetId)).toEqual(["fee-1", "transfer-1"]);
   });
 
   test("reopens a synced record when its version or updated time changes", () => {

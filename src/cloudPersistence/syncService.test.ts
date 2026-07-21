@@ -10,6 +10,21 @@ import type { TemporaryScan } from "../captureMedia/media";
 import type { UploadQueueItem } from "../captureMedia/upload";
 
 const account: LocalAccount = { id: "account-1", name: "Cash", currency: "TWD" };
+const syncNow = "2026-07-13T00:00:00.000Z";
+
+function enqueue(overrides: Partial<Parameters<typeof enqueueLocalChanges>[0]> = {}) {
+  return enqueueLocalChanges({
+    queue: [],
+    accounts: [],
+    records: [],
+    drafts: [],
+    meals: [],
+    media: [],
+    scans: [],
+    now: syncNow,
+    ...overrides,
+  });
+}
 
 test("does not restore a scan state changed while cloud sync was in flight", () => {
   const retained: TemporaryScan = {
@@ -97,7 +112,7 @@ function input(overrides: Partial<Parameters<typeof syncLocalChanges>[0]> = {}) 
     meals: [] as MealEntry[],
     media: [] as UploadQueueItem[],
     scans: [] as TemporaryScan[],
-    queue: enqueueLocalChanges([], [], [baseRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+    queue: enqueue({ records: [baseRecord] }),
     now: "2026-07-13T00:00:00.000Z",
     ...overrides,
   };
@@ -107,7 +122,7 @@ describe("cloud sync service", () => {
   test("persists an account even when no ledger record exists", async () => {
     const result = await syncLocalChanges(input({
       records: [],
-      queue: enqueueLocalChanges([], [account], [], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ accounts: [account] }),
     }));
 
     expect(result.records).toEqual([]);
@@ -122,7 +137,7 @@ describe("cloud sync service", () => {
     const result = await syncLocalChanges(input({
       client: persistenceClient("profiles"),
       records: [],
-      queue: enqueueLocalChanges([], [account], [], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ accounts: [account] }),
     }));
 
     expect(result.queue).toMatchObject([{ state: "retryable-error", lastError: "profiles failed" }]);
@@ -139,7 +154,7 @@ describe("cloud sync service", () => {
     const staleRecord = { ...baseRecord, accountId: "old-user-account-uuid" };
     const result = await syncLocalChanges(input({
       records: [staleRecord],
-      queue: enqueueLocalChanges([], [], [staleRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ records: [staleRecord] }),
     }));
 
     expect(result.records[0].status).toBe("synced");
@@ -160,7 +175,7 @@ describe("cloud sync service", () => {
     const result = await syncLocalChanges(input({
       accounts: [account, { id: "account-2", name: "Bank", currency: "TWD" }],
       records: [transfer],
-      queue: enqueueLocalChanges([], [], [transfer], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ records: [transfer] }),
       client: Object.assign(persistenceClient(), {
         rpc: vi.fn((_name: string, args: Record<string, unknown>) => {
           rpcArgs.push(args);
@@ -188,7 +203,7 @@ describe("cloud sync service", () => {
     const rpcArgs: Record<string, unknown>[] = [];
     const result = await syncLocalChanges(input({
       records: [remoteRecord],
-      queue: enqueueLocalChanges([], [], [remoteRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ records: [remoteRecord] }),
       client: Object.assign(persistenceClient(), {
         rpc: vi.fn((_name: string, args: Record<string, unknown>) => {
           rpcArgs.push(args);
@@ -214,7 +229,7 @@ describe("cloud sync service", () => {
     const result = await syncLocalChanges(input({
       accounts: [],
       records: [legacyRecord],
-      queue: enqueueLocalChanges([], [], [legacyRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ records: [legacyRecord] }),
       referenceClient: {
         from: (table) => ({
           upsert: (rows) => ({
@@ -283,7 +298,7 @@ describe("cloud sync service", () => {
     };
     const second = await syncLocalChanges(input({
       records: [editedRecord],
-      queue: enqueueLocalChanges(first.queue, [], [editedRecord], [], [], [], [], "2026-07-13T01:00:00.000Z"),
+      queue: enqueue({ queue: first.queue, records: [editedRecord], now: "2026-07-13T01:00:00.000Z" }),
       now: "2026-07-13T01:00:00.000Z",
     }));
 
@@ -348,7 +363,7 @@ describe("cloud sync service", () => {
       meals: [meal],
       media: [media],
       scans: [scan],
-      queue: enqueueLocalChanges([], [], [baseRecord], [], [meal], [media], [scan], "2026-07-13T00:00:00.000Z"),
+      queue: enqueue({ records: [baseRecord], meals: [meal], media: [media], scans: [scan] }),
     }));
 
     expect(result.meals[0].status).toBe("synced");

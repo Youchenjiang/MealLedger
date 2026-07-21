@@ -552,19 +552,30 @@ function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspac
   return { label: "Checking cloud connection", detail: "The workspace is checking whether cloud sync is available.", icon: Wifi, tone: "neutral" };
 }
 
-function enabledSyncStatus(
-  pendingCount: number,
-  conflictCount: number,
-  errorCount: number,
-  uploadCount: number,
-  unavailableUploadCount: number,
-  uploadErrorCount: number,
-  firstError?: string,
-  firstUploadError?: string,
-): StatusItem {
-  if (conflictCount > 0) return { label: `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
-  if (errorCount > 0) return { label: `${errorCount} cloud sync error${errorCount === 1 ? "" : "s"}`, detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
-  if (uploadErrorCount > 0) return { label: `${uploadErrorCount} media upload error${uploadErrorCount === 1 ? "" : "s"}`, detail: firstUploadError ? `The media upload failed: ${firstUploadError}. Select the original file again to retry.` : "A media upload failed. Select the original file again to retry.", icon: CloudOff, tone: "danger" };
+type EnabledSyncStatusInput = {
+  pendingCount: number;
+  conflictCount: number;
+  errorCount: number;
+  uploadCount: number;
+  unavailableUploadCount: number;
+  uploadErrorCount: number;
+  firstError?: string;
+  firstUploadError?: string;
+};
+
+function enabledSyncStatus({
+  pendingCount,
+  conflictCount,
+  errorCount,
+  uploadCount,
+  unavailableUploadCount,
+  uploadErrorCount,
+  firstError,
+  firstUploadError,
+}: Readonly<EnabledSyncStatusInput>): StatusItem {
+  if (conflictCount > 0) return { label: `${countLabel(conflictCount, "sync conflict")} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
+  if (errorCount > 0) return { label: countLabel(errorCount, "cloud sync error"), detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
+  if (uploadErrorCount > 0) return { label: countLabel(uploadErrorCount, "media upload error"), detail: firstUploadError ? `The media upload failed: ${firstUploadError}. Select the original file again to retry.` : "A media upload failed. Select the original file again to retry.", icon: CloudOff, tone: "danger" };
   if (pendingCount > 0) return { label: `${pendingCount} cloud sync pending`, detail: "Local changes are queued for the configured Supabase workspace.", icon: CloudOff, tone: "warn" };
   if (uploadCount > 0) {
     return { label: "Cloud sync incomplete", detail: `Ledger records are synced, but ${countLabel(uploadCount, "image")} remains local-only until media upload completes.`, icon: CloudOff, tone: "warn" };
@@ -607,7 +618,16 @@ function syncStatusItem({
   if (blocked) {
     return { label: "Local data review required", detail: "This signed-in workspace will not claim data from another local user automatically.", icon: CloudOff, tone: "danger" };
   }
-  return enabled ? enabledSyncStatus(pendingCount, conflictCount, errorCount, uploadCount, unavailableUploadCount, uploadErrorCount, firstError, firstUploadError) : disabledSyncStatus(online, authState, userId === "local-user");
+  return enabled ? enabledSyncStatus({
+    pendingCount,
+    conflictCount,
+    errorCount,
+    uploadCount,
+    unavailableUploadCount,
+    uploadErrorCount,
+    firstError,
+    firstUploadError,
+  }) : disabledSyncStatus(online, authState, userId === "local-user");
 }
 
 function markCloudSyncRetryable(items: CloudSyncQueueItem[], message: string): CloudSyncQueueItem[] {
@@ -615,6 +635,41 @@ function markCloudSyncRetryable(items: CloudSyncQueueItem[], message: string): C
     if (item.state !== "pending" && item.state !== "retryable-error") return item;
     return { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() };
   });
+}
+
+function mergeUploadedQueueItems(current: UploadQueueItem[], uploadedItems: UploadQueueItem[]): UploadQueueItem[] {
+  const uploadedById = new Map(uploadedItems.map((item) => [item.id, item]));
+  return current.map((item) => uploadedById.get(item.id) ?? item);
+}
+
+function removeUploadedFileReferences(files: Map<string, File>, uploadedItems: UploadQueueItem[]) {
+  for (const item of uploadedItems) {
+    if (item.status === "uploaded") files.delete(item.id);
+  }
+}
+
+function releaseUploadCandidates(inFlight: Set<string>, candidates: Array<{ item: UploadQueueItem; file: File }>) {
+  for (const { item } of candidates) inFlight.delete(item.id);
+}
+
+function draftReviewStatus(draftCount: number): StatusItem {
+  return {
+    label: draftCountLabel(draftCount),
+    detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
+    icon: draftCount > 0 ? AlertCircle : CheckCircle2,
+    tone: draftCount > 0 ? "warn" : "good",
+  };
+}
+
+function statusWhen(condition: boolean, item: StatusItem): StatusItem[] {
+  return condition ? [item] : [];
+}
+
+function recordStorageStatus(recordCount: number, cloudSyncEnabled: boolean): StatusItem {
+  if (cloudSyncEnabled) {
+    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good" };
+  }
+  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" };
 }
 
 function buildStatusItems({
@@ -646,8 +701,7 @@ function buildStatusItems({
 }>): StatusItem[] {
   const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
   const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
-  const items: StatusItem[] = [
-    syncStatusItem({
+  const syncItem = syncStatusItem({
       authState,
       userId,
       enabled: cloudSyncEnabled,
@@ -661,22 +715,18 @@ function buildStatusItems({
       uploadErrorCount,
       firstUploadError,
       firstError: errorItems.find((item) => item.lastError)?.lastError,
-    }),
-    {
-      label: draftCountLabel(draftCount),
-      detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
-      icon: draftCount > 0 ? AlertCircle : CheckCircle2,
-      tone: draftCount > 0 ? "warn" : "good",
-    },
-  ];
+    });
 
-  if (persistenceWarning) items.push({ label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" });
-  if (draftCount > 0) items.push({ label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" });
-  if (uploadCount > 0) items.push({ label: `${uploadCount} local image${uploadCount === 1 ? "" : "s"}`, detail: "The image bytes are saved on this device; cloud image backup is not enabled in this spec.", icon: CloudOff, tone: "warn" });
-  if (uploadErrorCount > 0) items.push({ label: `${uploadErrorCount} image${uploadErrorCount === 1 ? "" : "s"} upload failed`, detail: firstUploadError ? `${firstUploadError}. Select the original file again to retry.` : "Select the original file again to retry.", icon: CloudOff, tone: "danger" });
-  if (unavailableUploadCount > 0) items.push({ label: `${unavailableUploadCount} image${unavailableUploadCount === 1 ? "" : "s"} needs reselect`, detail: "Only metadata remains on this device; select the original file again to back up its bytes.", icon: CloudOff, tone: "warn" });
-  if (recordCount > 0) items.push({ label: cloudSyncEnabled ? `${countLabel(recordCount, "record")} synced` : `${countLabel(recordCount, "record")} local-only`, detail: cloudSyncEnabled ? "Confirmed ledger records are stored in the cloud workspace." : "Official records stay on this device until cloud sync is enabled.", icon: cloudSyncEnabled ? Cloud : CloudOff, tone: cloudSyncEnabled ? "good" : "warn" });
-  return items;
+  return [
+    syncItem,
+    draftReviewStatus(draftCount),
+    ...statusWhen(persistenceWarning, { label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" }),
+    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(uploadCount > 0, { label: `${countLabel(uploadCount, "local image")}`, detail: "The image bytes are saved on this device; cloud image backup is not enabled in this spec.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(uploadErrorCount > 0, { label: `${countLabel(uploadErrorCount, "image")} upload failed`, detail: firstUploadError ? `${firstUploadError}. Select the original file again to retry.` : "Select the original file again to retry.", icon: CloudOff, tone: "danger" }),
+    ...statusWhen(unavailableUploadCount > 0, { label: `${countLabel(unavailableUploadCount, "image")} needs reselect`, detail: "Only metadata remains on this device; select the original file again to back up its bytes.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(recordCount > 0, recordStorageStatus(recordCount, cloudSyncEnabled)),
+  ];
 }
 
 function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
@@ -878,14 +928,11 @@ function AuthenticatedApp() {
     const now = new Date().toISOString();
     Promise.all(candidates.map(({ item, file }) => uploadMediaFile(uploadClient, file, item, now)))
       .then((uploadedItems) => {
-        const uploadedById = new Map(uploadedItems.map((item) => [item.id, item]));
-        uploadedItems.forEach((item) => {
-          if (item.status === "uploaded") pendingMediaFilesRef.current.delete(item.id);
-        });
-        setUploadQueue((current) => current.map((item) => uploadedById.get(item.id) ?? item));
+        removeUploadedFileReferences(pendingMediaFilesRef.current, uploadedItems);
+        setUploadQueue((current) => mergeUploadedQueueItems(current, uploadedItems));
       })
       .finally(() => {
-        candidates.forEach(({ item }) => mediaUploadsInFlightRef.current.delete(item.id));
+        releaseUploadCandidates(mediaUploadsInFlightRef.current, candidates);
       });
   }, [authState, cloudDataOwnerMatches, isOnline, userId]);
 
@@ -997,7 +1044,16 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (!isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
     const now = new Date().toISOString();
-    setCloudSyncQueue((current) => enqueueLocalChanges(current, accounts, records, drafts, meals, uploadQueue, scans, now));
+    setCloudSyncQueue((current) => enqueueLocalChanges({
+      queue: current,
+      accounts,
+      records,
+      drafts,
+      meals,
+      media: uploadQueue,
+      scans,
+      now,
+    }));
   }, [accounts, authState, cloudDataOwnerMatches, drafts, meals, records, scans, uploadQueue, userId]);
 
   useEffect(() => {
@@ -1780,7 +1836,7 @@ function LedgerRecordCard({
   }
 
   const isVoided = record.recordState === "voided";
-  const statusLabel = isVoided ? "Voided" : record.status === "synced" ? "Synced" : "Local only";
+  const statusLabel = ledgerRecordStatusLabel(record, isVoided);
   return (
     <article className={`draft-card ledger-record-card ${isVoided ? "voided-record" : ""}`}>
       <div className="record-summary">
@@ -1794,6 +1850,11 @@ function LedgerRecordCard({
       <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onVoid={onVoid} />
     </article>
   );
+}
+
+function ledgerRecordStatusLabel(record: LocalLedgerRecord, isVoided: boolean): string {
+  if (isVoided) return "Voided";
+  return record.status === "synced" ? "Synced" : "Local only";
 }
 
 function LedgerPage({
@@ -3813,11 +3874,7 @@ function ScanCapturePanel({
         {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => {
           const media = scanQueue.find((item) => item.id === scan.id);
           const previewUrl = mediaPreviewUrls[scan.id];
-          const storageStatus = media?.status === "uploaded"
-            ? "Cloud image uploaded"
-            : !media || media.bytesStatus === "metadata-only"
-              ? "Original image must be selected again"
-              : "Image available on this device";
+          const storageStatus = scanStorageStatus(media);
 
           return (
             <article className="source-list-row" key={scan.id}>
@@ -3845,6 +3902,59 @@ function ScanCapturePanel({
   );
 }
 
+function scanStorageStatus(media?: UploadQueueItem): string {
+  if (media?.status === "uploaded") return "Cloud image uploaded";
+  if (!media || media.bytesStatus === "metadata-only") return "Original image must be selected again";
+  return "Image available on this device";
+}
+
+type AttachmentQueueSummary = {
+  synced: number;
+  metadataPending: number;
+  failed: number;
+  needsReselect: number;
+  local: number;
+  pendingIds: string[];
+};
+
+function summarizeAttachmentQueue(queue: UploadQueueItem[]): AttachmentQueueSummary {
+  const summary: AttachmentQueueSummary = {
+    synced: 0,
+    metadataPending: 0,
+    failed: 0,
+    needsReselect: 0,
+    local: 0,
+    pendingIds: [],
+  };
+  for (const item of queue) {
+    if (item.status !== "uploaded") summary.pendingIds.push(item.id);
+    if (item.status === "uploaded" && item.metadataStatus === "synced") summary.synced += 1;
+    else if (item.status === "uploaded") summary.metadataPending += 1;
+    else if (item.status === "failed") summary.failed += 1;
+    else if (item.bytesStatus === "metadata-only") summary.needsReselect += 1;
+    else summary.local += 1;
+  }
+  return summary;
+}
+
+function AttachmentUploadSummary({ queue, onClearUploads }: Readonly<{
+  queue: UploadQueueItem[];
+  onClearUploads: (ids: string[]) => void;
+}>) {
+  if (queue.length === 0) return null;
+  const summary = summarizeAttachmentQueue(queue);
+  return (
+    <div className="field-help upload-queue-summary" aria-live="polite">
+      {summary.synced > 0 ? <p>{countLabel(summary.synced, "photo")} synced.</p> : null}
+      {summary.metadataPending > 0 ? <p>{countLabel(summary.metadataPending, "photo")} uploaded; cloud metadata pending.</p> : null}
+      {summary.failed > 0 ? <p>{countLabel(summary.failed, "photo")} failed. Select the original file again to retry.</p> : null}
+      {summary.needsReselect > 0 ? <p>{countLabel(summary.needsReselect, "photo")} needs the original file selected again.</p> : null}
+      {summary.local > 0 ? <p>{countLabel(summary.local, "photo")} saved locally. Cloud image backup is not enabled in this version.</p> : null}
+      {summary.pendingIds.length > 0 ? <button className="quiet-action" type="button" onClick={() => onClearUploads(summary.pendingIds)}>Clear pending attachments</button> : null}
+    </div>
+  );
+}
+
 function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSavedMessage, uploadQueue, onFilesChange, onSubmit, onClearUploads }: Readonly<{
   attachmentFiles: File[];
   attachmentError: string;
@@ -3855,7 +3965,6 @@ function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSa
   onClearUploads: (ids: string[]) => void;
 }>) {
   const attachmentQueue = uploadQueue.filter((item) => item.kind === "attachment");
-  const pendingAttachments = attachmentQueue.filter((item) => item.status !== "uploaded");
 
   return (
     <Panel key="attach-photo" title="Attach photo" eyebrow="Supporting evidence">
@@ -3872,16 +3981,7 @@ function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSa
         </div>
         {attachmentError ? <p className="quick-account-error" role="alert">{attachmentError}</p> : null}
         {attachmentSavedMessage ? <p className="auth-message" aria-live="polite">{attachmentSavedMessage}</p> : null}
-        {attachmentQueue.length > 0 ? (
-          <div className="field-help upload-queue-summary" aria-live="polite">
-            {attachmentQueue.filter((item) => item.status === "uploaded" && item.metadataStatus === "synced").length > 0 ? <p>{countLabel(attachmentQueue.filter((item) => item.status === "uploaded" && item.metadataStatus === "synced").length, "photo")} synced.</p> : null}
-            {attachmentQueue.filter((item) => item.status === "uploaded" && item.metadataStatus !== "synced").length > 0 ? <p>{countLabel(attachmentQueue.filter((item) => item.status === "uploaded" && item.metadataStatus !== "synced").length, "photo")} uploaded; cloud metadata pending.</p> : null}
-            {attachmentQueue.filter((item) => item.status === "failed").length > 0 ? <p>{countLabel(attachmentQueue.filter((item) => item.status === "failed").length, "photo")} failed. Select the original file again to retry.</p> : null}
-            {attachmentQueue.filter((item) => item.status !== "uploaded" && item.status !== "failed" && item.bytesStatus === "metadata-only").length > 0 ? <p>{countLabel(attachmentQueue.filter((item) => item.status !== "uploaded" && item.status !== "failed" && item.bytesStatus === "metadata-only").length, "photo")} needs the original file selected again.</p> : null}
-            {attachmentQueue.filter((item) => item.status !== "uploaded" && item.status !== "failed" && item.bytesStatus !== "metadata-only").length > 0 ? <p>{countLabel(attachmentQueue.filter((item) => item.status !== "uploaded" && item.status !== "failed" && item.bytesStatus !== "metadata-only").length, "photo")} saved locally. Cloud image backup is not enabled in this version.</p> : null}
-            {pendingAttachments.length > 0 ? <button className="quiet-action" type="button" onClick={() => onClearUploads(pendingAttachments.map((item) => item.id))}>Clear pending attachments</button> : null}
-          </div>
-        ) : null}
+        <AttachmentUploadSummary queue={attachmentQueue} onClearUploads={onClearUploads} />
       </form>
     </Panel>
   );
@@ -4053,6 +4153,11 @@ function SettingsPage({ accounts, records, authState, authMessage, cloudDataOwne
   );
 }
 
+function authenticationStatusLabel(isLocalPreview: boolean, isSignedIn: boolean): string {
+  if (isLocalPreview) return "Local preview mode";
+  return isSignedIn ? "Cloud account verified" : "Local-only until an account is verified";
+}
+
 function AccountSyncPanel({ authState, authMessage, cloudDataOwnerMatches, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{ authState: AuthState; authMessage: string; cloudDataOwnerMatches: boolean; onSignIn: (email?: string, password?: string) => Promise<void>; onClaimLocalWorkspace: () => void; onSignOut: () => Promise<void> }>) {
   const isSignedIn = authState === "signed-in";
   const isLocalPreview = isLocalDevelopmentMode;
@@ -4064,7 +4169,7 @@ function AccountSyncPanel({ authState, authMessage, cloudDataOwnerMatches, onSig
       <dl className="settings-list">
         <div>
           <dt>Authentication</dt>
-          <dd>{isLocalPreview ? "Local preview mode" : isSignedIn ? "Cloud account verified" : "Local-only until an account is verified"}</dd>
+          <dd>{authenticationStatusLabel(isLocalPreview, isSignedIn)}</dd>
         </div>
         <div>
           <dt>Storage</dt>

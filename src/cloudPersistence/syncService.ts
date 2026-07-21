@@ -133,7 +133,7 @@ export function mergeSyncedScans(current: TemporaryScan[], synced: TemporaryScan
 
   return current.map((scan) => {
     const syncedScan = syncedById.get(scan.id);
-    if (!syncedScan || syncedScan.state !== scan.state) return scan;
+    if (syncedScan?.state !== scan.state) return scan;
     return { ...scan, cloudStatus: syncedScan.cloudStatus };
   });
 }
@@ -248,7 +248,7 @@ async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, st
 }
 
 async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
-  if (item.target === "account") return await syncAccountItem(item, context, state);
+  if (item.target === "account") return syncAccountItem(item, context, state);
   if (item.target === "draft") return await syncDraftItem(item, context, state);
   if (item.target === "media") return await syncMediaItem(item, context, state);
   if (item.target === "scan") return await syncScanItem(item, context, state);
@@ -304,16 +304,25 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
   return state;
 }
 
-export function enqueueLocalChanges(
-  queue: CloudSyncQueueItem[],
-  accounts: LocalAccount[],
-  records: LocalLedgerRecord[],
-  drafts: TransactionDraft[],
-  meals: MealEntry[],
-  media: UploadQueueItem[],
-  scans: TemporaryScan[],
-  now: string,
-): CloudSyncQueueItem[] {
+export function enqueueLocalChanges({
+  queue,
+  accounts,
+  records,
+  drafts,
+  meals,
+  media,
+  scans,
+  now,
+}: Readonly<{
+  queue: CloudSyncQueueItem[];
+  accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
+  drafts: TransactionDraft[];
+  meals: MealEntry[];
+  media: UploadQueueItem[];
+  scans: TemporaryScan[];
+  now: string;
+}>): CloudSyncQueueItem[] {
   let next = queue;
   for (const account of accounts) next = enqueueAccountSync(next, account, now);
   for (const item of media) {
