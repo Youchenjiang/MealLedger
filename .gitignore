@@ -18,6 +18,7 @@ tmp/
 # Supabase local state
 .supabase/
 supabase/.branches/
+supabase/.temp/
 
 # Logs and OS files
 *.log
