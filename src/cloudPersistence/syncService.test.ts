@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import type { CloudPersistenceClient, CloudRow } from "./contracts";
-import { enqueueLocalChanges, syncLocalChanges } from "./syncService";
+import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./syncService";
 import { enqueueRecordSync } from "./syncQueue";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
@@ -10,6 +10,33 @@ import type { TemporaryScan } from "../captureMedia/media";
 import type { UploadQueueItem } from "../captureMedia/upload";
 
 const account: LocalAccount = { id: "account-1", name: "Cash", currency: "TWD" };
+
+test("does not restore a scan state changed while cloud sync was in flight", () => {
+  const retained: TemporaryScan = {
+    id: "scan-1",
+    intent: "scan-receipt",
+    fileName: "receipt.jpg",
+    mimeType: "image/jpeg",
+    byteSize: 100,
+    state: "retained",
+    cloudStatus: "synced",
+    createdAt: "2026-07-13T00:00:00.000Z",
+    expiresAt: null,
+  };
+  const discarded: TemporaryScan = { ...retained, state: "discarded", cloudStatus: "local-only" };
+
+  expect(mergeSyncedScans([discarded], [retained])).toEqual([discarded]);
+});
+
+test("does not restore queue items removed while cloud sync was in flight", () => {
+  const current = [{ id: "still-present", state: "pending" }];
+  const staleSyncResult = [
+    { id: "still-present", state: "synced" },
+    { id: "removed-during-sync", state: "synced" },
+  ];
+
+  expect(mergeSyncedItems(current, staleSyncResult)).toEqual([{ id: "still-present", state: "synced" }]);
+});
 const baseRecord = {
   id: "record-1", idempotencyKey: "action-1", userId: "local-user", kind: "expense", status: "local-only", recordState: "active", version: 1,
   localDate: "2026-07-13", accountId: "account-1", accountName: "Cash", amount: "100", currency: "TWD", category: "Daily", counterparty: "Store", counterpartyMissing: false, itemName: "Tea", itemNameMissing: false,
@@ -267,8 +294,10 @@ describe("cloud sync service", () => {
       name: "lunch.jpg",
       type: "image/jpeg",
       size: 2048,
-      status: "queued" as const,
+      status: "uploaded" as const,
       kind: "meal-photo" as const,
+      remoteMediaId: "00000000-0000-4000-8000-000000000003",
+      objectKey: "meal/meal-1-0-lunch.jpg",
     };
     const scan = {
       id: "scan-1",
