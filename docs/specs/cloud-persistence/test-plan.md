@@ -52,12 +52,14 @@
 ```text
 npm run test
 npm run test:coverage
+npm run test:rls
 npm run test:e2e
 npm run build
 git diff --check
 git status --short
 ```
 
-Real Supabase RLS integration tests are a separate environment-gated check;
-they are not faked by frontend unit tests and are not a prerequisite until a
-test project is configured.
+`npm run test:rls` runs `supabase/tests/rls.integration.sql` against the local
+Supabase database. It creates isolated test identities, verifies owner-only
+visibility, rejects cross-owner ledger references, rejects cross-owner media
+links, and cleans up its rows in the same transaction.

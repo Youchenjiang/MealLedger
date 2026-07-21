@@ -45,8 +45,8 @@
 - [x] Verify category alias deduplication and canonical category mapping.
 - [x] Verify profile persistence failure keeps pending work retryable.
 - [x] Existing local app, import/export, E2E, and build gates remain green.
-- [ ] Real RLS integration run is deferred until Supabase CLI/project
-      credentials are intentionally enabled.
+- [x] Real RLS integration run against local Supabase with two authenticated
+      identities and cross-owner rejection checks.
 
 ## Deferred
 
