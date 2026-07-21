@@ -3,13 +3,27 @@ import type { MealEntry } from "../captureMedia/meals";
 import type { TemporaryScan } from "../captureMedia/media";
 import type { LocalLedgerRecord } from "../manualLedger/records";
 import type { UploadQueueItem } from "../captureMedia/upload";
-import { enqueueDraftSync, enqueueMealSync, enqueueMediaSync, enqueueRecordSync, enqueueScanSync, markCloudSyncFailure, markCloudSynced, markCloudSyncing, pendingCloudSyncItems, retryCloudSyncItem } from "./syncQueue";
+import { enqueueAccountSync, enqueueDraftSync, enqueueMealSync, enqueueMediaSync, enqueueRecordSync, enqueueScanSync, markCloudSyncFailure, markCloudSynced, markCloudSyncing, pendingCloudSyncItems, retryCloudSyncItem } from "./syncQueue";
 
 const record = { id: "record-1", idempotencyKey: "action-1", version: 1, updatedAt: "2026-07-13T00:00:00.000Z" } as LocalLedgerRecord;
 const draft = { id: "draft-1" } as Parameters<typeof enqueueDraftSync>[1];
 const now = "2026-07-13T00:00:00.000Z";
+const account = { id: "account-1", name: "Daily wallet", currency: "TWD", accountType: "cash", allowNegativeBalance: true };
 
 describe("cloud sync queue", () => {
+  test("queues an account before any record exists", () => {
+    const queued = enqueueAccountSync([], account, now);
+
+    expect(queued).toMatchObject([{
+      target: "account",
+      targetId: "account-1",
+      actionType: "account-reference",
+      idempotencyKey: "account:account-1",
+      state: "pending",
+    }]);
+    expect(enqueueAccountSync(queued, account, now)).toBe(queued);
+  });
+
   test("deduplicates record and draft targets", () => {
     const withRecord = enqueueRecordSync([], record, now);
     const withDraft = enqueueDraftSync(withRecord, draft, now);
@@ -23,7 +37,7 @@ describe("cloud sync queue", () => {
     const transfer = { ...record, id: "transfer-1", kind: "transfer" } as LocalLedgerRecord;
     const fee = { ...record, id: "fee-1", linkedRecordId: "transfer-1" } as LocalLedgerRecord;
 
-    expect(enqueueLocalChanges([], [transfer, fee], [], [], [], [], now).map((item) => item.targetId)).toEqual(["fee-1", "transfer-1"]);
+    expect(enqueueLocalChanges([], [], [transfer, fee], [], [], [], [], now).map((item) => item.targetId)).toEqual(["fee-1", "transfer-1"]);
   });
 
   test("reopens a synced record when its version or updated time changes", () => {

@@ -68,13 +68,27 @@ function input(overrides: Partial<Parameters<typeof syncLocalChanges>[0]> = {}) 
     meals: [] as MealEntry[],
     media: [] as UploadQueueItem[],
     scans: [] as TemporaryScan[],
-    queue: enqueueLocalChanges([], [baseRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+    queue: enqueueLocalChanges([], [], [baseRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
     now: "2026-07-13T00:00:00.000Z",
     ...overrides,
   };
 }
 
 describe("cloud sync service", () => {
+  test("persists an account even when no ledger record exists", async () => {
+    const result = await syncLocalChanges(input({
+      records: [],
+      queue: enqueueLocalChanges([], [account], [], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+    }));
+
+    expect(result.records).toEqual([]);
+    expect(result.queue).toMatchObject([{
+      target: "account",
+      targetId: "account-1",
+      state: "synced",
+    }]);
+  });
+
   test("bootstraps references and marks a successful record synced", async () => {
     const result = await syncLocalChanges(input());
 
@@ -128,7 +142,7 @@ describe("cloud sync service", () => {
     };
     const second = await syncLocalChanges(input({
       records: [editedRecord],
-      queue: enqueueLocalChanges(first.queue, [editedRecord], [], [], [], [], "2026-07-13T01:00:00.000Z"),
+      queue: enqueueLocalChanges(first.queue, [], [editedRecord], [], [], [], [], "2026-07-13T01:00:00.000Z"),
       now: "2026-07-13T01:00:00.000Z",
     }));
 
@@ -191,7 +205,7 @@ describe("cloud sync service", () => {
       meals: [meal],
       media: [media],
       scans: [scan],
-      queue: enqueueLocalChanges([], [baseRecord], [], [meal], [media], [scan], "2026-07-13T00:00:00.000Z"),
+      queue: enqueueLocalChanges([], [], [baseRecord], [], [meal], [media], [scan], "2026-07-13T00:00:00.000Z"),
     }));
 
     expect(result.meals[0].status).toBe("synced");
