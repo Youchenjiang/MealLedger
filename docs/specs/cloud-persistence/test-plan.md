@@ -53,6 +53,7 @@
 npm run test
 npm run test:coverage
 npm run test:rls
+npm run test:remote
 npm run test:e2e
 npm run build
 git diff --check
@@ -63,3 +64,11 @@ git status --short
 Supabase database. It creates isolated test identities, verifies owner-only
 visibility, rejects cross-owner ledger references, rejects cross-owner media
 links, and cleans up its rows in the same transaction.
+
+`npm run test:remote` is a manual release-gate command. It requires a
+temporary `SUPABASE_SERVICE_ROLE_KEY` in the process environment, creates an
+isolated confirmed test user, uses that user's authenticated session for all
+application writes, verifies the canonical persistence entities and transfer
+idempotency replay against the remote project, removes the smoke rows in
+dependency order, then deletes the test user. The key is never read from a
+committed file and no image bytes are uploaded.
