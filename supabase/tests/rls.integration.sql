@@ -120,7 +120,7 @@ begin
       'TWD', '30000000-0000-0000-0000-000000000002', 'cross-owner item'
     );
     insert_succeeded := true;
-  exception when others then
+  exception when raise_exception then
     null;
   end;
 
@@ -144,7 +144,7 @@ begin
       '50000000-0000-0000-0000-000000000001', 'meal-photo'
     );
     insert_succeeded := true;
-  exception when others then
+  exception when insufficient_privilege then
     null;
   end;
 
