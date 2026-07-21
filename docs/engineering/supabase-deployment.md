@@ -74,4 +74,3 @@ Every PR that changes `supabase/` must answer:
 - Is it safe to run after the migrations already recorded remotely?
 - Does it require an environment secret or manual post-deploy step?
 - What verification proves local and production migration histories agree?
-
