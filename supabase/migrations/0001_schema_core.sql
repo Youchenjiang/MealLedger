@@ -1,6 +1,7 @@
 -- MealLedger V1 canonical Supabase schema.
--- This file is the SQL Editor entrypoint; the same migration is kept under
--- migrations/0001_schema_core.sql for versioned application later.
+-- This file is the canonical schema reference for review and local bootstrap.
+-- Production deployment uses the versioned migration under
+-- migrations/0001_schema_core.sql through the repository release workflow.
 
 create extension if not exists pgcrypto;
 
