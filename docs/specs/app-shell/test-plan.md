@@ -10,7 +10,7 @@ Test `npm run test:coverage` succeeds before committing app-shell behavior chang
 
 The app-shell coverage threshold is 90% lines, 90% functions, 90% statements, and 85% branches. Manual Ledger owns the detailed validation cases even when its local preview is rendered from Capture.
 
-Automated tests must cover the minimal signed-out to signed-in navigation path, local draft handoff, draft review visibility, draft discard, and the rule that draft creation does not create confirmed ledger records. Detailed field and transfer validation belongs to the Manual Ledger test plan.
+Automated tests must cover the local-only entry path, optional authentication-state handling, local draft handoff, draft review visibility, draft discard, and the rule that draft creation does not create confirmed ledger records. Detailed field and transfer validation belongs to the Manual Ledger test plan.
 
 ## Test Layers
 
@@ -27,13 +27,13 @@ Vitest covers the local-draft handoff helper in `src/appShell/drafts.ts`. Its ac
 
 Run `npm run test`.
 
-React Testing Library covers the signed-out entry point, all core navigation, safe unknown-route recovery, offline/online state, zero/non-zero draft counts, Capture availability states, local draft creation, and discard behavior.
+React Testing Library covers the local-only entry point, all core navigation, safe unknown-route recovery, offline/online state, zero/non-zero draft counts, Capture availability states, local draft creation, and discard behavior.
 
 ### Browser Smoke
 
 Run `npm run test:e2e`.
 
-Playwright uses a dedicated local Vite server on `127.0.0.1:4174`, so it does not reuse the regular development server. It covers the signed-out-to-Ledger draft flow, console/page errors, and document-level horizontal overflow at 1440px desktop, 720px compact, and 390px mobile viewports.
+Playwright uses a dedicated local Vite server on `127.0.0.1:4174`, so it does not reuse the regular development server. It covers the local-only-to-Ledger draft flow, console/page errors, and document-level horizontal overflow at 1440px desktop, 720px compact, and 390px mobile viewports.
 
 Playwright HTML reports and failed-test artifacts remain ignored by git.
 
@@ -93,7 +93,7 @@ Test navigation is usable at desktop width.
 
 ## State Indicators
 
-Test signed-out state shows sign-in entry point.
+Test unauthenticated state opens the local-only workspace without requiring sign-in.
 
 Test signed-in state shows primary navigation.
 

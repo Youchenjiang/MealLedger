@@ -75,7 +75,7 @@ Expected verification:
 - `npm run test:coverage`
 - `npm run test:e2e`
 - `npm run build`
-- Playwright opens the signed-out state, enters the workspace, creates a local draft, and shows it in Ledger.
+- Playwright opens the local-only workspace, creates a local draft, and shows it in Ledger.
 - Playwright asserts no browser console/page errors and no document-level horizontal overflow at desktop and mobile sizes.
 
 ## Scope Boundary

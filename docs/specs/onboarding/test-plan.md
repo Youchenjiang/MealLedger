@@ -2,11 +2,11 @@
 
 ## Entry Conditions
 
-Test signed-in user with no accounts sees onboarding.
+Test local-only or signed-in user with no accounts sees onboarding.
 
 Test signed-in user with an account sees Overview.
 
-Test signed-out user sees signed-out app shell, not onboarding.
+Test local-only user can enter the workspace without authentication.
 
 ## First Account
 
@@ -66,4 +66,4 @@ Test mobile layout has no overlapping text.
 - New users see first-account setup; setup can be skipped and reopened from Settings.
 - Current balance is posted as `fund-addition`, never `income`.
 - Default categories, income labels, tags, and aliases are merged case-insensitively and idempotently.
-- Magic Link request behavior is covered by `src/auth/authActions.test.ts`; configured Supabase session integration remains environment-dependent.
+- Provider-specific verification behavior belongs to the Auth spec; onboarding only verifies that local-only setup remains usable before authentication.
