@@ -80,7 +80,7 @@ describe("cloud reference bootstrap", () => {
 
   test("bootstraps merchant names with a normalized uniqueness key", async () => {
     const mock = client();
-    const result = await bootstrapReferences(mock, { userId: "user-1", accounts, merchants: [" Market "] });
+    const result = await bootstrapReferences(mock, { userId: "user-1", accounts, merchants: [" Market ", "market"] });
 
     expect(result).toMatchObject({ ok: true, references: { merchantIds: { Market: "remote-merchants-0" } } });
     expect(mock.calls).toEqual(["accounts", "merchants"]);
