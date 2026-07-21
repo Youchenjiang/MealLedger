@@ -8,7 +8,8 @@ export const isSupabaseConfigured = isUsableSupabaseConfig(
   { url: supabaseUrl, anonKey: supabaseAnonKey },
   { allowHttp: import.meta.env.DEV },
 );
-export const isLocalDevelopmentMode = import.meta.env.DEV && !isSupabaseConfigured;
+const explicitLocalDevelopmentMode = import.meta.env.VITE_LOCAL_DEVELOPMENT_MODE === "true";
+export const isLocalDevelopmentMode = import.meta.env.DEV && (explicitLocalDevelopmentMode || !isSupabaseConfigured);
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl as string, supabaseAnonKey as string)
