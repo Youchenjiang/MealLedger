@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import schemaSql from "../../supabase/schema.sql?raw";
 import migrationSql from "../../supabase/migrations/0001_schema_core.sql?raw";
-import uploadFunction from "../../supabase/functions/create-r2-upload-url/index.ts?raw";
 import { ledgerRecordKinds } from "./contracts";
+
+const uploadFunction = readFileSync(
+  resolve(process.cwd(), "supabase/functions/create-r2-upload-url/index.ts"),
+  "utf8",
+);
 
 const requiredTables = [
   "profiles",

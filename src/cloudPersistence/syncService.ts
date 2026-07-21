@@ -180,7 +180,7 @@ async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, sta
   return { ...state, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
-async function syncAccountItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
+function syncAccountItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): SyncLocalChangesResult {
   const { input, references } = context;
   const account = input.accounts.find((candidate) => candidate.id === item.targetId);
   if (!account) return applyItemFailure(state, item, "Local account is no longer available.", input.now);

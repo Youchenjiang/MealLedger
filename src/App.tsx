@@ -3135,7 +3135,6 @@ function CapturePage({
     }
   }, [customSources]);
 
-  const recordCount = records.length;
   const actionIcons = {
     "manual-ledger": Banknote,
     "scan-invoice": ReceiptText,
