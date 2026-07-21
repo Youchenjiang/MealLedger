@@ -164,7 +164,16 @@ describe("cloud persistence repository", () => {
     });
 
     expect(result).toMatchObject({ ok: true, replayed: false, tables: expect.arrayContaining(["transfer_details"]) });
-    expect(mock.rpc).toHaveBeenCalledWith("persist_ledger_record_bundle", expect.objectContaining({ p_transfer_details: expect.any(Object) }));
+    expect(mock.rpc).toHaveBeenCalledWith("persist_ledger_record_bundle_resolved", expect.objectContaining({
+      p_request: {
+        user_id: "user-1",
+        action_type: "record-create",
+        idempotency_key: "action-1",
+        request_hash: "hash-1",
+        expires_at: "2026-07-14T00:00:00.000Z",
+      },
+      p_transfer_details: expect.any(Object),
+    }));
     expect(mock.calls).toEqual([]);
   });
 });

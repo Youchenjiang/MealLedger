@@ -207,15 +207,21 @@ async function persistTransferBundle(
     };
   }
 
-  const rpcResult = await client.rpc("persist_ledger_record_bundle", {
-    p_request: request,
+  const rpcResult = await client.rpc("persist_ledger_record_bundle_resolved", {
+    p_request: {
+      user_id: request.userId,
+      action_type: request.actionType,
+      idempotency_key: request.idempotencyKey,
+      request_hash: request.requestHash,
+      expires_at: request.expiresAt,
+    },
     p_ledger_record: bundle.ledgerRecord,
     p_transfer_details: bundle.transferDetails,
     p_refund_links: bundle.refundLinks,
     p_ledger_record_tags: bundle.ledgerRecordTags,
     p_audit_events: bundle.auditEvents,
   });
-  if (rpcResult.error) return failure(rpcResult.error, "persist_ledger_record_bundle");
+  if (rpcResult.error) return failure(rpcResult.error, "persist_ledger_record_bundle_resolved");
 
   const rpcData = rpcResult.data;
   const rpcReplayed = rpcData && typeof rpcData === "object" && "replayed" in rpcData ? Boolean(rpcData.replayed) : replayed;
