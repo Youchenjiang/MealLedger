@@ -17,7 +17,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(`Remote persistence assertion failed: ${message}`);
 }
 
-async function requireData(operation, result) {
+function requireData(operation, result) {
   if (result.error) throw new Error(`${operation}: ${result.error.message}`);
   assert(result.data !== null && result.data !== undefined, `${operation} returned no data`);
   return result.data;
@@ -49,6 +49,39 @@ async function authRequest(baseUrl, path, key, method, body) {
   return responseBody;
 }
 
+async function cleanupRemoteUser(serviceClient, userId) {
+  let cleanupError = null;
+  try {
+    await removeWhere(serviceClient, "media_links", "user_id", userId);
+    await removeWhere(serviceClient, "media_assets", "user_id", userId);
+    await removeWhere(serviceClient, "meal_transaction_links", "user_id", userId);
+    await removeWhere(serviceClient, "meal_entries", "user_id", userId);
+    await removeWhere(serviceClient, "drafts", "user_id", userId);
+    await removeWhere(serviceClient, "source_payloads", "user_id", userId);
+    await removeWhere(serviceClient, "ledger_record_tags", "user_id", userId);
+    await removeWhere(serviceClient, "audit_events", "user_id", userId);
+    await removeWhere(serviceClient, "idempotency_keys", "user_id", userId);
+    await removeWhere(serviceClient, "ledger_records", "user_id", userId);
+    await removeWhere(serviceClient, "category_aliases", "user_id", userId);
+    await removeWhere(serviceClient, "categories", "user_id", userId);
+    await removeWhere(serviceClient, "merchants", "user_id", userId);
+    await removeWhere(serviceClient, "events", "user_id", userId);
+    await removeWhere(serviceClient, "tags", "user_id", userId);
+    await removeWhere(serviceClient, "accounts", "user_id", userId);
+    await removeWhere(serviceClient, "profiles", "user_id", userId);
+  } catch (error) {
+    cleanupError = error;
+  }
+
+  try {
+    const deleted = await serviceClient.auth.admin.deleteUser(userId);
+    if (deleted.error) cleanupError ??= deleted.error;
+  } catch (error) {
+    cleanupError ??= error;
+  }
+  return cleanupError;
+}
+
 async function run() {
   requireValue("VITE_SUPABASE_URL", url);
   requireValue("VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY", publicKey);
@@ -60,6 +93,7 @@ async function run() {
   const serviceClient = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  let runError = null;
 
   try {
     const created = await requireData(
@@ -234,44 +268,18 @@ async function run() {
     assert(mealRows.data.length === 1, "expected one meal row");
     assert(mediaRows.data.length === 2, "expected two media links without copying bytes");
 
-    console.log("REMOTE_PERSISTENCE_SMOKE=PASS");
-    console.log("REMOTE_SMOKE_ENTITIES=profile,accounts,references,ledger,transfer,idempotency,draft,source,media,meal");
-  } finally {
-    if (userId) {
-      let cleanupError;
-      try {
-        await removeWhere(serviceClient, "media_links", "user_id", userId);
-        await removeWhere(serviceClient, "media_assets", "user_id", userId);
-        await removeWhere(serviceClient, "meal_transaction_links", "user_id", userId);
-        await removeWhere(serviceClient, "meal_entries", "user_id", userId);
-        await removeWhere(serviceClient, "drafts", "user_id", userId);
-        await removeWhere(serviceClient, "source_payloads", "user_id", userId);
-        await removeWhere(serviceClient, "ledger_record_tags", "user_id", userId);
-        await removeWhere(serviceClient, "audit_events", "user_id", userId);
-        await removeWhere(serviceClient, "idempotency_keys", "user_id", userId);
-        await removeWhere(serviceClient, "ledger_records", "user_id", userId);
-        await removeWhere(serviceClient, "category_aliases", "user_id", userId);
-        await removeWhere(serviceClient, "categories", "user_id", userId);
-        await removeWhere(serviceClient, "merchants", "user_id", userId);
-        await removeWhere(serviceClient, "events", "user_id", userId);
-        await removeWhere(serviceClient, "tags", "user_id", userId);
-        await removeWhere(serviceClient, "accounts", "user_id", userId);
-        await removeWhere(serviceClient, "profiles", "user_id", userId);
-      } catch (error) {
-        cleanupError = error;
-      }
-      try {
-        const deleted = await serviceClient.auth.admin.deleteUser(userId);
-        if (deleted.error) throw deleted.error;
-      } catch (error) {
-        cleanupError ??= error;
-      }
-      if (cleanupError) throw cleanupError;
-    }
+    process.stdout.write("REMOTE_PERSISTENCE_SMOKE=PASS\n");
+    process.stdout.write("REMOTE_SMOKE_ENTITIES=profile,accounts,references,ledger,transfer,idempotency,draft,source,media,meal\n");
+  } catch (error) {
+    runError = error;
   }
+
+  const cleanupError = userId ? await cleanupRemoteUser(serviceClient, userId) : null;
+  if (runError) throw runError;
+  if (cleanupError) throw cleanupError;
 }
 
 run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });
