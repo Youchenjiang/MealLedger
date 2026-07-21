@@ -1,4 +1,5 @@
 import type { TransactionDraft } from "../appShell/drafts";
+import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
 import type { MealEntry } from "../captureMedia/meals";
 import type { TemporaryScan } from "../captureMedia/media";
