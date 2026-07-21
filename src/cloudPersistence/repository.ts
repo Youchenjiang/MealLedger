@@ -119,6 +119,22 @@ export async function persistAccounts(
   return error ?? { ok: true, replayed: false, tables: ["accounts"] };
 }
 
+export async function persistProfile(
+  client: CloudPersistenceClient,
+  row: CloudRow,
+): Promise<CloudPersistenceResult> {
+  const userId = typeof row.user_id === "string" ? row.user_id : "";
+  if (!userId) {
+    return {
+      ok: false,
+      failure: { code: "validation", message: "Profile rows require a user_id.", retryable: false, table: "profiles" },
+    };
+  }
+
+  const error = await upsert(client, "profiles", row, "user_id");
+  return error ?? { ok: true, replayed: false, tables: ["profiles"] };
+}
+
 export async function persistDraft(
   client: CloudPersistenceClient,
   row: CloudRow,

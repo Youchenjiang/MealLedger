@@ -2,7 +2,7 @@ import type { ReferenceBootstrapClient } from "./bootstrap";
 import { bootstrapReferences } from "./bootstrap";
 import type { CloudPersistenceClient, CloudReferenceMap } from "./contracts";
 import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink } from "./mappers";
-import { persistDraft, persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
+import { persistDraft, persistMealBundle, persistMediaAsset, persistProfile, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
 import {
   enqueueDraftSync,
   enqueueAccountSync,
@@ -175,6 +175,21 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
   const pending = orderPendingSyncItems(pendingCloudSyncItems(input.queue, input.now), input.records);
   let state: SyncLocalChangesResult = { records: input.records, meals: input.meals, media: input.media, scans: input.scans, queue: input.queue };
   if (pending.length === 0) return state;
+
+  const profileResult = await persistProfile(input.client, {
+    user_id: input.userId,
+    default_currency: input.accounts[0]?.currency.toUpperCase() ?? "TWD",
+    default_timezone: "Asia/Taipei",
+  });
+  if (!profileResult.ok) {
+    return {
+      ...state,
+      queue: pending.reduce(
+        (current, item) => markCloudSyncFailure(current, item.id, profileResult.failure.message, profileResult.failure.retryable, input.now),
+        state.queue,
+      ),
+    };
+  }
 
   const bootstrap = await bootstrapReferences(input.referenceClient, {
     userId: input.userId,
