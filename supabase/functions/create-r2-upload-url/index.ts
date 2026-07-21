@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
 
   return json({
     mediaId,
+    bucket: R2_BUCKET,
     putUrl,
     method: "PUT",
     expiresInSeconds: 900,
