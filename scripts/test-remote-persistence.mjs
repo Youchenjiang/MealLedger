@@ -57,12 +57,17 @@ async function run() {
   const email = `meal-ledger-remote-smoke-${Date.now()}@example.com`;
   const password = `${randomUUID()}-ML`;
   let userId = "";
-  let serviceClient;
+  const serviceClient = createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 
   try {
-    const created = await authRequest(url, "/auth/v1/admin/users", serviceRoleKey, "POST", { email, password, email_confirm: true });
-    if (!created.id) throw new Error("create temporary user: response did not include an id");
-    userId = created.id;
+    const created = await requireData(
+      "create temporary user",
+      await serviceClient.auth.admin.createUser({ email, password, email_confirm: true }),
+    );
+    if (!created.user?.id) throw new Error("create temporary user: response did not include an id");
+    userId = created.user.id;
 
     const signedIn = await authRequest(url, "/auth/v1/token?grant_type=password", publicKey, "POST", { email, password });
     if (!signedIn.access_token) throw new Error("sign in temporary user: response did not include an access token");
@@ -70,10 +75,6 @@ async function run() {
       auth: { autoRefreshToken: false, persistSession: false },
       global: { headers: { Authorization: `Bearer ${signedIn.access_token}` } },
     });
-    serviceClient = createClient(url, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
     const accountId = randomUUID();
     const destinationAccountId = randomUUID();
     const categoryId = randomUUID();
@@ -239,30 +240,29 @@ async function run() {
     if (userId) {
       let cleanupError;
       try {
-        if (serviceClient) {
-          await removeWhere(serviceClient, "media_links", "user_id", userId);
-          await removeWhere(serviceClient, "media_assets", "user_id", userId);
-          await removeWhere(serviceClient, "meal_transaction_links", "user_id", userId);
-          await removeWhere(serviceClient, "meal_entries", "user_id", userId);
-          await removeWhere(serviceClient, "drafts", "user_id", userId);
-          await removeWhere(serviceClient, "source_payloads", "user_id", userId);
-          await removeWhere(serviceClient, "ledger_record_tags", "user_id", userId);
-          await removeWhere(serviceClient, "audit_events", "user_id", userId);
-          await removeWhere(serviceClient, "idempotency_keys", "user_id", userId);
-          await removeWhere(serviceClient, "ledger_records", "user_id", userId);
-          await removeWhere(serviceClient, "category_aliases", "user_id", userId);
-          await removeWhere(serviceClient, "categories", "user_id", userId);
-          await removeWhere(serviceClient, "merchants", "user_id", userId);
-          await removeWhere(serviceClient, "events", "user_id", userId);
-          await removeWhere(serviceClient, "tags", "user_id", userId);
-          await removeWhere(serviceClient, "accounts", "user_id", userId);
-          await removeWhere(serviceClient, "profiles", "user_id", userId);
-        }
+        await removeWhere(serviceClient, "media_links", "user_id", userId);
+        await removeWhere(serviceClient, "media_assets", "user_id", userId);
+        await removeWhere(serviceClient, "meal_transaction_links", "user_id", userId);
+        await removeWhere(serviceClient, "meal_entries", "user_id", userId);
+        await removeWhere(serviceClient, "drafts", "user_id", userId);
+        await removeWhere(serviceClient, "source_payloads", "user_id", userId);
+        await removeWhere(serviceClient, "ledger_record_tags", "user_id", userId);
+        await removeWhere(serviceClient, "audit_events", "user_id", userId);
+        await removeWhere(serviceClient, "idempotency_keys", "user_id", userId);
+        await removeWhere(serviceClient, "ledger_records", "user_id", userId);
+        await removeWhere(serviceClient, "category_aliases", "user_id", userId);
+        await removeWhere(serviceClient, "categories", "user_id", userId);
+        await removeWhere(serviceClient, "merchants", "user_id", userId);
+        await removeWhere(serviceClient, "events", "user_id", userId);
+        await removeWhere(serviceClient, "tags", "user_id", userId);
+        await removeWhere(serviceClient, "accounts", "user_id", userId);
+        await removeWhere(serviceClient, "profiles", "user_id", userId);
       } catch (error) {
         cleanupError = error;
       }
       try {
-        await authRequest(url, `/auth/v1/admin/users/${userId}`, serviceRoleKey, "DELETE");
+        const deleted = await serviceClient.auth.admin.deleteUser(userId);
+        if (deleted.error) throw deleted.error;
       } catch (error) {
         cleanupError ??= error;
       }
