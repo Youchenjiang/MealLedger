@@ -13,6 +13,8 @@
 
 ## Repository Integration
 
+- Creating an account without a ledger record still queues and persists the
+  owned account reference.
 - A successful account/record bundle calls tables in dependency order.
 - Replaying the same idempotency key returns the original result and does not
   insert a second parent or fee record.

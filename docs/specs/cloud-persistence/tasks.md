@@ -12,6 +12,7 @@
 
 - [x] Add typed persistence client boundary.
 - [x] Add local account, record, draft, meal, media, and source metadata row mappers.
+- [x] Queue account references even when no ledger record exists yet.
 - [x] Add idempotent account, draft, record, meal, media, and source persistence.
 - [x] Add retry classification and bounded backoff policy.
 - [x] Re-queue edited, voided, and unresolved-converted local targets by version/hash;
@@ -36,6 +37,7 @@
 - [x] Unit tests for child-write failure and retry classification.
 - [x] Integration-style tests with a mocked Supabase client.
 - [x] Queue meal, media metadata, and temporary source payload writes independently.
+- [x] Verify account-only synchronization closes after the owned reference is returned.
 - [x] Existing local app, import/export, E2E, and build gates remain green.
 - [ ] Real RLS integration run is deferred until Supabase CLI/project
       credentials are intentionally enabled.
@@ -65,7 +67,7 @@ uniqueness hardening. Pending queue execution also reorders legacy transfer
 items behind linked fee records. Temporary scan links now use `receipt-evidence` or
 `invoice-scan`, matching the canonical enum:
 
-- `npm run test`: 35 files, 213 tests passed.
+- `npm run test`: 35 files, 221 tests passed.
 - `npm run test:coverage`: 83.08% statements, 73.67% branches, 84.37% functions,
   84.16% lines.
 - `npm run test:e2e`: 6 browser smoke tests passed.

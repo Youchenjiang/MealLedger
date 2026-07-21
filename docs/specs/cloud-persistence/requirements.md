@@ -45,6 +45,8 @@ making cloud availability a prerequisite for recording locally.
    reload, reconnect, or repeated button clicks.
 6. Meal, media metadata, and scan source writes have independent queue targets;
    a scan remains a source/draft until the user confirms it.
+7. An account has its own queue target, so creating an account does not require
+   a ledger record before the account reference is persisted.
 
 ## Write Order
 
