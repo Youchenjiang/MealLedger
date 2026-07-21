@@ -478,8 +478,9 @@ begin
 end;
 $$;
 
-create trigger transfer_details_delete_guard
+create constraint trigger transfer_details_delete_guard
 after delete on public.transfer_details
+deferrable initially deferred
 for each row execute function public.prevent_transfer_details_delete();
 
 create or replace function public.require_transfer_details()
@@ -603,7 +604,7 @@ as $$
 declare
   request_user uuid := (p_request->>'user_id')::uuid;
   request_key text := p_request->>'idempotency_key';
-  request_hash text := p_request->>'request_hash';
+  incoming_request_hash text := p_request->>'request_hash';
   request_action text := p_request->>'action_type';
   request_expires timestamptz := (p_request->>'expires_at')::timestamptz;
   existing_hash text;
@@ -620,10 +621,10 @@ begin
     raise exception 'bundle user does not match authenticated user' using errcode = '42501';
   end if;
 
-  select request_hash, expires_at, response_json
+  select ik.request_hash, ik.expires_at, ik.response_json
     into existing_hash, existing_expires, existing_response
-  from public.idempotency_keys
-  where user_id = request_user and idempotency_key = request_key;
+  from public.idempotency_keys as ik
+  where ik.user_id = request_user and ik.idempotency_key = request_key;
 
   if existing_hash is not null and existing_expires <= now() and existing_response is null then
     delete from public.idempotency_keys
@@ -633,7 +634,7 @@ begin
   end if;
 
   if existing_hash is not null then
-    if existing_hash <> request_hash then
+    if existing_hash <> incoming_request_hash then
       raise exception 'idempotency key was reused with a different request hash' using errcode = 'ME001';
     end if;
     if existing_response is not null then
@@ -642,7 +643,7 @@ begin
     was_replayed := true;
   else
     insert into public.idempotency_keys (user_id, idempotency_key, action_type, request_hash, expires_at)
-    values (request_user, request_key, request_action, request_hash, request_expires);
+    values (request_user, request_key, request_action, incoming_request_hash, request_expires);
   end if;
 
   select version into existing_version
