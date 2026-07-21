@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import type { CloudMealBundle, CloudPersistenceClient, CloudRecordBundle, CloudRow } from "./contracts";
-import { persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload } from "./repository";
+import { persistMealBundle, persistMediaAsset, persistProfile, persistRecordBundle, persistSourcePayload } from "./repository";
 
 function bundle(): CloudRecordBundle {
   return {
@@ -47,6 +47,14 @@ const request = {
 };
 
 describe("cloud persistence repository", () => {
+  test("persists a profile with the authenticated owner key", async () => {
+    const mock = client();
+    const result = await persistProfile(mock, { user_id: "user-1", default_currency: "TWD", default_timezone: "Asia/Taipei" });
+
+    expect(result).toMatchObject({ ok: true, tables: ["profiles"] });
+    expect(mock.calls).toEqual(["profiles"]);
+  });
+
   test("writes a bundle in dependency order", async () => {
     const mock = client();
     const result = await persistRecordBundle(mock, request, bundle());

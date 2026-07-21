@@ -90,6 +90,16 @@ describe("cloud sync service", () => {
     }]);
   });
 
+  test("keeps pending work retryable when profile persistence fails", async () => {
+    const result = await syncLocalChanges(input({
+      client: persistenceClient("profiles"),
+      records: [],
+      queue: enqueueLocalChanges([], [account], [], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+    }));
+
+    expect(result.queue).toMatchObject([{ state: "retryable-error", lastError: "profiles failed" }]);
+  });
+
   test("bootstraps references and marks a successful record synced", async () => {
     const result = await syncLocalChanges(input());
 
