@@ -901,3 +901,29 @@ with check (
   auth.uid() = user_id
   and (result_id is null or public.idempotency_result_owned(result_type, result_id, auth.uid()))
 );
+
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table
+  public.profiles,
+  public.accounts,
+  public.categories,
+  public.category_aliases,
+  public.merchants,
+  public.events,
+  public.tags,
+  public.ledger_records,
+  public.transfer_details,
+  public.refund_links,
+  public.ledger_record_tags,
+  public.meal_entries,
+  public.meal_transaction_links,
+  public.media_assets,
+  public.media_links,
+  public.source_payloads,
+  public.drafts,
+  public.audit_events,
+  public.idempotency_keys
+to authenticated;
+grant execute on function public.persist_ledger_record_bundle(
+  jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
+) to authenticated;
