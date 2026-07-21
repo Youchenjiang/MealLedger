@@ -9,6 +9,8 @@ making cloud availability a prerequisite for recording locally.
 ## In Scope
 
 - Map local accounts to `public.accounts`.
+- Upsert the authenticated user's `public.profiles` row before dependent cloud
+  writes.
 - Bootstrap merchant names to `public.merchants` and map expense-like records
   to their owned merchant references.
 - Map local official records to `public.ledger_records`.
