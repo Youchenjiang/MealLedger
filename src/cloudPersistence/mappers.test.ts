@@ -91,6 +91,16 @@ describe("cloud row mappers", () => {
     }
   });
 
+  test("links an expense to its bootstrapped merchant reference", () => {
+    const result = mapLedgerRecord(record(), "user-1", {
+      ...references,
+      merchantIds: { Market: "88888888-8888-4888-8888-888888888888" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) expect(result.value.ledgerRecord).toMatchObject({ merchant_id: "88888888-8888-4888-8888-888888888888" });
+  });
+
   test("maps non-UUID audit ids to stable cloud ids for retries", () => {
     const first = mapLedgerRecord(record(), "user-1", references);
     const second = mapLedgerRecord(record(), "user-1", references);

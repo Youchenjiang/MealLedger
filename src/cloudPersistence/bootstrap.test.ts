@@ -49,6 +49,7 @@ describe("cloud reference bootstrap", () => {
       references: {
         accountIds: { "account-local-1": "remote-accounts-0" },
         categoryIds: { Daily: "remote-categories-0" },
+        merchantIds: {},
         tagIds: { Subscription: "remote-tags-0" },
         eventIds: { Trip: "remote-events-0" },
       },
@@ -75,5 +76,14 @@ describe("cloud reference bootstrap", () => {
     await bootstrapReferences(mock, { userId: "user-1", accounts });
 
     expect(mock.calls).toEqual(["accounts"]);
+  });
+
+  test("bootstraps merchant names with a normalized uniqueness key", async () => {
+    const mock = client();
+    const result = await bootstrapReferences(mock, { userId: "user-1", accounts, merchants: [" Market "] });
+
+    expect(result).toMatchObject({ ok: true, references: { merchantIds: { Market: "remote-merchants-0" } } });
+    expect(mock.calls).toEqual(["accounts", "merchants"]);
+    expect(mock.conflicts).toEqual(["user_id,name", "user_id,normalized_name"]);
   });
 });
