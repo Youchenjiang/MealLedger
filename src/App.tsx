@@ -789,6 +789,7 @@ function AuthenticatedApp() {
       userId,
       accounts,
       categories,
+      aliases: readStoredAliases(),
       merchants,
       tags,
       events,

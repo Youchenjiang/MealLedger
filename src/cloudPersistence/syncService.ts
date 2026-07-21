@@ -19,6 +19,7 @@ import {
 import type { TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
+import type { TaxonomyAliasSeed } from "../taxonomy/defaults";
 import type { MealEntry } from "../captureMedia/meals";
 import type { TemporaryScan } from "../captureMedia/media";
 import type { UploadQueueItem } from "../captureMedia/upload";
@@ -29,6 +30,7 @@ export type SyncLocalChangesInput = {
   userId: string;
   accounts: LocalAccount[];
   categories: string[];
+  aliases: TaxonomyAliasSeed[];
   merchants: string[];
   tags: string[];
   events: string[];
@@ -195,6 +197,7 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
     userId: input.userId,
     accounts: input.accounts,
     categories: input.categories,
+    aliases: input.aliases,
     merchants: input.merchants,
     tags: input.tags,
     events: input.events,

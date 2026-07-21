@@ -1,4 +1,5 @@
 import type { LocalAccount } from "../manualLedger/accounts";
+import type { TaxonomyAliasSeed } from "../taxonomy/defaults";
 import { mapLocalAccount } from "./mappers";
 import type { CloudMutationError, CloudReferenceMap, CloudRow } from "./contracts";
 
@@ -16,6 +17,7 @@ export type ReferenceBootstrapInput = {
   userId: string;
   accounts: LocalAccount[];
   categories?: string[];
+  aliases?: TaxonomyAliasSeed[];
   merchants?: string[];
   tags?: string[];
   events?: string[];
@@ -54,6 +56,29 @@ function rowsForMerchants(userId: string, names: string[] | undefined): CloudRow
     user_id: userId,
     name,
     normalized_name: normalizedName,
+  }));
+}
+
+function rowsForAliases(
+  userId: string,
+  aliases: TaxonomyAliasSeed[] | undefined,
+  categoryIds: Record<string, string>,
+): CloudRow[] {
+  const unique = new Map<string, TaxonomyAliasSeed>();
+  for (const item of aliases ?? []) {
+    const alias = item.alias.trim();
+    const canonical = item.canonical.trim();
+    if (alias && canonical && !unique.has(alias.toLocaleLowerCase())) {
+      unique.set(alias.toLocaleLowerCase(), { alias, canonical });
+    }
+  }
+
+  return [...unique.values()].map((item) => ({
+    user_id: userId,
+    ...(categoryIds[item.canonical] ? { category_id: categoryIds[item.canonical] } : {}),
+    alias: item.alias,
+    source: "legacy-import",
+    review_required: true,
   }));
 }
 
@@ -111,6 +136,14 @@ export async function bootstrapReferences(
     "user_id,parent_key,name",
   );
   if (!categories.ok) return categories;
+
+  const aliases = await upsertAndMap(
+    client,
+    "category_aliases",
+    rowsForAliases(input.userId, input.aliases, categories.ids),
+    "user_id,alias",
+  );
+  if (!aliases.ok) return aliases;
 
   const tags = await upsertAndMap(client, "tags", rowsForNames(input.userId, uniqueNames(input.tags)));
   if (!tags.ok) return tags;
