@@ -60,6 +60,7 @@ function input(overrides: Partial<Parameters<typeof syncLocalChanges>[0]> = {}) 
     userId: "user-1",
     accounts: [account],
     categories: ["Daily"],
+    aliases: [],
     merchants: ["Store"],
     tags: [],
     events: [],
