@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const url = process.env.VITE_SUPABASE_URL?.trim();
-const anonKey = process.env.VITE_SUPABASE_ANON_KEY?.trim();
+const publicKey = (
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+  ?? process.env.VITE_SUPABASE_ANON_KEY
+)?.trim();
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
 function requireValue(name, value) {
@@ -48,7 +51,7 @@ async function authRequest(baseUrl, path, key, method, body) {
 
 async function run() {
   requireValue("VITE_SUPABASE_URL", url);
-  requireValue("VITE_SUPABASE_ANON_KEY", anonKey);
+  requireValue("VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY", publicKey);
   requireValue("SUPABASE_SERVICE_ROLE_KEY", serviceRoleKey);
 
   const email = `meal-ledger-remote-smoke-${Date.now()}@example.com`;
@@ -61,9 +64,9 @@ async function run() {
     if (!created.id) throw new Error("create temporary user: response did not include an id");
     userId = created.id;
 
-    const signedIn = await authRequest(url, "/auth/v1/token?grant_type=password", anonKey, "POST", { email, password });
+    const signedIn = await authRequest(url, "/auth/v1/token?grant_type=password", publicKey, "POST", { email, password });
     if (!signedIn.access_token) throw new Error("sign in temporary user: response did not include an access token");
-    const client = createClient(url, anonKey, {
+    const client = createClient(url, publicKey, {
       auth: { autoRefreshToken: false, persistSession: false },
       global: { headers: { Authorization: `Bearer ${signedIn.access_token}` } },
     });
