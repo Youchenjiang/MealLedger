@@ -70,8 +70,8 @@ also reorders legacy transfer items behind linked fee records. Temporary scan
 links now use `receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
 - `npm run test`: 35 files, 221 tests passed.
-- `npm run test:coverage`: 84.4% statements, 75.09% branches, 86.79% functions,
-  86.99% lines.
+- `npm run test:coverage`: 84.35% statements, 75.2% branches, 86.72% functions,
+  87.01% lines.
 - `npm run test:e2e`: 8 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
