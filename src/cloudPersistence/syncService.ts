@@ -73,11 +73,11 @@ function accountsForBootstrap(accounts: LocalAccount[], records: LocalLedgerReco
   const result = [...accounts];
   const names = new Set(result.map((account) => normalizedName(account.name)));
 
-  const addRecordAccount = (id: string, name: string, currency: string) => {
+  const addRecordAccount = (id: string, name: string, currency?: string | null) => {
     const trimmedName = name.trim();
     const normalized = normalizedName(trimmedName);
     if (!trimmedName || names.has(normalized)) return;
-    result.push({ id: id || `sync-account:${normalized}`, name: trimmedName, currency: currency.trim() || "TWD" });
+    result.push({ id: id || `sync-account:${normalized}`, name: trimmedName, currency: currency?.trim() || "TWD" });
     names.add(normalized);
   };
 

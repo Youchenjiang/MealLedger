@@ -89,7 +89,7 @@ export function mapLocalAccount(account: LocalAccount, userId: string): CloudRow
     id: stableCloudUuid(`account:${userId}:${account.id}`),
     user_id: userId,
     name: account.name,
-    currency: account.currency.toUpperCase(),
+    currency: account.currency?.trim().toUpperCase() || "TWD",
     account_type: account.accountType ?? "cash",
     allow_negative_balance: account.allowNegativeBalance ?? true,
   };
@@ -482,9 +482,10 @@ export function mapLedgerRecord(
   auditEvents: LocalAuditEvent[] = [],
   feeLedgerRecordId?: string,
 ): CloudMappingResult<CloudRecordBundle> {
+  const normalizedRecord = { ...record, currency: record.currency?.trim() || "TWD" };
   const recordId = ledgerReference(references.ledgerRecordIds, record.id, userId, "id");
   const accountId = reference(references.accountIds, record.accountId, "account_id");
-  const amount = money(record.amount, record.currency, "amount", record.kind !== "adjustment");
+  const amount = money(record.amount, normalizedRecord.currency, "amount", record.kind !== "adjustment");
   const issues = collect([recordId, accountId, amount]);
 
   const needsCategory = ["expense", "income", "refund"].includes(record.kind);
@@ -510,7 +511,7 @@ export function mapLedgerRecord(
   }
 
   const ledgerRecord = createLedgerRow({
-    record,
+    record: normalizedRecord,
     userId,
     timezone,
     accountId: accountId.value,
@@ -529,7 +530,7 @@ export function mapLedgerRecord(
     auditEvents: [],
   };
 
-  const detailMapping = mapLedgerDetails(record, userId, references, recordId.value, amount.value, feeLedgerRecordId);
+  const detailMapping = mapLedgerDetails(normalizedRecord, userId, references, recordId.value, amount.value, feeLedgerRecordId);
   if (!detailMapping.ok) return { ok: false, issues: [...issues, ...detailMapping.issues] };
 
   bundle.transferDetails = detailMapping.value.transferDetails;

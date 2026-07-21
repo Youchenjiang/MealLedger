@@ -203,6 +203,40 @@ describe("cloud sync service", () => {
     expect(rpcArgs[0].p_transfer_details).toMatchObject({ destination_account_id: "remote-accounts-0" });
   });
 
+  test("defaults a malformed legacy account currency during bootstrap", async () => {
+    const capturedAccounts: CloudRow[] = [];
+    const legacyRecord = {
+      ...baseRecord,
+      accountId: "legacy-account",
+      accountName: "Legacy wallet",
+      currency: null as unknown as string,
+    };
+    const result = await syncLocalChanges(input({
+      accounts: [],
+      records: [legacyRecord],
+      queue: enqueueLocalChanges([], [], [legacyRecord], [], [], [], [], "2026-07-13T00:00:00.000Z"),
+      referenceClient: {
+        from: (table) => ({
+          upsert: (rows) => ({
+            select: () => {
+              const batch = (Array.isArray(rows) ? rows : [rows]) as CloudRow[];
+              if (table === "accounts") capturedAccounts.push(...batch);
+              return Promise.resolve({
+                data: batch.map((row, index) => ({ id: `remote-${table}-${index}`, name: row.name })),
+                error: null,
+              });
+            },
+          }),
+        }),
+      },
+    }));
+
+    expect(capturedAccounts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Legacy wallet", currency: "TWD" }),
+    ]));
+    expect(result.records[0].status).toBe("synced");
+  });
+
   test("reorders a persisted transfer queue behind its linked fee record", async () => {
     const transfer: LocalLedgerRecord = {
       ...baseRecord,
