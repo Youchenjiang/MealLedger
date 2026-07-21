@@ -66,4 +66,21 @@ describe("media upload boundary", () => {
       error: "Edge Function unavailable",
     });
   });
+
+  test("does not mark metadata ready when the signed PUT fails", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: { mediaId: "media-1", putUrl: "https://upload.test", objectKey: "user/originals/media-1.jpg", bucket: "media", expiresInSeconds: 900 },
+      error: null,
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }));
+    const file = new File(["image bytes"], "meal.jpg", { type: "image/jpeg" });
+    const item = { id: "meal-1-0-meal.jpg", name: file.name, type: file.type, size: file.size, status: "queued" as const, kind: "meal-photo" as const };
+
+    await expect(uploadMediaFile({ functions: { invoke } }, file, item)).resolves.toEqual(expect.objectContaining({
+      status: "failed",
+      error: "Media upload failed with HTTP 503.",
+    }));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    fetchMock.mockRestore();
+  });
 });

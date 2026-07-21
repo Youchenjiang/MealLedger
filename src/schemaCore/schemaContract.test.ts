@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import schemaSql from "../../supabase/schema.sql?raw";
 import migrationSql from "../../supabase/migrations/0001_schema_core.sql?raw";
+import uploadFunction from "../../supabase/functions/create-r2-upload-url/index.ts?raw";
 import { ledgerRecordKinds } from "./contracts";
 
 const requiredTables = [
@@ -96,5 +97,10 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("source.user_id = auth.uid()");
     expect(schemaSql).toContain("target_record_id is null or exists (select 1 from public.ledger_records record");
     expect(schemaSql).toContain("fee_ledger_record_id is null or exists (select 1 from public.ledger_records fee_record");
+  });
+
+  test("does not create cloud media metadata before the signed upload succeeds", () => {
+    expect(uploadFunction).toContain("getSignedUrl(s3, command");
+    expect(uploadFunction).not.toContain('.from("media_assets").insert');
   });
 });

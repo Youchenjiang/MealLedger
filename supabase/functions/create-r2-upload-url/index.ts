@@ -77,7 +77,6 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => null);
   const contentType = cleanImageContentType(body?.contentType);
   const kind = body?.kind ?? "attachment";
-  const capturedAt = body?.capturedAt ?? null;
   const extension = getExtensionFromContentType(contentType);
 
   if (!contentType.startsWith("image/")) {
@@ -95,20 +94,6 @@ Deno.serve(async (req) => {
     ContentType: contentType,
   });
   const putUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
-
-  const { error: insertError } = await supabase.from("media_assets").insert({
-    id: mediaId,
-    user_id: userData.user.id,
-    media_kind: kind,
-    storage_provider: "r2",
-    bucket: R2_BUCKET,
-    object_key: objectKey,
-    thumbnail_object_key: thumbnailKey,
-    content_type: contentType,
-    captured_at: capturedAt,
-  });
-
-  if (insertError) return json({ error: "failed_to_create_media_asset" }, 500);
 
   return json({
     mediaId,
