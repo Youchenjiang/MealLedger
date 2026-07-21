@@ -779,7 +779,8 @@ function AuthenticatedApp() {
     const now = new Date().toISOString();
 
     const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
-    const merchants = [...new Set(records.map((record) => record.counterparty.trim()).filter(Boolean))];
+    const merchantKinds = new Set(["expense", "refund", "unresolved-expense"]);
+    const merchants = [...new Set(records.filter((record) => merchantKinds.has(record.kind)).map((record) => record.counterparty.trim()).filter(Boolean))];
     const tags = [...new Set(records.flatMap((record) => record.tags ?? []).map((value) => value.trim()).filter(Boolean))];
     const events = [...new Set(records.map((record) => record.event ?? "").map((value) => value.trim()).filter(Boolean))];
     syncLocalChanges({
