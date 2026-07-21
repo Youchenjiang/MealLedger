@@ -68,7 +68,7 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("alter table public.ledger_records enable row level security");
     expect(schemaSql).toContain("create policy ledger_records_owner");
     expect(schemaSql).toContain("create trigger transfer_details_valid");
-    expect(schemaSql).toContain("create trigger transfer_details_delete_guard");
+    expect(schemaSql).toContain("create constraint trigger transfer_details_delete_guard");
     expect(schemaSql).toContain("transfer fee must be an expense owned by the same user");
     expect(schemaSql).toContain("create trigger refund_links_valid");
     expect(schemaSql).toContain("refund link currency must match the refund record currency");
