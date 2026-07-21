@@ -575,7 +575,8 @@ $$;
 create or replace function public.idempotency_result_owned(p_result_type text, p_result_id uuid, p_user_id uuid)
 returns boolean
 language sql
-security invoker
+stable
+security definer
 set search_path = public
 as $$
   select case p_result_type
@@ -598,7 +599,7 @@ create or replace function public.persist_ledger_record_bundle(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -619,6 +620,22 @@ declare
 begin
   if auth.uid() is null or request_user <> auth.uid() then
     raise exception 'bundle user does not match authenticated user' using errcode = '42501';
+  end if;
+
+  if (p_ledger_record->>'user_id')::uuid <> request_user
+    or not exists (select 1 from public.accounts where id = (p_ledger_record->>'account_id')::uuid and user_id = request_user)
+    or ((p_ledger_record->>'category_id') is not null and not exists (select 1 from public.categories where id = (p_ledger_record->>'category_id')::uuid and user_id = request_user))
+    or ((p_ledger_record->>'merchant_id') is not null and not exists (select 1 from public.merchants where id = (p_ledger_record->>'merchant_id')::uuid and user_id = request_user))
+    or ((p_ledger_record->>'event_id') is not null and not exists (select 1 from public.events where id = (p_ledger_record->>'event_id')::uuid and user_id = request_user)) then
+    raise exception 'ledger bundle references data owned by another user' using errcode = '42501';
+  end if;
+
+  if p_transfer_details is not null and p_transfer_details <> '{}'::jsonb then
+    if (p_transfer_details->>'ledger_record_id')::uuid <> record_id
+      or not exists (select 1 from public.accounts where id = (p_transfer_details->>'destination_account_id')::uuid and user_id = request_user)
+      or ((p_transfer_details->>'fee_ledger_record_id') is not null and not exists (select 1 from public.ledger_records where id = (p_transfer_details->>'fee_ledger_record_id')::uuid and user_id = request_user)) then
+      raise exception 'transfer bundle references data owned by another user' using errcode = '42501';
+    end if;
   end if;
 
   select ik.request_hash, ik.expires_at, ik.response_json
