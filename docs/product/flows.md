@@ -27,23 +27,30 @@ slice」的步驟不可視為目前已完成的功能。
 
 同一個媒體連結不跨用途。如果同一張圖片同時可作為餐點照片與帳務證明，系統可以共用同一份底層檔案，但要建立不同的 link intent，讓使用者清楚知道每個用途。
 
-## 掃描發票或收據（未來雲端 media slice）
+## 掃描發票或收據（本地優先，可設定雲端上傳）
 
 1. 使用者在 app 內拍照或匯入一批發票/收據圖片。
-2. 前端上傳圖片作為 temporary scan input，送出 `contentType`、`capturedAt`、`kind = invoice_scan` 或 `receipt_scan`。
-3. Edge Function 建立暫存 upload row，回傳 R2 presigned PUT URL。
-4. 前端直接 PUT 圖片到暫存 object key。
-5. OCR 或匯入流程建立 `source_payloads` 與 `drafts`。
+2. 前端先建立本地 temporary scan 與 byte queue；未登入或離線時仍可保存。
+3. 雲端上傳已設定時，前端呼叫 `create-r2-upload-url`，送出
+   `contentType`、`capturedAt`、`kind = invoice-scan` 或 `receipt-scan`。
+4. Edge Function 驗證使用者並回傳 R2 presigned PUT URL，不預先建立
+   `media_assets` row。
+5. PUT 成功後，cloud queue 才建立 media/source/draft metadata；未來 OCR
+   也只能更新草稿建議。
 6. 使用者確認後才建立或更新正式 `ledger_records`。
-7. 使用者確認或捨棄草稿後，原始掃描圖片刪除或到期，不進入長期媒體庫。
+7. 使用者可保留或捨棄來源；本地生命週期立即反映選擇，R2 實體物件
+   刪除與到期清理由後續 cleanup job 完成。
 
-## 紀錄餐點並可選連動帳本（目前可本地記錄；雲端圖片步驟為未來）
+## 紀錄餐點並可選連動帳本
 
 1. 使用者在 app 內拍餐點照、匯入餐點照片，或手動新增餐點。
 2. 一餐可以連到多張圖片。
-3. 未來雲端 media slice 才呼叫 `create-r2-upload-url`，送出 `contentType`、`capturedAt`、`kind = meal_photo`。
-4. 未來 Edge Function 建立 `media_assets` metadata row，回傳 R2 presigned PUT URL。
-5. 未來前端才直接 PUT 圖片到 R2；目前只保留本地 metadata 與 upload queue。
+3. 已登入且雲端上傳已設定時，前端呼叫 `create-r2-upload-url`，送出
+   `contentType`、`capturedAt`、`kind = meal-photo`。
+4. Edge Function 驗證使用者並回傳 R2 presigned PUT URL；此時不先建立
+   `media_assets`，避免上傳失敗卻留下假的同步資料。
+5. 前端直接 PUT 圖片到 R2，成功後才由 cloud queue 寫入 media metadata；
+   離線或缺少本地 bytes 時維持待同步或待重新選取狀態。
 6. 前端建立或更新 `meal_entries`，並以 `media_links` 的 `target_type = 'meal'` 建立照片連結。
 7. 未來啟用 AI/OCR 時，背景 function 只能在 `source_payloads` 與 `drafts` 邊界產生建議，不能直接改寫正式欄位。
 8. 如果使用者想連動帳本，應用層查詢 `ledger_records` 顯示候選交易；候選配對服務不屬於目前 V1 cloud persistence 的已實作 RPC。

@@ -70,7 +70,7 @@ Request:
 {
   "contentType": "image/jpeg",
   "capturedAt": "2026-07-05T12:34:00+08:00",
-  "kind": "meal_photo"
+  "kind": "meal-photo"
 }
 ```
 
