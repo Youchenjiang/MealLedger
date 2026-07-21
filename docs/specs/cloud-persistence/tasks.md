@@ -67,11 +67,11 @@ than being claimed automatically.
 ## Verification Evidence
 
 The current branch was re-verified after the meal/media/source queue slice,
-invoice-import spike documentation, Supabase configuration hardening, changed-
-local-target requeue fix, exact minor-unit aggregation fix, category uniqueness
-hardening, account-only reference queue coverage, profile persistence, and
-category alias bootstrap. Pending queue execution also reorders legacy transfer
-items behind linked fee records. Temporary scan links now use
+Supabase configuration hardening, changed-local-target requeue fix, exact
+minor-unit aggregation fix, category uniqueness hardening, account-only
+reference queue coverage, profile persistence, and category alias bootstrap.
+Pending queue execution also reorders legacy transfer items behind linked fee
+records. Temporary scan links now use
 `receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
 - `npm run test`: 35 files, 226 tests passed.
@@ -79,8 +79,10 @@ items behind linked fee records. Temporary scan links now use
   87.03% lines.
 - `npm run test:e2e`: 8 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
-- Real Supabase/RLS execution remains environment-gated; mocked authenticated
-  persistence tests cover the adapter contract.
+- `npm run test:rls`: local Supabase execution passed with two authenticated
+  identities, owner-only visibility, cross-owner rejection, and cleanup.
+- Mocked authenticated persistence tests continue to cover adapter failure and
+  retry behavior that is independent of the local database runtime.
 
 The Supabase configuration boundary also rejects template placeholders and
 keeps production deployments fail-closed when cloud authentication is missing.
