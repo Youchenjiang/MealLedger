@@ -784,6 +784,10 @@ function AuthenticatedApp() {
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>(readStoredUploadQueue);
   const [mediaPreviewUrls, setMediaPreviewUrls] = useState<Record<string, string>>({});
   const mediaPreviewUrlsRef = useRef(new Map<string, string>());
+  const pendingMediaFilesRef = useRef(new Map<string, File>());
+  const mediaUploadsInFlightRef = useRef(new Set<string>());
+  const uploadQueueRef = useRef(uploadQueue);
+  uploadQueueRef.current = uploadQueue;
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
@@ -837,9 +841,10 @@ function AuthenticatedApp() {
 
   useEffect(() => () => {
     const revokeObjectUrl = window.URL.revokeObjectURL?.bind(window.URL);
-    if (!revokeObjectUrl) return;
-    mediaPreviewUrlsRef.current.forEach((url) => revokeObjectUrl(url));
+    if (revokeObjectUrl) mediaPreviewUrlsRef.current.forEach((url) => revokeObjectUrl(url));
     mediaPreviewUrlsRef.current.clear();
+    pendingMediaFilesRef.current.clear();
+    mediaUploadsInFlightRef.current.clear();
   }, []);
 
   const clearMediaPreviews = useCallback((ids: Iterable<string>) => {
@@ -856,17 +861,54 @@ function AuthenticatedApp() {
     ));
   }, []);
 
+  const uploadPendingFiles = useCallback((items: UploadQueueItem[]) => {
+    if (!supabase || !isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline) {
+      return;
+    }
+
+    const candidates = items.flatMap((item) => {
+      const file = pendingMediaFilesRef.current.get(item.id);
+      if (!file || item.status === "uploaded" || mediaUploadsInFlightRef.current.has(item.id)) return [];
+      mediaUploadsInFlightRef.current.add(item.id);
+      return [{ item, file }];
+    });
+    if (candidates.length === 0) return;
+
+    const uploadClient = supabase as unknown as SignedUploadClient;
+    const now = new Date().toISOString();
+    Promise.all(candidates.map(({ item, file }) => uploadMediaFile(uploadClient, file, item, now)))
+      .then((uploadedItems) => {
+        const uploadedById = new Map(uploadedItems.map((item) => [item.id, item]));
+        uploadedItems.forEach((item) => {
+          if (item.status === "uploaded") pendingMediaFilesRef.current.delete(item.id);
+        });
+        setUploadQueue((current) => current.map((item) => uploadedById.get(item.id) ?? item));
+      })
+      .finally(() => {
+        candidates.forEach(({ item }) => mediaUploadsInFlightRef.current.delete(item.id));
+      });
+  }, [authState, cloudDataOwnerMatches, isOnline, userId]);
+
   const queueUploads = (items: UploadQueueItem[], files: File[] = []) => {
     const replacementKeys = new Set(items.map((item) => `${item.kind}:${item.name}`));
     const replacementNames = new Set(items.map((item) => item.name));
-    clearMediaPreviews(uploadQueue.filter((item) => (
+    const replacedIds = uploadQueue.filter((item) => (
       item.status !== "uploaded"
         && (item.bytesStatus === "metadata-only"
           ? replacementNames.has(item.name)
           : replacementKeys.has(`${item.kind}:${item.name}`))
-    )).map((item) => item.id));
+    )).map((item) => item.id);
+    clearMediaPreviews(replacedIds);
+    replacedIds.forEach((id) => {
+      pendingMediaFilesRef.current.delete(id);
+      mediaUploadsInFlightRef.current.delete(id);
+    });
 
     const createObjectUrl = window.URL.createObjectURL?.bind(window.URL);
+    items.forEach((item, index) => {
+      const file = files[index];
+      if (file) pendingMediaFilesRef.current.set(item.id, file);
+    });
     if (createObjectUrl) {
       const nextPreviews: Record<string, string> = {};
       items.forEach((item, index) => {
@@ -890,25 +932,21 @@ function AuthenticatedApp() {
       )),
       ...items,
     ]);
-    if (!supabase || !isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline) {
-      return;
-    }
-
-    const uploadClient = supabase as unknown as SignedUploadClient;
-    const now = new Date().toISOString();
-    Promise.all(items.map((item, index) => {
-      const file = files[index];
-      return file ? uploadMediaFile(uploadClient, file, item, now) : Promise.resolve(item);
-    })).then((uploadedItems) => {
-      const uploadedById = new Map(uploadedItems.map((item) => [item.id, item]));
-      setUploadQueue((current) => current.map((item) => uploadedById.get(item.id) ?? item));
-    });
+    uploadPendingFiles(items);
   };
+
+  useEffect(() => {
+    uploadPendingFiles(uploadQueueRef.current);
+  }, [uploadPendingFiles]);
 
   const clearUploads = useCallback((ids: string[]) => {
     const idsToClear = new Set(ids);
     if (idsToClear.size === 0) return;
     clearMediaPreviews(idsToClear);
+    idsToClear.forEach((id) => {
+      pendingMediaFilesRef.current.delete(id);
+      mediaUploadsInFlightRef.current.delete(id);
+    });
     setUploadQueue((current) => current.filter((item) => !idsToClear.has(item.id)));
     setCloudSyncQueue((current) => current.filter((item) => item.target !== "media" || !idsToClear.has(item.targetId)));
   }, [clearMediaPreviews]);
@@ -923,7 +961,7 @@ function AuthenticatedApp() {
     if (orphanedIds.length > 0) clearUploads(orphanedIds);
   }, [clearUploads, scans, uploadQueue]);
 
-  const rebindPersistedLocalState = () => {
+  useEffect(() => {
     if (authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
     const hasForeignOwnedState = records.some((record) => record.userId !== userId)
       || auditEvents.some((event) => event.userId !== userId);
@@ -936,13 +974,9 @@ function AuthenticatedApp() {
     setCloudSyncQueue((current) => current.map((item) => item.state === "retryable-error" || item.state === "failed"
       ? { ...item, state: "pending", attempts: 0, nextAttemptAt: now, lastError: "", updatedAt: now }
       : item));
-  };
-
-  useEffect(() => {
-    rebindPersistedLocalState();
   }, [auditEvents, authState, cloudDataOwnerMatches, records, userId]);
 
-  const claimLocalWorkspace = () => {
+  const claimLocalWorkspace = useCallback(() => {
     if (authState !== "signed-in" || !userId || userId === "local-user") return;
     const now = new Date().toISOString();
     const rebound = rebindLocalWorkspace(records, auditEvents, userId);
@@ -958,7 +992,7 @@ function AuthenticatedApp() {
       ? { ...item, state: "pending", attempts: 0, nextAttemptAt: now, lastError: "", updatedAt: now }
       : item));
     setLocalDataOwner(userId);
-  };
+  }, [auditEvents, authState, records, userId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
