@@ -69,13 +69,14 @@ than being claimed automatically.
 The current branch was re-verified after the meal/media/source queue slice,
 invoice-import spike documentation, Supabase configuration hardening, changed-
 local-target requeue fix, exact minor-unit aggregation fix, category uniqueness
-hardening, and account-only reference queue coverage. Pending queue execution
-also reorders legacy transfer items behind linked fee records. Temporary scan
-links now use `receipt-evidence` or `invoice-scan`, matching the canonical enum:
+hardening, account-only reference queue coverage, profile persistence, and
+category alias bootstrap. Pending queue execution also reorders legacy transfer
+items behind linked fee records. Temporary scan links now use
+`receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
-- `npm run test`: 35 files, 225 tests passed.
-- `npm run test:coverage`: 84.3% statements, 75.17% branches, 86.65% functions,
-  86.98% lines.
+- `npm run test`: 35 files, 226 tests passed.
+- `npm run test:coverage`: 84.33% statements, 75.25% branches, 86.68% functions,
+  87.03% lines.
 - `npm run test:e2e`: 8 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - Real Supabase/RLS execution remains environment-gated; mocked authenticated
