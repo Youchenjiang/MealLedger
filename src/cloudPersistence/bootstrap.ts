@@ -45,10 +45,15 @@ function rowsForNames(userId: string, names: string[], includeRootParent = false
 }
 
 function rowsForMerchants(userId: string, names: string[] | undefined): CloudRow[] {
-  return uniqueNames(names).map((name) => ({
+  const unique = new Map<string, string>();
+  for (const name of names ?? []) {
+    const trimmed = name.trim();
+    if (trimmed && !unique.has(trimmed.toLowerCase())) unique.set(trimmed.toLowerCase(), trimmed);
+  }
+  return [...unique.entries()].map(([normalizedName, name]) => ({
     user_id: userId,
     name,
-    normalized_name: name.toLowerCase(),
+    normalized_name: normalizedName,
   }));
 }
 
