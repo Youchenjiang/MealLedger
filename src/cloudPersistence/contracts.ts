@@ -7,6 +7,7 @@ export type CloudRow = Record<string, unknown>;
 export type CloudReferenceMap = {
   accountIds: Record<string, string>;
   categoryIds?: Record<string, string>;
+  merchantIds?: Record<string, string>;
   eventIds?: Record<string, string>;
   tagIds?: Record<string, string>;
   ledgerRecordIds?: Record<string, string>;

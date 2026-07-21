@@ -409,11 +409,12 @@ type LedgerRowInput = {
   accountId: string;
   amount: string;
   categoryId: string | undefined;
+  merchantId: string | undefined;
   eventId: string | undefined;
   recordId: string;
 };
 
-function createLedgerRow({ record, userId, timezone, accountId, amount, categoryId, eventId, recordId }: LedgerRowInput): CloudRow {
+function createLedgerRow({ record, userId, timezone, accountId, amount, categoryId, merchantId, eventId, recordId }: LedgerRowInput): CloudRow {
   const isDay = record.timePrecision === "day";
   const source = record.kind === "income" || record.kind === "fund-addition" ? optionalText(record.counterparty) : null;
   return {
@@ -430,6 +431,7 @@ function createLedgerRow({ record, userId, timezone, accountId, amount, category
     amount_minor: amount,
     currency: record.currency.toUpperCase(),
     category_id: categoryId ?? null,
+    merchant_id: merchantId ?? null,
     merchant_text: optionalText(record.counterparty),
     item_name: optionalText(record.itemName),
     source,
@@ -491,10 +493,16 @@ export function mapLedgerRecord(
   const eventId = optionalReference(record.event ?? "", references.eventIds, "event_id");
   if (!eventId.ok) issues.push(...eventId.issues);
 
+  const merchantKinds = ["expense", "refund", "unresolved-expense"];
+  const merchantId = references.merchantIds && merchantKinds.includes(record.kind)
+    ? optionalReference(record.counterparty, references.merchantIds, "merchant_id")
+    : { ok: true as const, value: undefined };
+  if (!merchantId.ok) issues.push(...merchantId.issues);
+
   const tagMapping = mapLedgerTags(record, userId, references, recordId);
   issues.push(...tagMapping.issues);
 
-  if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok || !categoryId.ok || !eventId.ok) {
+  if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok || !categoryId.ok || !eventId.ok || !merchantId.ok) {
     return { ok: false, issues };
   }
 
@@ -505,6 +513,7 @@ export function mapLedgerRecord(
     accountId: accountId.value,
     amount: amount.value,
     categoryId: categoryId.value,
+    merchantId: merchantId.value,
     eventId: eventId.value,
     recordId: recordId.value,
   });

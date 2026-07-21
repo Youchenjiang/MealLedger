@@ -16,6 +16,7 @@ export type ReferenceBootstrapInput = {
   userId: string;
   accounts: LocalAccount[];
   categories?: string[];
+  merchants?: string[];
   tags?: string[];
   events?: string[];
 };
@@ -40,6 +41,14 @@ function rowsForNames(userId: string, names: string[], includeRootParent = false
     ...(includeRootParent ? { parent_id: null } : {}),
     name,
     kind_scope: "both",
+  }));
+}
+
+function rowsForMerchants(userId: string, names: string[] | undefined): CloudRow[] {
+  return uniqueNames(names).map((name) => ({
+    user_id: userId,
+    name,
+    normalized_name: name.toLowerCase(),
   }));
 }
 
@@ -82,6 +91,14 @@ export async function bootstrapReferences(
   const accounts = await upsertAndMap(client, "accounts", accountRows);
   if (!accounts.ok) return accounts;
 
+  const merchants = await upsertAndMap(
+    client,
+    "merchants",
+    rowsForMerchants(input.userId, input.merchants),
+    "user_id,normalized_name",
+  );
+  if (!merchants.ok) return merchants;
+
   const categories = await upsertAndMap(
     client,
     "categories",
@@ -101,6 +118,7 @@ export async function bootstrapReferences(
     references: {
       accountIds: Object.fromEntries(input.accounts.map((account) => [account.id, accounts.ids[account.name]])),
       categoryIds: categories.ids,
+      merchantIds: merchants.ids,
       tagIds: tags.ids,
       eventIds: events.ids,
     },

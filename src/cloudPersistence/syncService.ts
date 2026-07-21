@@ -29,6 +29,7 @@ export type SyncLocalChangesInput = {
   userId: string;
   accounts: LocalAccount[];
   categories: string[];
+  merchants: string[];
   tags: string[];
   events: string[];
   auditEvents: import("../manualLedger/records").LocalAuditEvent[];
@@ -179,6 +180,7 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
     userId: input.userId,
     accounts: input.accounts,
     categories: input.categories,
+    merchants: input.merchants,
     tags: input.tags,
     events: input.events,
   });
