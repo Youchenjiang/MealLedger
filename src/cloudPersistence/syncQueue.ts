@@ -5,7 +5,7 @@ import type { TemporaryScan } from "../captureMedia/media";
 import type { UploadQueueItem } from "../captureMedia/upload";
 import { nextRetryAt } from "./retry";
 
-export type CloudSyncTarget = "record" | "draft" | "meal" | "media" | "scan";
+export type CloudSyncTarget = "account" | "record" | "draft" | "meal" | "media" | "scan";
 export type CloudSyncState = "pending" | "syncing" | "retryable-error" | "failed" | "conflict" | "synced";
 
 export type CloudSyncQueueItem = {
@@ -55,6 +55,31 @@ function refreshExisting(
       updatedAt: now,
     }
     : item);
+}
+
+export function enqueueAccountSync(
+  current: CloudSyncQueueItem[],
+  account: LocalAccount,
+  now: string,
+): CloudSyncQueueItem[] {
+  const idempotencyKey = `account:${account.id}`;
+  const requestHash = `account:${account.id}:${account.name}:${account.currency}:${account.accountType ?? ""}:${String(account.allowNegativeBalance ?? true)}`;
+  const refreshed = refreshExisting(current, "account", account.id, requestHash, idempotencyKey, now);
+  if (refreshed) return refreshed;
+  return [...current, {
+    id: queueId("account", account.id),
+    target: "account",
+    targetId: account.id,
+    actionType: "account-reference",
+    idempotencyKey,
+    requestHash,
+    state: "pending",
+    attempts: 0,
+    nextAttemptAt: now,
+    lastError: "",
+    createdAt: now,
+    updatedAt: now,
+  }];
 }
 
 export function enqueueRecordSync(

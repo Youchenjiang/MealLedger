@@ -762,8 +762,8 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (!isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
     const now = new Date().toISOString();
-    setCloudSyncQueue((current) => enqueueLocalChanges(current, records, drafts, meals, uploadQueue, scans, now));
-  }, [authState, cloudDataOwnerMatches, drafts, meals, records, scans, uploadQueue, userId]);
+    setCloudSyncQueue((current) => enqueueLocalChanges(current, accounts, records, drafts, meals, uploadQueue, scans, now));
+  }, [accounts, authState, cloudDataOwnerMatches, drafts, meals, records, scans, uploadQueue, userId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline || cloudSyncInFlight.current) {

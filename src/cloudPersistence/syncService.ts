@@ -5,6 +5,7 @@ import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporarySca
 import { persistDraft, persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
 import {
   enqueueDraftSync,
+  enqueueAccountSync,
   enqueueRecordSync,
   markCloudSyncFailure,
   markCloudSynced,
@@ -100,6 +101,14 @@ async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, sta
   return { ...state, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
+async function syncAccountItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
+  const { input, references } = context;
+  const account = input.accounts.find((candidate) => candidate.id === item.targetId);
+  if (!account) return applyItemFailure(state, item, "Local account is no longer available.", input.now);
+  if (!references.accountIds[account.id]) return applyItemFailure(state, item, "Cloud account reference was not returned.", input.now);
+  return { ...state, queue: markCloudSynced(state.queue, item.id, input.now) };
+}
+
 async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const media = input.media.find((candidate) => candidate.id === item.targetId);
@@ -153,6 +162,7 @@ async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, st
 }
 
 async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
+  if (item.target === "account") return await syncAccountItem(item, context, state);
   if (item.target === "draft") return await syncDraftItem(item, context, state);
   if (item.target === "media") return await syncMediaItem(item, context, state);
   if (item.target === "scan") return await syncScanItem(item, context, state);
@@ -190,6 +200,7 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
 
 export function enqueueLocalChanges(
   queue: CloudSyncQueueItem[],
+  accounts: LocalAccount[],
   records: LocalLedgerRecord[],
   drafts: TransactionDraft[],
   meals: MealEntry[],
@@ -198,6 +209,7 @@ export function enqueueLocalChanges(
   now: string,
 ): CloudSyncQueueItem[] {
   let next = queue;
+  for (const account of accounts) next = enqueueAccountSync(next, account, now);
   for (const item of media) {
     next = enqueueMediaSync(next, item, now);
   }
