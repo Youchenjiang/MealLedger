@@ -1,7 +1,7 @@
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import { bootstrapReferences } from "./bootstrap";
 import type { CloudPersistenceClient, CloudReferenceMap } from "./contracts";
-import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink } from "./mappers";
+import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink, stableCloudUuid } from "./mappers";
 import { persistDraft, persistMealBundle, persistMediaAsset, persistProfile, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
 import {
   enqueueDraftSync,
@@ -128,8 +128,30 @@ function markScansSynced(scans: TemporaryScan[], id: string): TemporaryScan[] {
   return scans.map((candidate) => candidate.id === id ? { ...candidate, cloudStatus: "synced" as const } : candidate);
 }
 
+export function mergeSyncedScans(current: TemporaryScan[], synced: TemporaryScan[]): TemporaryScan[] {
+  const syncedById = new Map(synced.map((scan) => [scan.id, scan]));
+
+  return current.map((scan) => {
+    const syncedScan = syncedById.get(scan.id);
+    if (!syncedScan || syncedScan.state !== scan.state) return scan;
+    return { ...scan, cloudStatus: syncedScan.cloudStatus };
+  });
+}
+
+export function mergeSyncedItems<T extends { id: string }>(current: T[], synced: T[]): T[] {
+  const syncedById = new Map(synced.map((item) => [item.id, item]));
+  return current.map((item) => syncedById.get(item.id) ?? item);
+}
+
 function markMealsSynced(meals: MealEntry[], id: string): MealEntry[] {
   return meals.map((candidate) => candidate.id === id ? { ...candidate, status: "synced" as const } : candidate);
+}
+
+function hasUploadedMedia(media: UploadQueueItem[], mediaIds: string[]): boolean {
+  return mediaIds.every((mediaId) => {
+    const item = media.find((candidate) => candidate.id === mediaId);
+    return Boolean(item?.status === "uploaded" && item.remoteMediaId && item.objectKey);
+  });
 }
 
 function markRecordsSynced(records: LocalLedgerRecord[], id: string): LocalLedgerRecord[] {
@@ -179,8 +201,10 @@ async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, stat
   const { input } = context;
   const scan = input.scans.find((candidate) => candidate.id === item.targetId);
   if (!scan) return applyItemFailure(state, item, "Local scan metadata is no longer available.", input.now);
-  const mediaLink = input.media.some((candidate) => candidate.id === scan.id)
-    ? [mapTemporaryScanMediaLink(scan, input.userId)]
+  const media = input.media.find((candidate) => candidate.id === scan.id);
+  if (media && !hasUploadedMedia(input.media, [scan.id])) return state;
+  const mediaLink = media
+    ? [mapTemporaryScanMediaLink(scan, input.userId, media.remoteMediaId ?? stableCloudUuid(`media:${input.userId}:${scan.id}`))]
     : [];
   const result = await persistSourcePayload(input.client, mapTemporaryScan(scan, input.userId), mediaLink);
   const nextScans = result.ok ? markScansSynced(state.scans, scan.id) : state.scans;
@@ -191,7 +215,12 @@ async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, stat
   const { input, references } = context;
   const meal = input.meals.find((candidate) => candidate.id === item.targetId);
   if (!meal) return applyItemFailure(state, item, "Local meal metadata is no longer available.", input.now);
-  const mappedMeal = mapMealEntry(meal, input.userId, references);
+  if (!hasUploadedMedia(input.media, meal.mediaAssetIds)) return state;
+  const mediaIds = Object.fromEntries(input.media.map((media) => [
+    media.id,
+    media.remoteMediaId ?? stableCloudUuid(`media:${input.userId}:${media.id}`),
+  ]));
+  const mappedMeal = mapMealEntry(meal, input.userId, { ...references, mediaIds });
   if (!mappedMeal.ok) return applyItemFailure(state, item, mappedMeal.issues.map((entry) => entry.message).join(" "), input.now);
   const result = await persistMealBundle(input.client, mappedMeal.value);
   const nextMeals = result.ok ? markMealsSynced(state.meals, meal.id) : state.meals;

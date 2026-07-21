@@ -107,14 +107,14 @@ export function mapDraft(draft: TransactionDraft, userId: string): CloudRow {
 
 export function mapMediaAsset(item: UploadQueueItem, userId: string, now: string): CloudRow {
   const kind: UploadMediaKind = item.kind ?? "attachment";
-  const mediaId = stableCloudUuid(`media:${userId}:${item.id}`);
+  const mediaId = item.remoteMediaId ?? stableCloudUuid(`media:${userId}:${item.id}`);
   const temporary = kind === "receipt-scan" || kind === "invoice-scan";
   return {
     id: mediaId,
     user_id: userId,
     storage_provider: "r2",
-    bucket: "pending",
-    object_key: `pending/${userId}/${mediaId}/${encodeURIComponent(item.name)}`,
+    bucket: item.bucket ?? "pending",
+    object_key: item.objectKey ?? `pending/${userId}/${mediaId}/${encodeURIComponent(item.name)}`,
     content_type: item.type || "application/octet-stream",
     byte_size: item.size,
     captured_at: now,
@@ -143,10 +143,10 @@ export function mapTemporaryScan(scan: TemporaryScan, userId: string): CloudRow 
   };
 }
 
-export function mapTemporaryScanMediaLink(scan: TemporaryScan, userId: string): CloudRow {
+export function mapTemporaryScanMediaLink(scan: TemporaryScan, userId: string, mediaId?: string): CloudRow {
   return {
     user_id: userId,
-    media_asset_id: stableCloudUuid(`media:${userId}:${scan.id}`),
+    media_asset_id: mediaId ?? stableCloudUuid(`media:${userId}:${scan.id}`),
     target_type: "source-payload",
     target_id: stableCloudUuid(`source:${userId}:${scan.id}`),
     link_intent: scan.intent === "scan-invoice" ? "invoice-scan" : "receipt-evidence",
@@ -184,7 +184,7 @@ export function mapMealEntry(
 
   const mediaLinks: CloudRow[] = meal.mediaAssetIds.map((mediaAssetId) => ({
     user_id: userId,
-    media_asset_id: stableCloudUuid(`media:${userId}:${mediaAssetId}`),
+    media_asset_id: references.mediaIds?.[mediaAssetId] ?? stableCloudUuid(`media:${userId}:${mediaAssetId}`),
     target_type: "meal",
     target_id: mealId,
     link_intent: "meal-photo",

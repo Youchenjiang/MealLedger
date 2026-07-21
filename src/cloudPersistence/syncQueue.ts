@@ -164,8 +164,11 @@ export function enqueueMediaSync(
   media: UploadQueueItem,
   now: string,
 ): CloudSyncQueueItem[] {
+  // Metadata must follow the object upload. A local queue item has no stable
+  // remote object yet, so syncing it would create a misleading cloud record.
+  if (media.status !== "uploaded" || !media.remoteMediaId || !media.objectKey) return current;
   const idempotencyKey = `media:${media.id}`;
-  const requestHash = `media:${media.id}:${JSON.stringify({ name: media.name, type: media.type, size: media.size, status: media.status, kind: media.kind })}`;
+  const requestHash = `media:${media.id}:${JSON.stringify({ name: media.name, type: media.type, size: media.size, status: media.status, kind: media.kind, remoteMediaId: media.remoteMediaId, objectKey: media.objectKey })}`;
   if (media.metadataStatus === "synced") return current;
   const refreshed = refreshExisting(current, "media", media.id, requestHash, idempotencyKey, now);
   if (refreshed) return refreshed;
