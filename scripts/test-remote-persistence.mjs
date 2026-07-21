@@ -44,7 +44,9 @@ async function authRequest(baseUrl, path, key, method, body) {
   });
   const responseBody = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`${path}: ${responseBody.msg ?? responseBody.message ?? responseBody.error_description ?? `HTTP ${response.status}`}`);
+    const errorMessage = responseBody.msg ?? responseBody.message
+      ?? responseBody.error_description ?? `HTTP ${response.status}`;
+    throw new Error(`${path}: ${errorMessage}`);
   }
   return responseBody;
 }
@@ -279,7 +281,9 @@ async function run() {
   if (cleanupError) throw cleanupError;
 }
 
-run().catch((error) => {
+try {
+  await run();
+} catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
-});
+}

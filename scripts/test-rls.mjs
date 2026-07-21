@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const dockerCandidates = process.platform === "win32"
-  ? ["C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"]
+  ? [String.raw`C:\Program Files\Docker\Docker\resources\bin\docker.exe`]
   : ["/usr/bin/docker", "/usr/local/bin/docker"];
 const dockerExecutable = dockerCandidates.find(existsSync);
 if (!dockerExecutable) {
