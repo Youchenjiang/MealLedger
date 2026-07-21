@@ -84,18 +84,20 @@ records. Temporary scan links now use
 `receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
 - `npm run test`: 35 files, 226 tests passed.
-- `npm run test:coverage`: 84.33% statements, 75.25% branches, 86.68% functions,
-  87.03% lines.
+- `npm run test:coverage`: 84.33% statements, 75.22% branches, 86.68% functions,
+  87.04% lines.
 - `npm run test:e2e`: 8 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
 - `npm run test:rls`: local Supabase execution passed with two authenticated
   identities, owner-only visibility, cross-owner rejection, and cleanup.
 - Mocked authenticated persistence tests continue to cover adapter failure and
   retry behavior that is independent of the local database runtime.
-- Remote Supabase migration `0001_schema_core.sql` is applied and matches the
+- Remote Supabase migrations `0001` through `0003` are applied and match the
   local migration list.
-- Remote Auth and RLS smoke passed with a temporary authenticated user; the
-  temporary user and profile row were deleted after verification.
+- Remote authenticated persistence smoke passed with a temporary user,
+  covering profile, account/reference, ledger, transfer RPC replay,
+  idempotency, draft, source, media, and meal writes. Smoke rows are removed
+  in dependency order before the temporary user is deleted.
 - The frontend remote endpoint is configured only through ignored local
   environment files; no project secret is tracked in Git.
 
