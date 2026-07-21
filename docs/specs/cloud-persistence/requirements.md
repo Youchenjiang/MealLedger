@@ -13,6 +13,8 @@ making cloud availability a prerequisite for recording locally.
   writes.
 - Bootstrap merchant names to `public.merchants` and map expense-like records
   to their owned merchant references.
+- Bootstrap local category aliases to `public.category_aliases`, linking an
+  alias to its owned canonical category when that category is available.
 - Map local official records to `public.ledger_records`.
 - Map transfer details, refund links, and audit events after their parent record
   is accepted.
@@ -82,6 +84,9 @@ non-retryable cloud boundary error.
 - Category, merchant, event, and tag names are resolved through explicit maps;
   the adapter does not invent reference IDs or silently discard unresolved
   required values.
+- Category aliases are trimmed and deduplicated case-insensitively before
+  upsert. An alias whose canonical category is not present remains usable as
+  a review-required alias without inventing a category reference.
 - `fund-addition` remains a ledger record kind and is never converted to
   `income`.
 - `refund` stores links to one or more original records. A payback remains a

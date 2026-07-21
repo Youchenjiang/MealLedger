@@ -17,6 +17,8 @@
   owned account reference.
 - Authenticated synchronization upserts the owner profile before dependent
   writes, and profile failure remains retryable.
+- Category aliases are deduplicated and linked to the resolved canonical
+  category without creating duplicate alias rows.
 - Merchant names are normalized and expense-like ledger rows retain their
   owned `merchant_id` reference.
 - A successful account/record bundle calls tables in dependency order.
