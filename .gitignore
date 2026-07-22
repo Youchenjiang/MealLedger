@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.test
 
 # Dependencies and build outputs
 node_modules/
@@ -18,6 +19,7 @@ tmp/
 # Supabase local state
 .supabase/
 supabase/.branches/
+supabase/.temp/
 
 # Logs and OS files
 *.log

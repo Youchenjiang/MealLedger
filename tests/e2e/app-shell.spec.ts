@@ -116,7 +116,7 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
     mimeType: "image/jpeg",
     buffer: Buffer.from("invoice"),
   });
-  await page.getByRole("button", { name: "Save scan drafts" }).click();
+  await page.getByRole("button", { name: "Keep scan drafts" }).click();
 
   await expect(page.getByText("1 scan draft saved locally for review.")).toBeVisible();
   await expect(page.getByText("invoice.jpg")).toBeVisible();
@@ -185,11 +185,31 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await page.getByRole("button", { name: "Ledger", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
   await expectHorizontallyWithinViewport(page, "aside[aria-label='MealLedger navigation'] .nav-item");
-  await expectHorizontallyWithinViewport(page, ".table-card");
-  await expect
-    .poll(() => page.locator(".table-card").evaluate((element) => element.scrollWidth > element.clientWidth))
-    .toBe(true);
+  await expect(page.locator(".table-card")).toHaveCount(0);
+  await expect(page.locator(".ledger-record-card")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
+  expect(errors).toEqual([]);
+});
+
+test("keeps the mobile workspace header aligned across routes", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await openWorkspace(page);
+  const headerPositions: number[] = [];
+  const sidebarHeights: number[] = [];
+  for (const routeName of ["Overview", "Ledger", "Capture", "Settings"]) {
+    await page.getByRole("button", { name: routeName, exact: true }).click();
+    await expect(page.locator(".page-header")).toBeVisible();
+    const measurements = await page.locator(".page-header, .sidebar").evaluateAll((elements) =>
+      elements.map((element) => ({ className: element.className, top: element.getBoundingClientRect().top, height: element.getBoundingClientRect().height })),
+    );
+    headerPositions.push(measurements.find((item) => item.className === "page-header")?.top ?? -1);
+    sidebarHeights.push(measurements.find((item) => item.className === "sidebar")?.height ?? -1);
+  }
+
+  expect(new Set(headerPositions.map((position) => Math.round(position))).size).toBe(1);
+  expect(new Set(sidebarHeights.map((height) => Math.round(height))).size).toBe(1);
   expect(errors).toEqual([]);
 });
 

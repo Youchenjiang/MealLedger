@@ -9,6 +9,12 @@ making cloud availability a prerequisite for recording locally.
 ## In Scope
 
 - Map local accounts to `public.accounts`.
+- Upsert the authenticated user's `public.profiles` row before dependent cloud
+  writes.
+- Bootstrap merchant names to `public.merchants` and map expense-like records
+  to their owned merchant references.
+- Bootstrap local category aliases to `public.category_aliases`, linking an
+  alias to its owned canonical category when that category is available.
 - Map local official records to `public.ledger_records`.
 - Map transfer details, refund links, and audit events after their parent record
   is accepted.
@@ -17,6 +23,8 @@ making cloud availability a prerequisite for recording locally.
   the local queue contains the corresponding objects. Client-only identifiers
   are converted to deterministic UUIDs at the cloud boundary; image bytes are
   never placed in Supabase rows.
+- Upload available local image bytes to private R2 objects through short-lived
+  signed PUT URLs before marking their media metadata as synced.
 - Use the local idempotency key as the stable action key for retries.
 - Keep failed writes in the local queue and expose a retryable error state.
 - Use Supabase RLS as the ownership boundary; the browser never uses a service
@@ -26,8 +34,10 @@ making cloud availability a prerequisite for recording locally.
 
 - Ministry of Finance invoice synchronization.
 - Bank, credit-card, or statement synchronization.
-- R2 object upload, signed URL generation, image bytes, OCR, or AI processing.
-- Anonymous cloud accounts or a second authentication provider.
+- R2 object deletion/retention jobs, thumbnail generation, OCR, or AI
+  processing.
+- Authentication provider selection and account verification flow; those belong
+  to the auth spec. Cloud persistence only consumes an authenticated session.
 - Automatic conflict merging. A version mismatch becomes a retry/conflict
   result and never silently overwrites a newer cloud row.
 
@@ -45,6 +55,11 @@ making cloud availability a prerequisite for recording locally.
    reload, reconnect, or repeated button clicks.
 6. Meal, media metadata, and scan source writes have independent queue targets;
    a scan remains a source/draft until the user confirms it.
+7. An account has its own queue target, so creating an account does not require
+   a ledger record before the account reference is persisted.
+8. Media metadata is persisted only after its corresponding R2 upload succeeds.
+   A missing local byte payload remains visible for re-selection and is not
+   reported as uploaded.
 
 ## Write Order
 
@@ -76,6 +91,9 @@ non-retryable cloud boundary error.
 - Category, merchant, event, and tag names are resolved through explicit maps;
   the adapter does not invent reference IDs or silently discard unresolved
   required values.
+- Category aliases are trimmed and deduplicated case-insensitively before
+  upsert. An alias whose canonical category is not present remains usable as
+  a review-required alias without inventing a category reference.
 - `fund-addition` remains a ledger record kind and is never converted to
   `income`.
 - `refund` stores links to one or more original records. A payback remains a
@@ -118,8 +136,10 @@ non-retryable cloud boundary error.
   accept or store a service-role client in frontend code.
 - Every mutation includes the authenticated user ownership fields expected by
   RLS. Client-side IDs are not treated as proof of ownership.
-- The adapter persists metadata only. Temporary scan cleanup and signed media
-  URL behavior remain in the capture-media boundary until the cloud media slice.
+- Browser code requests signed upload URLs from the authenticated Edge Function;
+  R2 credentials never enter the browser. Temporary scan lifecycle remains in
+  the capture-media boundary, while physical R2 deletion is deferred to a
+  cleanup job.
 - If the authenticated user differs from the local data owner, automatic claim
   and sync are blocked until an explicit migration/review flow exists.
 
@@ -138,3 +158,5 @@ non-retryable cloud boundary error.
 - Transfers without the atomic RPC boundary remain local-only rather than being
   reported as synced.
 - Tests prove that clean exports remain unchanged and contain no media bytes.
+- Tests prove that media metadata is not marked synced before its R2 upload
+  succeeds and stale upload results cannot restore discarded lifecycle state.

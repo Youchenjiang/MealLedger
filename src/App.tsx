@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from "react";
 import {
   AlertCircle,
   Banknote,
   Camera,
   CheckCircle2,
+  Cloud,
   CloudOff,
   Home,
   ImagePlus,
@@ -39,10 +40,11 @@ import { applyDefaultTaxonomy, type TaxonomyAliasSeed } from "./taxonomy/default
 import { captureIntentLabel, captureIntents, type CaptureIntent } from "./captureMedia/intents";
 import { createMealEntry, type MealEntry } from "./captureMedia/meals";
 import { createTemporaryScan, discardTemporaryScan, expireTemporaryScans, retainTemporaryScan, type TemporaryScan } from "./captureMedia/media";
-import { queueUploadFiles, validateMediaBatch, type UploadQueueItem } from "./captureMedia/upload";
+import { queueUploadFiles, uploadMediaFile, validateMediaBatch, type SignedUploadClient, type UploadQueueItem } from "./captureMedia/upload";
 import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient, type RawSupabaseClient } from "./cloudPersistence/supabaseClient";
 import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
-import { enqueueLocalChanges, syncLocalChanges } from "./cloudPersistence/syncService";
+import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
+import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/overview", icon: Home },
@@ -93,10 +95,6 @@ function localDateTime(): string {
 
 function countLabel(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
-
-function metricValue(count: number, noun: string, empty: string): string {
-  return count > 0 ? `${count} ${noun}` : empty;
 }
 
 function metricDetail(count: number, populated: string, empty: string): string {
@@ -299,7 +297,17 @@ function readStoredUploadQueue(): UploadQueueItem[] {
     }
 
     const parsed: unknown = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed as UploadQueueItem[] : [];
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as UploadQueueItem[])
+      // Legacy smoke runs stored only file metadata. There are no bytes to
+      // retry, so discard those orphaned local queue entries on read.
+      .filter((item) => item.status === "uploaded" || item.remoteMediaId || item.objectKey || item.bytesStatus === "available")
+      .map((item) => ({
+      ...item,
+      // File bytes cannot survive a localStorage round-trip. Require a new
+      // selection instead of presenting an unrecoverable item as uploadable.
+      bytesStatus: item.status === "uploaded" ? "available" : "metadata-only",
+      }));
   } catch {
     return [];
   }
@@ -404,7 +412,19 @@ function draftDisplayName(draft: TransactionDraft): string {
 }
 
 function recordDisplayName(record: LocalLedgerRecord): string {
-  return record.kind === "transfer" ? `${record.accountName} to ${record.transferAccountName}` : record.counterparty || record.reason || record.kind;
+  return record.kind === "transfer" ? `${record.accountName} → ${record.transferAccountName || "Destination"}` : record.counterparty || record.reason || record.kind;
+}
+
+function recordDetailLine(record: LocalLedgerRecord): string {
+  if (record.kind === "transfer") {
+    return `${record.localDate} · ${record.accountName} → ${record.transferAccountName || "Destination"}`;
+  }
+
+  if (record.kind === "fund-addition") {
+    return `${record.localDate} · ${record.accountName} · ${record.reason || "Initial funds"}`;
+  }
+
+  return `${record.localDate} · ${record.accountName} · ${record.category || record.reason || "Category needed"}`;
 }
 
 function syncTargetLabel(target: CloudSyncQueueItem["target"]): string {
@@ -516,38 +536,98 @@ function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (
 
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
 
-function disabledSyncStatus(online: boolean): StatusItem {
-  return { label: online ? "Sync not enabled" : "Offline", detail: online ? "This preview keeps changes on this device." : "Drafts and records stay visible on this device while offline.", icon: online ? Wifi : WifiOff, tone: "neutral" };
+function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspace: boolean): StatusItem {
+  if (!online) {
+    return { label: "Offline", detail: "Drafts and records stay visible on this device while offline.", icon: WifiOff, tone: "neutral" };
+  }
+
+  if (localWorkspace || authState === "signed-out") {
+    return { label: "Local-only", detail: "This workspace keeps changes on this device until an account is verified.", icon: CloudOff, tone: "neutral" };
+  }
+
+  if (authState === "auth-error") {
+    return { label: "Local-only", detail: "Cloud authentication is unavailable. Changes remain on this device.", icon: CloudOff, tone: "warn" };
+  }
+
+  return { label: "Checking cloud connection", detail: "The workspace is checking whether cloud sync is available.", icon: Wifi, tone: "neutral" };
 }
 
-function enabledSyncStatus(pendingCount: number, conflictCount: number, errorCount: number, firstError?: string): StatusItem {
-  if (conflictCount > 0) return { label: `${conflictCount} sync conflict${conflictCount === 1 ? "" : "s"} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
-  if (errorCount > 0) return { label: `${errorCount} cloud sync error${errorCount === 1 ? "" : "s"}`, detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
+type EnabledSyncStatusInput = {
+  pendingCount: number;
+  conflictCount: number;
+  errorCount: number;
+  uploadCount: number;
+  unavailableUploadCount: number;
+  uploadErrorCount: number;
+  firstError?: string;
+  firstUploadError?: string;
+};
+
+function enabledSyncStatus({
+  pendingCount,
+  conflictCount,
+  errorCount,
+  uploadCount,
+  unavailableUploadCount,
+  uploadErrorCount,
+  firstError,
+  firstUploadError,
+}: Readonly<EnabledSyncStatusInput>): StatusItem {
+  if (conflictCount > 0) return { label: `${countLabel(conflictCount, "sync conflict")} need review`, detail: "Conflicting local and cloud versions are held for review before either one is replaced.", icon: CloudOff, tone: "danger" };
+  if (errorCount > 0) return { label: countLabel(errorCount, "cloud sync error"), detail: firstError ? `The latest sync attempt failed: ${firstError}` : "A cloud write failed and will be retried when possible.", icon: CloudOff, tone: "danger" };
+  if (uploadErrorCount > 0) return { label: countLabel(uploadErrorCount, "media upload error"), detail: firstUploadError ? `The media upload failed: ${firstUploadError}. Select the original file again to retry.` : "A media upload failed. Select the original file again to retry.", icon: CloudOff, tone: "danger" };
   if (pendingCount > 0) return { label: `${pendingCount} cloud sync pending`, detail: "Local changes are queued for the configured Supabase workspace.", icon: CloudOff, tone: "warn" };
-  return { label: "Cloud sync ready", detail: "Cloud writes use the authenticated workspace.", icon: Wifi, tone: "neutral" };
+  if (uploadCount > 0) {
+    return { label: "Cloud sync incomplete", detail: `Ledger records are synced, but ${countLabel(uploadCount, "image")} remains local-only until media upload completes.`, icon: CloudOff, tone: "warn" };
+  }
+  if (unavailableUploadCount > 0) {
+    return { label: "Media needs reselect", detail: `${countLabel(unavailableUploadCount, "image")} has metadata only; select the original file again to upload its bytes.`, icon: CloudOff, tone: "warn" };
+  }
+  return { label: "Cloud sync ready", detail: "Cloud records and media have no pending writes.", icon: Wifi, tone: "neutral" };
 }
 
 function syncStatusItem({
+  authState,
+  userId,
   enabled,
   blocked,
   online,
   pendingCount,
   conflictCount,
   errorCount,
+  uploadCount,
+  unavailableUploadCount,
+  uploadErrorCount,
+  firstUploadError,
   firstError,
 }: Readonly<{
+  authState: AuthState;
+  userId: string;
   enabled: boolean;
   blocked: boolean;
   online: boolean;
   pendingCount: number;
   conflictCount: number;
   errorCount: number;
+  uploadCount: number;
+  unavailableUploadCount: number;
+  uploadErrorCount: number;
+  firstUploadError?: string;
   firstError?: string;
 }>): StatusItem {
   if (blocked) {
     return { label: "Local data review required", detail: "This signed-in workspace will not claim data from another local user automatically.", icon: CloudOff, tone: "danger" };
   }
-  return enabled ? enabledSyncStatus(pendingCount, conflictCount, errorCount, firstError) : disabledSyncStatus(online);
+  return enabled ? enabledSyncStatus({
+    pendingCount,
+    conflictCount,
+    errorCount,
+    uploadCount,
+    unavailableUploadCount,
+    uploadErrorCount,
+    firstError,
+    firstUploadError,
+  }) : disabledSyncStatus(online, authState, userId === "local-user");
 }
 
 function markCloudSyncRetryable(items: CloudSyncQueueItem[], message: string): CloudSyncQueueItem[] {
@@ -555,6 +635,41 @@ function markCloudSyncRetryable(items: CloudSyncQueueItem[], message: string): C
     if (item.state !== "pending" && item.state !== "retryable-error") return item;
     return { ...item, state: "retryable-error", lastError: message, nextAttemptAt: new Date(Date.now() + 1_000).toISOString(), updatedAt: new Date().toISOString() };
   });
+}
+
+function mergeUploadedQueueItems(current: UploadQueueItem[], uploadedItems: UploadQueueItem[]): UploadQueueItem[] {
+  const uploadedById = new Map(uploadedItems.map((item) => [item.id, item]));
+  return current.map((item) => uploadedById.get(item.id) ?? item);
+}
+
+function removeUploadedFileReferences(files: Map<string, File>, uploadedItems: UploadQueueItem[]) {
+  for (const item of uploadedItems) {
+    if (item.status === "uploaded") files.delete(item.id);
+  }
+}
+
+function releaseUploadCandidates(inFlight: Set<string>, candidates: Array<{ item: UploadQueueItem; file: File }>) {
+  for (const { item } of candidates) inFlight.delete(item.id);
+}
+
+function draftReviewStatus(draftCount: number): StatusItem {
+  return {
+    label: draftCountLabel(draftCount),
+    detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
+    icon: draftCount > 0 ? AlertCircle : CheckCircle2,
+    tone: draftCount > 0 ? "warn" : "good",
+  };
+}
+
+function statusWhen(condition: boolean, item: StatusItem): StatusItem[] {
+  return condition ? [item] : [];
+}
+
+function recordStorageStatus(recordCount: number, cloudSyncEnabled: boolean): StatusItem {
+  if (cloudSyncEnabled) {
+    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good" };
+  }
+  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" };
 }
 
 function buildStatusItems({
@@ -566,6 +681,9 @@ function buildStatusItems({
   draftCount,
   persistenceWarning,
   uploadCount,
+  unavailableUploadCount,
+  uploadErrorCount,
+  firstUploadError,
   recordCount,
 }: Readonly<{
   authState: AuthState;
@@ -576,33 +694,39 @@ function buildStatusItems({
   draftCount: number;
   persistenceWarning: boolean;
   uploadCount: number;
+  unavailableUploadCount: number;
+  uploadErrorCount: number;
+  firstUploadError?: string;
   recordCount: number;
 }>): StatusItem[] {
   const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
   const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
-  const items: StatusItem[] = [
-    syncStatusItem({
+  const syncItem = syncStatusItem({
+      authState,
+      userId,
       enabled: cloudSyncEnabled,
       blocked: cloudSyncEnabled && !cloudDataOwnerMatches,
       online: isOnline,
       pendingCount: cloudSyncQueue.filter((item) => item.state !== "synced").length,
       conflictCount: cloudSyncQueue.filter((item) => item.state === "conflict").length,
       errorCount: errorItems.length,
+      uploadCount,
+      unavailableUploadCount,
+      uploadErrorCount,
+      firstUploadError,
       firstError: errorItems.find((item) => item.lastError)?.lastError,
-    }),
-    {
-      label: draftCountLabel(draftCount),
-      detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
-      icon: draftCount > 0 ? AlertCircle : CheckCircle2,
-      tone: draftCount > 0 ? "warn" : "good",
-    },
-  ];
+    });
 
-  if (persistenceWarning) items.push({ label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" });
-  if (draftCount > 0) items.push({ label: "Local-only data", detail: "These drafts stay on this device until a future sync workflow is enabled.", icon: CloudOff, tone: "warn" });
-  if (uploadCount > 0) items.push({ label: "Media metadata only", detail: `${uploadCount} image${uploadCount === 1 ? "" : "s"} queued locally; image bytes are not backed up in this local-only preview.`, icon: CloudOff, tone: "warn" });
-  if (recordCount > 0) items.push({ label: `${recordCount} local record${recordCount === 1 ? "" : "s"}`, detail: "Official manual records are stored locally until cloud sync is enabled.", icon: CloudOff, tone: "warn" });
-  return items;
+  return [
+    syncItem,
+    draftReviewStatus(draftCount),
+    ...statusWhen(persistenceWarning, { label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" }),
+    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(uploadCount > 0, { label: `${countLabel(uploadCount, "local image")}`, detail: "The image bytes are saved on this device; cloud image backup is not enabled in this spec.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(uploadErrorCount > 0, { label: `${countLabel(uploadErrorCount, "image")} upload failed`, detail: firstUploadError ? `${firstUploadError}. Select the original file again to retry.` : "Select the original file again to retry.", icon: CloudOff, tone: "danger" }),
+    ...statusWhen(unavailableUploadCount > 0, { label: `${countLabel(unavailableUploadCount, "image")} needs reselect`, detail: "Only metadata remains on this device; select the original file again to back up its bytes.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(recordCount > 0, recordStorageStatus(recordCount, cloudSyncEnabled)),
+  ];
 }
 
 function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
@@ -648,7 +772,7 @@ function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (ite
   );
 }
 
-function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
+function WorkspaceHeader({ route }: Readonly<{ route: AppRoute }>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -657,7 +781,6 @@ function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; sta
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
       </header>
-      <StatusStrip items={statusItems} />
     </section>
   );
 }
@@ -709,6 +832,12 @@ function AuthenticatedApp() {
   const [meals, setMeals] = useState<MealEntry[]>(readStoredMeals);
   const [scans, setScans] = useState<TemporaryScan[]>(() => expireTemporaryScans(readStoredScans()));
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>(readStoredUploadQueue);
+  const [mediaPreviewUrls, setMediaPreviewUrls] = useState<Record<string, string>>({});
+  const mediaPreviewUrlsRef = useRef(new Map<string, string>());
+  const pendingMediaFilesRef = useRef(new Map<string, File>());
+  const mediaUploadsInFlightRef = useRef(new Set<string>());
+  const uploadQueueRef = useRef(uploadQueue);
+  uploadQueueRef.current = uploadQueue;
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
@@ -745,25 +874,187 @@ function AuthenticatedApp() {
   }, [accounts, auditEvents, cloudSyncQueue, meals, onboardingCompleted, records, scans, uploadQueue]);
 
   useEffect(() => {
-    if (authState !== "signed-in" || !userId) return;
     const hasLocalData = accounts.length > 0 || records.length > 0 || drafts.length > 0 || meals.length > 0 || scans.length > 0 || uploadQueue.length > 0;
-    if (!localDataOwner && (userId === "local-user" || !hasLocalData)) {
+    const localWorkspace = authState !== "signed-in";
+    const ownerForEmptyWorkspace = localWorkspace ? "local-user" : userId;
+    if (!localDataOwner && (hasLocalData ? localWorkspace : Boolean(ownerForEmptyWorkspace))) {
       try {
-        window.localStorage.setItem(localDataOwnerStorageKey, userId);
+        window.localStorage.setItem(localDataOwnerStorageKey, ownerForEmptyWorkspace);
       } catch {
         setPersistenceWarning(true);
       }
-      setLocalDataOwner(userId);
+      setLocalDataOwner(ownerForEmptyWorkspace);
     }
   }, [accounts.length, authState, drafts.length, localDataOwner, meals.length, records.length, scans.length, uploadQueue.length, userId]);
 
   const cloudDataOwnerMatches = localDataOwner === userId;
 
+  useEffect(() => () => {
+    const revokeObjectUrl = window.URL.revokeObjectURL?.bind(window.URL);
+    if (revokeObjectUrl) mediaPreviewUrlsRef.current.forEach((url) => revokeObjectUrl(url));
+    mediaPreviewUrlsRef.current.clear();
+    pendingMediaFilesRef.current.clear();
+    mediaUploadsInFlightRef.current.clear();
+  }, []);
+
+  const clearMediaPreviews = useCallback((ids: Iterable<string>) => {
+    const idsToClear = new Set(ids);
+    if (idsToClear.size === 0) return;
+    const revokeObjectUrl = window.URL.revokeObjectURL?.bind(window.URL);
+    idsToClear.forEach((id) => {
+      const url = mediaPreviewUrlsRef.current.get(id);
+      if (url && revokeObjectUrl) revokeObjectUrl(url);
+      mediaPreviewUrlsRef.current.delete(id);
+    });
+    setMediaPreviewUrls((current) => Object.fromEntries(
+      Object.entries(current).filter(([id]) => !idsToClear.has(id)),
+    ));
+  }, []);
+
+  const uploadPendingFiles = useCallback((items: UploadQueueItem[]) => {
+    if (!supabase || !isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline) {
+      return;
+    }
+
+    const candidates = items.flatMap((item) => {
+      const file = pendingMediaFilesRef.current.get(item.id);
+      if (!file || item.status === "uploaded" || mediaUploadsInFlightRef.current.has(item.id)) return [];
+      mediaUploadsInFlightRef.current.add(item.id);
+      return [{ item, file }];
+    });
+    if (candidates.length === 0) return;
+
+    const uploadClient = supabase as unknown as SignedUploadClient;
+    const now = new Date().toISOString();
+    Promise.all(candidates.map(({ item, file }) => uploadMediaFile(uploadClient, file, item, now)))
+      .then((uploadedItems) => {
+        removeUploadedFileReferences(pendingMediaFilesRef.current, uploadedItems);
+        setUploadQueue((current) => mergeUploadedQueueItems(current, uploadedItems));
+      })
+      .finally(() => {
+        releaseUploadCandidates(mediaUploadsInFlightRef.current, candidates);
+      });
+  }, [authState, cloudDataOwnerMatches, isOnline, userId]);
+
+  const queueUploads = (items: UploadQueueItem[], files: File[] = []) => {
+    const replacementKeys = new Set(items.map((item) => `${item.kind}:${item.name}`));
+    const replacementNames = new Set(items.map((item) => item.name));
+    const replacedIds = uploadQueue.filter((item) => (
+      item.status !== "uploaded"
+        && (item.bytesStatus === "metadata-only"
+          ? replacementNames.has(item.name)
+          : replacementKeys.has(`${item.kind}:${item.name}`))
+    )).map((item) => item.id);
+    clearMediaPreviews(replacedIds);
+    replacedIds.forEach((id) => {
+      pendingMediaFilesRef.current.delete(id);
+      mediaUploadsInFlightRef.current.delete(id);
+    });
+
+    const createObjectUrl = window.URL.createObjectURL?.bind(window.URL);
+    items.forEach((item, index) => {
+      const file = files[index];
+      if (file) pendingMediaFilesRef.current.set(item.id, file);
+    });
+    if (createObjectUrl) {
+      const nextPreviews: Record<string, string> = {};
+      items.forEach((item, index) => {
+        const file = files[index];
+        if (!file) return;
+        const url = createObjectUrl(file);
+        mediaPreviewUrlsRef.current.set(item.id, url);
+        nextPreviews[item.id] = url;
+      });
+      if (Object.keys(nextPreviews).length > 0) {
+        setMediaPreviewUrls((current) => ({ ...current, ...nextPreviews }));
+      }
+    }
+
+    setUploadQueue((current) => [
+      ...current.filter((item) => (
+        item.status === "uploaded"
+          || (item.bytesStatus === "metadata-only"
+            ? !replacementNames.has(item.name)
+            : !replacementKeys.has(`${item.kind}:${item.name}`))
+      )),
+      ...items,
+    ]);
+    uploadPendingFiles(items);
+  };
+
+  useEffect(() => {
+    uploadPendingFiles(uploadQueueRef.current);
+  }, [uploadPendingFiles]);
+
+  const clearUploads = useCallback((ids: string[]) => {
+    const idsToClear = new Set(ids);
+    if (idsToClear.size === 0) return;
+    clearMediaPreviews(idsToClear);
+    idsToClear.forEach((id) => {
+      pendingMediaFilesRef.current.delete(id);
+      mediaUploadsInFlightRef.current.delete(id);
+    });
+    setUploadQueue((current) => current.filter((item) => !idsToClear.has(item.id)));
+    setCloudSyncQueue((current) => current.filter((item) => item.target !== "media" || !idsToClear.has(item.targetId)));
+  }, [clearMediaPreviews]);
+
+  useEffect(() => {
+    const activeScanIds = new Set(scans
+      .filter((scan) => scan.state === "temporary" || scan.state === "retained")
+      .map((scan) => scan.id));
+    const orphanedIds = uploadQueue
+      .filter((item) => (item.kind === "invoice-scan" || item.kind === "receipt-scan") && !activeScanIds.has(item.id))
+      .map((item) => item.id);
+    if (orphanedIds.length > 0) clearUploads(orphanedIds);
+  }, [clearUploads, scans, uploadQueue]);
+
+  useEffect(() => {
+    if (authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
+    const hasForeignOwnedState = records.some((record) => record.userId !== userId)
+      || auditEvents.some((event) => event.userId !== userId);
+    if (!hasForeignOwnedState) return;
+
+    const now = new Date().toISOString();
+    const rebound = rebindLocalWorkspace(records, auditEvents, userId);
+    setRecords(rebound.records);
+    setAuditEvents(rebound.auditEvents);
+    setCloudSyncQueue((current) => current.map((item) => item.state === "retryable-error" || item.state === "failed"
+      ? { ...item, state: "pending", attempts: 0, nextAttemptAt: now, lastError: "", updatedAt: now }
+      : item));
+  }, [auditEvents, authState, cloudDataOwnerMatches, records, userId]);
+
+  const claimLocalWorkspace = useCallback(() => {
+    if (authState !== "signed-in" || !userId || userId === "local-user") return;
+    const now = new Date().toISOString();
+    const rebound = rebindLocalWorkspace(records, auditEvents, userId);
+    try {
+      window.localStorage.setItem(localDataOwnerStorageKey, userId);
+    } catch {
+      setPersistenceWarning(true);
+      return;
+    }
+    setRecords(rebound.records);
+    setAuditEvents(rebound.auditEvents);
+    setCloudSyncQueue((current) => current.map((item) => item.state === "retryable-error" || item.state === "failed"
+      ? { ...item, state: "pending", attempts: 0, nextAttemptAt: now, lastError: "", updatedAt: now }
+      : item));
+    setLocalDataOwner(userId);
+  }, [auditEvents, authState, records, userId]);
+
   useEffect(() => {
     if (!isSupabaseConfigured || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches) return;
     const now = new Date().toISOString();
-    setCloudSyncQueue((current) => enqueueLocalChanges(current, records, drafts, meals, uploadQueue, scans, now));
-  }, [authState, cloudDataOwnerMatches, drafts, meals, records, scans, uploadQueue, userId]);
+    setCloudSyncQueue((current) => enqueueLocalChanges({
+      queue: current,
+      accounts,
+      records,
+      drafts,
+      meals,
+      media: uploadQueue,
+      scans,
+      now,
+    }));
+  }, [accounts, authState, cloudDataOwnerMatches, drafts, meals, records, scans, uploadQueue, userId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || authState !== "signed-in" || !userId || userId === "local-user" || !cloudDataOwnerMatches || !isOnline || cloudSyncInFlight.current) {
@@ -779,6 +1070,8 @@ function AuthenticatedApp() {
     const now = new Date().toISOString();
 
     const categories = [...new Set([...readStoredCategories(), ...records.map((record) => record.category)].map((value) => value.trim()).filter(Boolean))];
+    const merchantKinds = new Set(["expense", "refund", "unresolved-expense"]);
+    const merchants = [...new Set(records.filter((record) => merchantKinds.has(record.kind)).map((record) => record.counterparty.trim()).filter(Boolean))];
     const tags = [...new Set(records.flatMap((record) => record.tags ?? []).map((value) => value.trim()).filter(Boolean))];
     const events = [...new Set(records.map((record) => record.event ?? "").map((value) => value.trim()).filter(Boolean))];
     syncLocalChanges({
@@ -787,6 +1080,8 @@ function AuthenticatedApp() {
       userId,
       accounts,
       categories,
+      aliases: readStoredAliases(),
+      merchants,
       tags,
       events,
       auditEvents,
@@ -800,9 +1095,9 @@ function AuthenticatedApp() {
     }).then((result) => {
       setRecords(result.records);
       setMeals(result.meals);
-      setUploadQueue(result.media);
-      setScans(result.scans);
-      setCloudSyncQueue(result.queue);
+      setUploadQueue((current) => mergeSyncedItems(current, result.media));
+      setScans((current) => mergeSyncedScans(current, result.scans));
+      setCloudSyncQueue((current) => mergeSyncedItems(current, result.queue));
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Cloud synchronization failed.";
       setCloudSyncQueue((current) => markCloudSyncRetryable(current, message));
@@ -847,9 +1142,12 @@ function AuthenticatedApp() {
     isOnline,
     draftCount,
     persistenceWarning,
-    uploadCount: uploadQueue.length,
+    uploadCount: uploadQueue.filter((item) => item.status !== "uploaded" && item.status !== "failed" && item.bytesStatus !== "metadata-only").length,
+    unavailableUploadCount: uploadQueue.filter((item) => item.status !== "uploaded" && item.bytesStatus === "metadata-only").length,
+    uploadErrorCount: uploadQueue.filter((item) => item.status === "failed").length,
+    firstUploadError: uploadQueue.find((item) => item.status === "failed" && item.error)?.error,
     recordCount,
-  }), [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, uploadQueue.length, userId]);
+  }), [authState, cloudDataOwnerMatches, cloudSyncQueue, draftCount, isOnline, persistenceWarning, recordCount, uploadQueue, userId]);
 
   const navigate = (item: NavItem) => {
     window.history.pushState(null, "", item.path);
@@ -860,7 +1158,7 @@ function AuthenticatedApp() {
     return <AuthLoadingShell />;
   }
 
-  if (authState !== "signed-in") {
+  if (authState !== "signed-in" && isLocalDevelopmentMode) {
     return <SignedOutShell authState={authState} authMessage={authMessage} configurationError={configurationError} onSignIn={signIn} />;
   }
 
@@ -884,10 +1182,10 @@ function AuthenticatedApp() {
             // Taxonomy seed is best effort in local development.
           }
         }}
-        onSaveInitialFunding={(account, draft) => {
-          const now = new Date().toISOString();
-          const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
-            userId: "local-user",
+          onSaveInitialFunding={(account, draft) => {
+            const now = new Date().toISOString();
+            const bundle = createOfficialRecordBundle(draft, [account, ...accounts], {
+              userId: authState === "signed-in" && cloudDataOwnerMatches && userId !== "local-user" ? userId : "local-user",
             recordId: `record-${draft.id}`,
             idempotencyKey: `onboarding:${draft.id}`,
             createdAt: now,
@@ -911,9 +1209,14 @@ function AuthenticatedApp() {
       <Sidebar route={route} navigate={navigate} />
 
       <section className="workspace">
-        <WorkspaceHeader route={route} statusItems={statusItems} />
+        <WorkspaceHeader route={route} />
+        <StatusStrip items={statusItems} />
         {renderRoute({
           route,
+          authState,
+          userId,
+          authMessage,
+          cloudDataOwnerMatches,
           drafts,
           setDrafts,
           draftToEdit,
@@ -928,13 +1231,17 @@ function AuthenticatedApp() {
           setAccounts,
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
+          onSignIn: signIn,
+          onClaimLocalWorkspace: claimLocalWorkspace,
           onSignOut: signOut,
           onSaveMeal: (meal) => setMeals((current) => [...current, meal]),
           scans,
           onSaveScans: (nextScans) => setScans((current) => [...current, ...nextScans]),
           onUpdateScan: (scan) => setScans((current) => current.map((item) => item.id === scan.id ? scan : item)),
           uploadQueue,
-          onQueueUploads: (items) => setUploadQueue((current) => [...current, ...items]),
+          mediaPreviewUrls,
+          onQueueUploads: queueUploads,
+          onClearUploads: clearUploads,
         })}
       </section>
     </main>
@@ -1109,8 +1416,9 @@ function AuthLoadingShell() {
   );
 }
 
-function SignedOutShell({ authState, authMessage, configurationError, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; configurationError: boolean; onSignIn: (email?: string) => Promise<void> }>) {
+function SignedOutShell({ authState, authMessage, configurationError, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; configurationError: boolean; onSignIn: (email?: string, password?: string) => Promise<void> }>) {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   let authControl: React.ReactNode = null;
 
   if (!configurationError && isLocalDevelopmentMode) {
@@ -1122,12 +1430,14 @@ function SignedOutShell({ authState, authMessage, configurationError, onSignIn }
     );
   } else if (!configurationError) {
     authControl = (
-      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email).catch(() => undefined); }}>
+      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email, password).catch(() => undefined); }}>
         <label htmlFor="auth-email">Email</label>
         <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+        <label htmlFor="auth-password">Password</label>
+        <input id="auth-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
         <button className="primary-action" type="submit" disabled={authState === "loading"}>
           <LogIn size={18} aria-hidden="true" />
-          {authState === "loading" ? "Sending link..." : "Send magic link"}
+          {authState === "loading" ? "Signing in..." : "Sign in"}
         </button>
       </form>
     );
@@ -1154,6 +1464,10 @@ function SignedOutShell({ authState, authMessage, configurationError, onSignIn }
 
 type RouteRenderContext = {
   route: AppRoute;
+  authState: AuthState;
+  userId: string;
+  authMessage: string;
+  cloudDataOwnerMatches: boolean;
   drafts: TransactionDraft[];
   setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>;
   draftToEdit: TransactionDraft | null;
@@ -1168,17 +1482,25 @@ type RouteRenderContext = {
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
+  onSignIn: (email?: string, password?: string) => Promise<void>;
+  onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
   onSaveMeal: (meal: MealEntry) => void;
   scans: TemporaryScan[];
   onSaveScans: (scans: TemporaryScan[]) => void;
   onUpdateScan: (scan: TemporaryScan) => void;
   uploadQueue: UploadQueueItem[];
-  onQueueUploads: (items: UploadQueueItem[]) => void;
+  mediaPreviewUrls: Record<string, string>;
+  onQueueUploads: (items: UploadQueueItem[], files?: File[]) => void;
+  onClearUploads: (ids: string[]) => void;
 };
 
 function renderRoute({
   route,
+  authState,
+  userId,
+  authMessage,
+  cloudDataOwnerMatches,
   drafts,
   setDrafts,
   draftToEdit,
@@ -1193,16 +1515,21 @@ function renderRoute({
   setAccounts,
   navigate,
   onReopenOnboarding,
+  onSignIn,
+  onClaimLocalWorkspace,
   onSignOut,
   onSaveMeal,
   scans,
   onSaveScans,
   onUpdateScan,
   uploadQueue,
+  mediaPreviewUrls,
   onQueueUploads,
+  onClearUploads,
 }: Readonly<RouteRenderContext>) {
   const draftCount = drafts.length;
   const recordCount = records.length;
+  const recordOwner = authState === "signed-in" && cloudDataOwnerMatches && userId !== "local-user" ? userId : "local-user";
 
   const saveOfficialRecord = (
     draft: TransactionDraft,
@@ -1212,7 +1539,7 @@ function renderRoute({
     feeRecordId?: string,
   ): boolean => {
     const bundle = createOfficialRecordBundle(draft, recordAccounts, {
-      userId: "local-user",
+      userId: recordOwner,
       recordId,
       idempotencyKey,
       createdAt: new Date().toISOString(),
@@ -1306,7 +1633,9 @@ function renderRoute({
           onSaveScans={onSaveScans}
           onUpdateScan={onUpdateScan}
           uploadQueue={uploadQueue}
+          mediaPreviewUrls={mediaPreviewUrls}
           onQueueUploads={onQueueUploads}
+          onClearUploads={onClearUploads}
         />
       );
     case "settings":
@@ -1334,6 +1663,11 @@ function renderRoute({
             return true;
           }}
           onReopenOnboarding={onReopenOnboarding}
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          onSignIn={onSignIn}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
           onSignOut={onSignOut}
         />
       );
@@ -1358,11 +1692,11 @@ function OverviewPage({ draftCount, recordCount, accountBalances, accountReports
   return (
     <div className="route-stack">
       <section className="summary-grid">
-        <EmptyMetric label="Account summary" value={metricValue(accountBalances.length, "account", "No balances yet")} detail={accountDetail} />
-        <EmptyMetric label="Ledger records" value={metricValue(recordCount, "saved", "No records")} detail={metricDetail(recordCount, "Official local records are ready in Ledger.", "Your confirmed transactions will appear here.")} />
+        <EmptyMetric label="Account summary" value={accountBalances.length > 0 ? countLabel(accountBalances.length, "account") : "No balances yet"} detail={accountDetail} />
+        <EmptyMetric label="Ledger records" value={recordCount > 0 ? `${recordCount} saved` : "No records"} detail={metricDetail(recordCount, "Official local records are ready in Ledger.", "Your confirmed transactions will appear here.")} />
         <EmptyMetric
           label="Draft reviews"
-          value={metricValue(draftCount, "waiting", "None")}
+          value={draftCount > 0 ? `${draftCount} waiting` : "None"}
           detail={metricDetail(draftCount, "Drafts are ready to review.", "Scans and imports will wait for review.")}
         />
       </section>
@@ -1502,19 +1836,25 @@ function LedgerRecordCard({
   }
 
   const isVoided = record.recordState === "voided";
+  const statusLabel = ledgerRecordStatusLabel(record, isVoided);
   return (
-    <article className={`draft-card ${isVoided ? "voided-record" : ""}`}>
-      <div>
+    <article className={`draft-card ledger-record-card ${isVoided ? "voided-record" : ""}`}>
+      <div className="record-summary">
         <strong>{recordDisplayName(record)}</strong>
-        <span>{record.localDate} · {record.accountName} · {record.category || record.reason || "No category"}</span>
+        <span className="record-detail">{recordDetailLine(record)}</span>
       </div>
-      <div className="draft-amount">
+      <div className="draft-amount record-amount">
         <strong>{record.currency} {record.amount}</strong>
-        <span>{record.kind} · {isVoided ? "voided" : record.status}</span>
+        <span>{record.kind} · {statusLabel}</span>
       </div>
       <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onVoid={onVoid} />
     </article>
   );
+}
+
+function ledgerRecordStatusLabel(record: LocalLedgerRecord, isVoided: boolean): string {
+  if (isVoided) return "Voided";
+  return record.status === "synced" ? "Synced" : "Local only";
 }
 
 function LedgerPage({
@@ -1542,24 +1882,6 @@ function LedgerPage({
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
-  const ledgerColumns = [
-    "Record ID",
-    "Date",
-    "Account",
-    "Type",
-    "Category",
-    "Merchant / Payee",
-    "Transfer account",
-    "Amount",
-    "Currency",
-    "Notes",
-    "Tags",
-    "Attachment",
-    "Entry source",
-    "Balance",
-    "Status",
-  ];
-
   return (
     <div className="route-stack">
       <section className="content-grid">
@@ -1569,9 +1891,9 @@ function LedgerPage({
             Start a record
           </button>
         </Panel>
-        <Panel title={draftCount > 0 ? "Drafts waiting" : "Clean export"} eyebrow="Portability">
+        <Panel title={draftCount > 0 ? "Drafts waiting" : "Review queue"} eyebrow="Next action">
           <p className="panel-copy">
-            {draftReviewCopy(draftCount)}
+            {draftCount > 0 ? draftReviewCopy(draftCount) : "No drafts waiting. New scans and imports will appear here after capture."}
           </p>
         </Panel>
       </section>
@@ -1579,7 +1901,7 @@ function LedgerPage({
         <section className="draft-list" aria-label="Confirmed ledger records">
           <div className="draft-list-heading">
             <div>
-              <p className="eyebrow">Official local records</p>
+              <p className="eyebrow">Confirmed records</p>
               <h2>Ledger history</h2>
             </div>
             <span>{records.length} record{records.length === 1 ? "" : "s"}</span>
@@ -1650,14 +1972,7 @@ function LedgerPage({
         </section>
       ) : null}
         {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
-      <section className="table-card" aria-label="Ledger table fields">
-        <div className="table-row table-head">
-          {ledgerColumns.map((column) => (
-            <span key={column}>{column}</span>
-          ))}
-        </div>
-        {records.length === 0 ? <div className="table-empty">No confirmed ledger records yet.</div> : null}
-      </section>
+      {records.length === 0 ? <p className="table-empty">No confirmed ledger records yet.</p> : null}
     </div>
   );
 }
@@ -2021,12 +2336,17 @@ function QuickAccountFields({
         <span>Allow negative balance</span>
       </label>
       <AmountField id="quick-account-initial-balance" label="Initial balance (optional)" value={initialBalance} onChange={onInitialBalanceChange} placeholder="Leave blank to start from zero" />
-      {initialBalance.trim() ? <label>
+      {hasPositiveInitialBalance(initialBalance) ? <label>
         <span>Balance as of</span>
         <input type="date" required value={initialBalanceDate} onChange={(event) => onInitialBalanceDateChange(event.target.value)} />
       </label> : null}
     </>
   );
+}
+
+function hasPositiveInitialBalance(value: string): boolean {
+  const amount = Number(value.trim());
+  return value.trim() !== "" && Number.isFinite(amount) && amount > 0;
 }
 
 function QuickAccountActions({ onConfirm, onCancel }: Readonly<{ onConfirm: () => void; onCancel: () => void }>) {
@@ -2040,7 +2360,7 @@ function QuickAccountActions({ onConfirm, onCancel }: Readonly<{ onConfirm: () =
 
 function useMealCapture(
   onSaveMeal: (meal: MealEntry) => void,
-  onQueueUploads: (items: UploadQueueItem[]) => void,
+  onQueueUploads: (items: UploadQueueItem[], files?: File[]) => void,
 ) {
   const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime);
   const [mealNote, setMealNote] = useState("");
@@ -2137,7 +2457,7 @@ function useMealCapture(
       return;
     }
     onSaveMeal(meal);
-    onQueueUploads(queuedMedia);
+    onQueueUploads(queuedMedia, mealPhotoFiles);
     setMealError("");
     setMealSavedMessage(`Meal saved locally with ${meal.mediaAssetIds.length} photo${meal.mediaAssetIds.length === 1 ? "" : "s"}.`);
     setMealNote("");
@@ -2167,7 +2487,7 @@ function useMealCapture(
 function useScanCapture(
   captureIntent: CaptureIntent,
   onSaveScans: (scans: TemporaryScan[]) => void,
-  onQueueUploads: (items: UploadQueueItem[]) => void,
+  onQueueUploads: (items: UploadQueueItem[], files?: File[]) => void,
 ) {
   const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [scanError, setScanError] = useState("");
@@ -2191,7 +2511,8 @@ function useScanCapture(
       .map((file, index) => createTemporaryScan({ intent: captureIntent, fileName: file.name, mimeType: file.type, byteSize: file.size }, queuedMedia[index].id))
       .filter((scan): scan is TemporaryScan => Boolean(scan));
     onSaveScans(nextScans);
-    onQueueUploads(queuedMedia);
+    onQueueUploads(queuedMedia, scanFiles);
+    event.currentTarget.reset();
     setScanFiles([]);
     setScanSavedMessage(`${nextScans.length} scan draft${nextScans.length === 1 ? "" : "s"} saved locally for review.`);
   };
@@ -2763,7 +3084,9 @@ function CapturePage({
   onSaveScans,
   onUpdateScan,
   uploadQueue,
+  mediaPreviewUrls,
   onQueueUploads,
+  onClearUploads,
 }: Readonly<{
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
@@ -2780,7 +3103,9 @@ function CapturePage({
   onSaveScans: (scans: TemporaryScan[]) => void;
   onUpdateScan: (scan: TemporaryScan) => void;
   uploadQueue: UploadQueueItem[];
-  onQueueUploads: (items: UploadQueueItem[]) => void;
+  mediaPreviewUrls: Record<string, string>;
+  onQueueUploads: (items: UploadQueueItem[], files?: File[]) => void;
+  onClearUploads: (ids: string[]) => void;
 }>) {
   const initialForm: DraftForm = draftToEdit ? { ...draftToEdit } : createEmptyDraftForm();
   const [form, setForm] = useState<DraftForm>(initialForm);
@@ -2805,6 +3130,9 @@ function CapturePage({
   const [quickSourceError, setQuickSourceError] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
   const [captureIntent, setCaptureIntent] = useState<CaptureIntent>("manual-ledger");
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [attachmentSavedMessage, setAttachmentSavedMessage] = useState("");
   const {
     mealOccurredAt,
     setMealOccurredAt,
@@ -2833,6 +3161,25 @@ function CapturePage({
   } = useScanCapture(captureIntent, onSaveScans, onQueueUploads);
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(cleanForm);
 
+  const handleAttachmentSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAttachmentError("");
+    setAttachmentSavedMessage("");
+    if (attachmentFiles.length === 0) {
+      setAttachmentError("Choose at least one photo before saving.");
+      return;
+    }
+    const mediaValidation = validateMediaBatch(attachmentFiles);
+    if (!mediaValidation.ok) {
+      setAttachmentError(mediaValidation.error ?? "The selected photos exceed the upload limit.");
+      return;
+    }
+    const queuedMedia = queueUploadFiles(attachmentFiles, `attachment-${crypto.randomUUID()}`, "attachment");
+    onQueueUploads(queuedMedia, attachmentFiles);
+    setAttachmentFiles([]);
+    setAttachmentSavedMessage(`${queuedMedia.length} photo${queuedMedia.length === 1 ? "" : "s"} saved locally as attachment evidence.`);
+  };
+
   useEffect(() => {
     try {
       window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
@@ -2849,7 +3196,6 @@ function CapturePage({
     }
   }, [customSources]);
 
-  const recordCount = records.length;
   const actionIcons = {
     "manual-ledger": Banknote,
     "scan-invoice": ReceiptText,
@@ -3102,10 +3448,17 @@ function CapturePage({
       return;
     }
 
-    if (quickAccountBalance.trim()) {
+    const initialBalance = quickAccountBalance.trim();
+    const initialBalanceAmount = Number(initialBalance);
+    if (initialBalance && (!Number.isFinite(initialBalanceAmount) || initialBalanceAmount < 0)) {
+      setQuickAccountError("Initial balance must be zero or a positive amount.");
+      return;
+    }
+
+    if (hasPositiveInitialBalance(initialBalance)) {
       const draft = createInitialFundingDraft({
         account: account.name,
-        amount: quickAccountBalance,
+        amount: initialBalance,
         currency: account.currency,
         date: quickAccountBalanceDate,
       }, `fund-${account.id}`);
@@ -3270,12 +3623,23 @@ function CapturePage({
           scanSavedMessage,
           scans,
           uploadQueue,
+          mediaPreviewUrls,
           onScanFilesChange: (files) => { setScanFiles(files); setScanError(""); },
           onSubmit: handleScanSubmit,
-          onUpdateScan,
-        }}
-      />
-      <SavedRecordPanel recordCount={recordCount} navigate={navigate} />
+           onUpdateScan,
+           onClearUploads,
+         }}
+        attachmentProps={{
+          attachmentFiles,
+          attachmentError,
+          attachmentSavedMessage,
+          uploadQueue,
+           onFilesChange: (files) => { setAttachmentFiles(files); setAttachmentError(""); setAttachmentSavedMessage(""); },
+           onSubmit: handleAttachmentSubmit,
+           onClearUploads,
+         }}
+       />
+      {captureIntent === "manual-ledger" ? <SavedRecordPanel recordCount={records.length} navigate={navigate} /> : null}
     </section>
   );
 }
@@ -3285,9 +3649,10 @@ type CaptureIntentPanelProps = {
   manualLedgerProps: React.ComponentProps<typeof ManualLedgerPanel>;
   mealProps: React.ComponentProps<typeof MealCapturePanel>;
   scanProps: React.ComponentProps<typeof ScanCapturePanel>;
+  attachmentProps: React.ComponentProps<typeof AttachmentCapturePanel>;
 };
 
-function CaptureIntentPanel({ captureIntent, manualLedgerProps, mealProps, scanProps }: Readonly<CaptureIntentPanelProps>) {
+function CaptureIntentPanel({ captureIntent, manualLedgerProps, mealProps, scanProps, attachmentProps }: Readonly<CaptureIntentPanelProps>) {
   if (captureIntent === "manual-ledger") {
     return <ManualLedgerPanel {...manualLedgerProps} />;
   }
@@ -3297,7 +3662,7 @@ function CaptureIntentPanel({ captureIntent, manualLedgerProps, mealProps, scanP
   if (captureIntent === "scan-invoice" || captureIntent === "scan-receipt") {
     return <ScanCapturePanel {...scanProps} />;
   }
-  return <CaptureWorkspacePanel captureIntent={captureIntent} />;
+  return <AttachmentCapturePanel {...attachmentProps} />;
 }
 
 function MealCaptureForm({
@@ -3417,7 +3782,7 @@ function TransferModeField({ transferMode, onSetTransferMode }: Readonly<{ trans
 }
 
 function TransferDestinationField({ form, accounts, quickAccountField, quickAccountProps, onBeginQuickAccountSetup, onSelectDestinationAccount }: Readonly<{ form: DraftForm; accounts: LocalAccount[]; quickAccountField: QuickAccountField | null; quickAccountProps: React.ComponentProps<typeof QuickAccountSetup>; onBeginQuickAccountSetup: (field: QuickAccountField) => void; onSelectDestinationAccount: (name: string) => void }>) {
-  return <div className="form-field"><label htmlFor="entry-destination-account"><span>Destination account</span></label><div className="field-control-row"><select id="entry-destination-account" required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => onSelectDestinationAccount(event.target.value)}><option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>{accounts.filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency)).map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => onBeginQuickAccountSetup("transferAccount")}><Plus size={18} aria-hidden="true" /></button></div>{quickAccountField === "transferAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
+  return <div className="form-field"><label htmlFor="entry-destination-account"><span>Destination account</span></label><div className="field-control-row"><select id="entry-destination-account" required disabled={accounts.length < 2} value={form.transferAccount} onChange={(event) => onSelectDestinationAccount(event.target.value)}><option value="">{accounts.length < 2 ? "Add another account" : "Select destination account"}</option>{accounts.filter((account) => account.name !== form.account && (form.transferMode !== "same-currency" || account.currency === form.currency)).map((account) => <option key={account.id} value={account.name}>{account.name} ({account.currency})</option>)}</select><button className="icon-button" type="button" aria-label="Add destination account" title="Add destination account" onClick={() => onBeginQuickAccountSetup("transferAccount")}><Plus size={18} aria-hidden="true" /></button></div>{accounts.length < 2 ? <p className="field-help">Transfers move money between two accounts. Add a second account to continue.</p> : null}{quickAccountField === "transferAccount" ? <QuickAccountSetup {...quickAccountProps} /> : null}</div>;
 }
 
 function FeeFields({
@@ -3458,9 +3823,11 @@ function ScanCapturePanel({
   scanSavedMessage,
   scans,
   uploadQueue,
+  mediaPreviewUrls,
   onScanFilesChange,
   onSubmit,
   onUpdateScan,
+  onClearUploads,
 }: Readonly<{
   captureIntent: "scan-invoice" | "scan-receipt";
   scanFiles: File[];
@@ -3468,10 +3835,23 @@ function ScanCapturePanel({
   scanSavedMessage: string;
   scans: TemporaryScan[];
   uploadQueue: UploadQueueItem[];
+  mediaPreviewUrls: Record<string, string>;
   onScanFilesChange: (files: File[]) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateScan: (scan: TemporaryScan) => void;
+  onClearUploads: (ids: string[]) => void;
 }>) {
+  const scanKind = captureIntent === "scan-invoice" ? "invoice-scan" : "receipt-scan";
+  const scanQueue = uploadQueue.filter((item) => item.kind === scanKind);
+  const queuedScanCount = scanQueue.filter((item) => item.status !== "uploaded" && item.bytesStatus !== "metadata-only").length;
+  const unavailableScanCount = scanQueue.filter((item) => item.status !== "uploaded" && item.bytesStatus === "metadata-only").length;
+
+  const removeScan = (scan: TemporaryScan) => {
+    onUpdateScan(discardTemporaryScan(scan));
+    const media = scanQueue.find((item) => item.id === scan.id);
+    if (media && media.status !== "uploaded") onClearUploads([media.id]);
+  };
+
   return (
     <Panel key={captureIntent} title={captureIntentLabel(captureIntent)} eyebrow="Temporary source">
       <p className="panel-copy">Scans remain temporary until you explicitly keep or discard them. They do not create official ledger records.</p>
@@ -3481,33 +3861,128 @@ function ScanCapturePanel({
           <input accept="image/*" multiple type="file" onChange={(event) => onScanFilesChange(Array.from(event.target.files ?? []))} />
         </label>
         {scanFiles.length > 0 ? <p className="field-help">Selected {countLabel(scanFiles.length, "image")}.</p> : null}
-        <button className="primary-action align-start" type="submit">Save scan drafts</button>
+        <div className="capture-actions">
+          <button className="primary-action" type="submit" disabled={scanFiles.length === 0}>Keep scan drafts</button>
+          {scanFiles.length > 0 ? <button className="quiet-action" type="button" onClick={(event) => { event.currentTarget.form?.reset(); onScanFilesChange([]); }}>Clear selected</button> : null}
+        </div>
         {scanError ? <p className="quick-account-error" role="alert">{scanError}</p> : null}
         {scanSavedMessage ? <p className="auth-message" aria-live="polite">{scanSavedMessage}</p> : null}
-        {uploadQueue.length > 0 ? <p className="field-help">{countLabel(uploadQueue.length, "media file")} queued locally for a future upload.</p> : null}
+        {queuedScanCount > 0 ? <p className="field-help">{countLabel(queuedScanCount, "scan file")} queued locally for a future upload.</p> : null}
+        {unavailableScanCount > 0 ? <p className="field-help">{countLabel(unavailableScanCount, "scan file")} needs the original image selected again.</p> : null}
       </form>
       <div className="source-list" aria-label="Temporary scans">
-        {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => (
-          <div className="source-list-row" key={scan.id}>
-            <span><strong>{scan.fileName}</strong><small>{scan.state === "temporary" ? "Temporary · expires in 24 hours" : "Retained source"}</small></span>
-            {scan.state === "temporary" ? (
-              <span className="source-list-actions">
-                <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>Keep source</button>
-                <button className="quiet-action" type="button" onClick={() => onUpdateScan(discardTemporaryScan(scan))}>Discard</button>
-              </span>
-            ) : null}
-          </div>
-        ))}
+        {scans.filter((scan) => scan.intent === captureIntent && ["temporary", "retained"].includes(scan.state)).map((scan) => {
+          const media = scanQueue.find((item) => item.id === scan.id);
+          const previewUrl = mediaPreviewUrls[scan.id];
+          const storageStatus = scanStorageStatus(media);
+
+          return (
+            <article className="source-list-row" key={scan.id}>
+              <div className="source-preview-frame">
+                {previewUrl
+                  ? <img src={previewUrl} alt={`Preview of ${scan.fileName}`} />
+                  : <span>Preview unavailable</span>}
+              </div>
+              <div className="source-list-copy">
+                <strong>{scan.fileName}</strong>
+                <small>{scan.state === "temporary" ? "Temporary · expires in 24 hours" : "Kept for review"}</small>
+                <small>{storageStatus}</small>
+              </div>
+              {scan.state === "temporary" ? (
+                <div className="source-list-actions">
+                  <button className="quiet-action" type="button" onClick={() => onUpdateScan(retainTemporaryScan(scan))}>Keep source</button>
+                  <button className="quiet-action" type="button" onClick={() => removeScan(scan)}>Discard</button>
+                </div>
+              ) : <button className="quiet-action source-remove-action" type="button" onClick={() => removeScan(scan)}>Remove source</button>}
+            </article>
+          );
+        })}
       </div>
     </Panel>
   );
 }
 
-function CaptureWorkspacePanel({ captureIntent }: Readonly<{ captureIntent: CaptureIntent }>) {
+function scanStorageStatus(media?: UploadQueueItem): string {
+  if (media?.status === "uploaded") return "Cloud image uploaded";
+  if (!media || media.bytesStatus === "metadata-only") return "Original image must be selected again";
+  return "Image available on this device";
+}
+
+type AttachmentQueueSummary = {
+  synced: number;
+  metadataPending: number;
+  failed: number;
+  needsReselect: number;
+  local: number;
+  pendingIds: string[];
+};
+
+function summarizeAttachmentQueue(queue: UploadQueueItem[]): AttachmentQueueSummary {
+  const summary: AttachmentQueueSummary = {
+    synced: 0,
+    metadataPending: 0,
+    failed: 0,
+    needsReselect: 0,
+    local: 0,
+    pendingIds: [],
+  };
+  for (const item of queue) {
+    if (item.status !== "uploaded") summary.pendingIds.push(item.id);
+    if (item.status === "uploaded" && item.metadataStatus === "synced") summary.synced += 1;
+    else if (item.status === "uploaded") summary.metadataPending += 1;
+    else if (item.status === "failed") summary.failed += 1;
+    else if (item.bytesStatus === "metadata-only") summary.needsReselect += 1;
+    else summary.local += 1;
+  }
+  return summary;
+}
+
+function AttachmentUploadSummary({ queue, onClearUploads }: Readonly<{
+  queue: UploadQueueItem[];
+  onClearUploads: (ids: string[]) => void;
+}>) {
+  if (queue.length === 0) return null;
+  const summary = summarizeAttachmentQueue(queue);
   return (
-    <Panel key="capture-workspace" title={captureIntentLabel(captureIntent)} eyebrow="Capture workspace">
-      <p className="panel-copy">This source is kept separate from the official ledger. The workflow will ask for confirmation before any ledger record is created.</p>
-      <p className="field-help">Select Manual ledger when you want to record an official transaction now.</p>
+    <div className="field-help upload-queue-summary" aria-live="polite">
+      {summary.synced > 0 ? <p>{countLabel(summary.synced, "photo")} synced.</p> : null}
+      {summary.metadataPending > 0 ? <p>{countLabel(summary.metadataPending, "photo")} uploaded; cloud metadata pending.</p> : null}
+      {summary.failed > 0 ? <p>{countLabel(summary.failed, "photo")} failed. Select the original file again to retry.</p> : null}
+      {summary.needsReselect > 0 ? <p>{countLabel(summary.needsReselect, "photo")} needs the original file selected again.</p> : null}
+      {summary.local > 0 ? <p>{countLabel(summary.local, "photo")} saved locally. Cloud image backup is not enabled in this version.</p> : null}
+      {summary.pendingIds.length > 0 ? <button className="quiet-action" type="button" onClick={() => onClearUploads(summary.pendingIds)}>Clear pending attachments</button> : null}
+    </div>
+  );
+}
+
+function AttachmentCapturePanel({ attachmentFiles, attachmentError, attachmentSavedMessage, uploadQueue, onFilesChange, onSubmit, onClearUploads }: Readonly<{
+  attachmentFiles: File[];
+  attachmentError: string;
+  attachmentSavedMessage: string;
+  uploadQueue: UploadQueueItem[];
+  onFilesChange: (files: File[]) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClearUploads: (ids: string[]) => void;
+}>) {
+  const attachmentQueue = uploadQueue.filter((item) => item.kind === "attachment");
+
+  return (
+    <Panel key="attach-photo" title="Attach photo" eyebrow="Supporting evidence">
+      <p className="panel-copy">Attach one or more photos without creating a meal or ledger record. The photos stay separate from clean ledger exports.</p>
+      <form className="meal-form" onSubmit={onSubmit}>
+        <label>
+          <span>Photos</span>
+          <input aria-label="Attachment photos" accept="image/*" multiple type="file" onChange={(event) => onFilesChange(Array.from(event.target.files ?? []))} />
+        </label>
+        {attachmentFiles.length > 0 ? <p className="field-help">{countLabel(attachmentFiles.length, "photo")} ready to attach.</p> : null}
+        <div className="capture-actions">
+          <button className="primary-action" type="submit" disabled={attachmentFiles.length === 0}>Keep attachments</button>
+          {attachmentFiles.length > 0 ? <button className="quiet-action" type="button" onClick={() => onFilesChange([])}>Clear selected</button> : null}
+        </div>
+        {attachmentError ? <p className="quick-account-error" role="alert">{attachmentError}</p> : null}
+        {attachmentSavedMessage ? <p className="auth-message" aria-live="polite">{attachmentSavedMessage}</p> : null}
+        <AttachmentUploadSummary queue={attachmentQueue} onClearUploads={onClearUploads} />
+      </form>
     </Panel>
   );
 }
@@ -3577,7 +4052,7 @@ function AccountSetupPanel({
 }: Readonly<AccountSetupPanelProps>) {
   return (
     <Panel title="Accounts" eyebrow="Local setup">
-      <p className="panel-copy">Create the accounts that manual records may use. This preview keeps them only in the current workspace session.</p>
+      <p className="panel-copy">Create the accounts that manual records may use. Accounts stay in this workspace and sync when cloud sync is enabled.</p>
       <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
       <AccountSetupForm
         accountName={accountName}
@@ -3603,14 +4078,19 @@ function AccountSetupPanel({
   );
 }
 
-function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding, onSignOut }: Readonly<{
+function SettingsPage({ accounts, records, authState, authMessage, cloudDataOwnerMatches, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
+  authState: AuthState;
+  authMessage: string;
+  cloudDataOwnerMatches: boolean;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
   onReopenOnboarding: () => void;
+  onSignIn: (email?: string, password?: string) => Promise<void>;
+  onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
 }>) {
   const [accountName, setAccountName] = useState("");
@@ -3667,29 +4147,64 @@ function SettingsPage({ accounts, records, onAddAccount, onSaveInitialFunding, o
         onReopenOnboarding={onReopenOnboarding}
         onSubmit={handleAccountSubmit}
       />
-      <AccountSyncPanel onSignOut={onSignOut} />
+      <AccountSyncPanel authState={authState} authMessage={authMessage} cloudDataOwnerMatches={cloudDataOwnerMatches} onSignIn={onSignIn} onClaimLocalWorkspace={onClaimLocalWorkspace} onSignOut={onSignOut} />
       <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
     </section>
   );
 }
 
-function AccountSyncPanel({ onSignOut }: Readonly<{ onSignOut: () => Promise<void> }>) {
+function authenticationStatusLabel(isLocalPreview: boolean, isSignedIn: boolean): string {
+  if (isLocalPreview) return "Local preview mode";
+  return isSignedIn ? "Cloud account verified" : "Local-only until an account is verified";
+}
+
+function AccountSyncPanel({ authState, authMessage, cloudDataOwnerMatches, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{ authState: AuthState; authMessage: string; cloudDataOwnerMatches: boolean; onSignIn: (email?: string, password?: string) => Promise<void>; onClaimLocalWorkspace: () => void; onSignOut: () => Promise<void> }>) {
+  const isSignedIn = authState === "signed-in";
+  const isLocalPreview = isLocalDevelopmentMode;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   return (
     <Panel title="Account and sync" eyebrow="Settings">
       <dl className="settings-list">
         <div>
           <dt>Authentication</dt>
-          <dd>{isSupabaseConfigured ? "Cloud sign-in is ready" : "Cloud sign-in is unavailable in this workspace"}</dd>
+          <dd>{authenticationStatusLabel(isLocalPreview, isSignedIn)}</dd>
         </div>
         <div>
           <dt>Storage</dt>
           <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
         </div>
       </dl>
-      <button className="secondary-action align-start" type="button" onClick={() => { onSignOut().catch(() => undefined); }}>
-        <LogOut size={18} aria-hidden="true" />
-        Sign out
-      </button>
+      {isLocalPreview ? <p className="field-help">Cloud sync is disabled in this local preview. Configure Supabase to test a real account.</p> : null}
+      {!isSignedIn && isSupabaseConfigured && !isLocalPreview ? (
+        <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email, password).catch(() => undefined); }}>
+          <label htmlFor="cloud-email">Cloud email</label>
+          <input id="cloud-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+          <label htmlFor="cloud-password">Cloud password</label>
+          <input id="cloud-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+          <button className="primary-action align-start" type="submit" disabled={authState === "loading"}>
+            <LogIn size={18} aria-hidden="true" />
+            {authState === "loading" ? "Signing in..." : "Sign in to enable cloud sync"}
+          </button>
+          {authMessage ? <p className="auth-message" role={authState === "auth-error" ? "alert" : undefined}>{authMessage}</p> : null}
+        </form>
+      ) : null}
+      {isSignedIn && !cloudDataOwnerMatches ? (
+        <div className="auth-form">
+          <p className="field-help">Local records are still owned by this device. Confirm once to associate them with this signed-in cloud account.</p>
+          <button className="primary-action align-start" type="button" onClick={onClaimLocalWorkspace}>
+            <Cloud size={18} aria-hidden="true" />
+            Use this cloud account for local data
+          </button>
+        </div>
+      ) : null}
+      {isSignedIn ? (
+        <button className="secondary-action align-start" type="button" onClick={() => { onSignOut().catch(() => undefined); }}>
+          <LogOut size={18} aria-hidden="true" />
+          Sign out
+        </button>
+      ) : null}
     </Panel>
   );
 }
@@ -3865,9 +4380,9 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
       <section className="portability-section" aria-labelledby="ledger-export-heading">
         <h3 id="ledger-export-heading">Export ledger</h3>
         <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
-      <div className="export-actions">
-        <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8")}>Export CSV</button>
-        <button className="secondary-action" type="button" onClick={() => downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8")}>Export JSON</button>
+       <div className="export-actions">
+         <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage("CSV export downloaded. Image bytes were not included."); }}>Export CSV</button>
+         <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage("JSON export downloaded. Image bytes were not included."); }}>Export JSON</button>
         <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
       </div>
       {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}

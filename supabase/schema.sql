@@ -1,6 +1,7 @@
 -- MealLedger V1 canonical Supabase schema.
--- This file is the SQL Editor entrypoint; the same migration is kept under
--- migrations/0001_schema_core.sql for versioned application later.
+-- This file is the canonical schema reference for review and local bootstrap.
+-- Production deployment uses the versioned migration under
+-- migrations/0001_schema_core.sql through the repository release workflow.
 
 create extension if not exists pgcrypto;
 
@@ -477,8 +478,9 @@ begin
 end;
 $$;
 
-create trigger transfer_details_delete_guard
+create constraint trigger transfer_details_delete_guard
 after delete on public.transfer_details
+deferrable initially deferred
 for each row execute function public.prevent_transfer_details_delete();
 
 create or replace function public.require_transfer_details()
@@ -573,7 +575,8 @@ $$;
 create or replace function public.idempotency_result_owned(p_result_type text, p_result_id uuid, p_user_id uuid)
 returns boolean
 language sql
-security invoker
+stable
+security definer
 set search_path = public
 as $$
   select case p_result_type
@@ -596,13 +599,13 @@ create or replace function public.persist_ledger_record_bundle(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
   request_user uuid := (p_request->>'user_id')::uuid;
   request_key text := p_request->>'idempotency_key';
-  request_hash text := p_request->>'request_hash';
+  incoming_request_hash text := p_request->>'request_hash';
   request_action text := p_request->>'action_type';
   request_expires timestamptz := (p_request->>'expires_at')::timestamptz;
   existing_hash text;
@@ -619,10 +622,26 @@ begin
     raise exception 'bundle user does not match authenticated user' using errcode = '42501';
   end if;
 
-  select request_hash, expires_at, response_json
+  if (p_ledger_record->>'user_id')::uuid <> request_user
+    or not exists (select 1 from public.accounts where id = (p_ledger_record->>'account_id')::uuid and user_id = request_user)
+    or ((p_ledger_record->>'category_id') is not null and not exists (select 1 from public.categories where id = (p_ledger_record->>'category_id')::uuid and user_id = request_user))
+    or ((p_ledger_record->>'merchant_id') is not null and not exists (select 1 from public.merchants where id = (p_ledger_record->>'merchant_id')::uuid and user_id = request_user))
+    or ((p_ledger_record->>'event_id') is not null and not exists (select 1 from public.events where id = (p_ledger_record->>'event_id')::uuid and user_id = request_user)) then
+    raise exception 'ledger bundle references data owned by another user' using errcode = '42501';
+  end if;
+
+  if p_transfer_details is not null and p_transfer_details <> '{}'::jsonb then
+    if (p_transfer_details->>'ledger_record_id')::uuid <> record_id
+      or not exists (select 1 from public.accounts where id = (p_transfer_details->>'destination_account_id')::uuid and user_id = request_user)
+      or ((p_transfer_details->>'fee_ledger_record_id') is not null and not exists (select 1 from public.ledger_records where id = (p_transfer_details->>'fee_ledger_record_id')::uuid and user_id = request_user)) then
+      raise exception 'transfer bundle references data owned by another user' using errcode = '42501';
+    end if;
+  end if;
+
+  select ik.request_hash, ik.expires_at, ik.response_json
     into existing_hash, existing_expires, existing_response
-  from public.idempotency_keys
-  where user_id = request_user and idempotency_key = request_key;
+  from public.idempotency_keys as ik
+  where ik.user_id = request_user and ik.idempotency_key = request_key;
 
   if existing_hash is not null and existing_expires <= now() and existing_response is null then
     delete from public.idempotency_keys
@@ -632,7 +651,7 @@ begin
   end if;
 
   if existing_hash is not null then
-    if existing_hash <> request_hash then
+    if existing_hash <> incoming_request_hash then
       raise exception 'idempotency key was reused with a different request hash' using errcode = 'ME001';
     end if;
     if existing_response is not null then
@@ -641,7 +660,7 @@ begin
     was_replayed := true;
   else
     insert into public.idempotency_keys (user_id, idempotency_key, action_type, request_hash, expires_at)
-    values (request_user, request_key, request_action, request_hash, request_expires);
+    values (request_user, request_key, request_action, incoming_request_hash, request_expires);
   end if;
 
   select version into existing_version
@@ -901,3 +920,29 @@ with check (
   auth.uid() = user_id
   and (result_id is null or public.idempotency_result_owned(result_type, result_id, auth.uid()))
 );
+
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table
+  public.profiles,
+  public.accounts,
+  public.categories,
+  public.category_aliases,
+  public.merchants,
+  public.events,
+  public.tags,
+  public.ledger_records,
+  public.transfer_details,
+  public.refund_links,
+  public.ledger_record_tags,
+  public.meal_entries,
+  public.meal_transaction_links,
+  public.media_assets,
+  public.media_links,
+  public.source_payloads,
+  public.drafts,
+  public.audit_events,
+  public.idempotency_keys
+to authenticated;
+grant execute on function public.persist_ledger_record_bundle(
+  jsonb, jsonb, jsonb, jsonb, jsonb, jsonb
+) to authenticated;

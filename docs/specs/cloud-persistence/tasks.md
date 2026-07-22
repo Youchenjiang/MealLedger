@@ -11,7 +11,11 @@
 ## Implementation
 
 - [x] Add typed persistence client boundary.
+- [x] Persist the authenticated profile before dependent cloud synchronization.
 - [x] Add local account, record, draft, meal, media, and source metadata row mappers.
+- [x] Queue account references even when no ledger record exists yet.
+- [x] Bootstrap normalized merchant references for expense-like records.
+- [x] Bootstrap local category aliases with canonical category references.
 - [x] Add idempotent account, draft, record, meal, media, and source persistence.
 - [x] Add retry classification and bounded backoff policy.
 - [x] Re-queue edited, voided, and unresolved-converted local targets by version/hash;
@@ -27,6 +31,10 @@
 - [x] Map temporary receipt and invoice links to the canonical media-link enum values.
 - [x] Add an authenticated atomic RPC for transfer bundles and version checks.
 - [x] Connect the adapter to the local queue without changing local-first commit.
+- [x] Upload available image bytes through authenticated signed R2 PUT URLs
+      before persisting media metadata.
+- [x] Preserve discard/retain decisions when an earlier async upload or metadata
+      sync result completes late.
 - [x] Add authenticated-style integration tests with a mocked Supabase client.
 
 ## Verification
@@ -36,14 +44,18 @@
 - [x] Unit tests for child-write failure and retry classification.
 - [x] Integration-style tests with a mocked Supabase client.
 - [x] Queue meal, media metadata, and temporary source payload writes independently.
+- [x] Verify account-only synchronization closes after the owned reference is returned.
+- [x] Verify merchant bootstrap and ledger `merchant_id` mapping.
+- [x] Verify category alias deduplication and canonical category mapping.
+- [x] Verify profile persistence failure keeps pending work retryable.
 - [x] Existing local app, import/export, E2E, and build gates remain green.
-- [ ] Real RLS integration run is deferred until Supabase CLI/project
-      credentials are intentionally enabled.
+- [x] Real RLS integration run against local Supabase with two authenticated
+      identities and cross-owner rejection checks.
 
 ## Deferred
 
 - [ ] Invoice and statement provider synchronization.
-- [ ] R2 upload and media cleanup jobs.
+- [ ] R2 object deletion, thumbnail, and scheduled cleanup jobs.
 - [ ] Multi-device conflict merge UI.
 - [ ] Capacitor/SQLite offline guarantee.
 
@@ -51,27 +63,52 @@
 
 The local-first adapter is wired into the authenticated App path. It persists
 canonical ledger/draft rows plus meal, media metadata, and temporary source
-payload metadata when Supabase is configured. It never uploads image bytes,
-confirms scan drafts, or runs provider synchronization. Existing local data
+payload metadata when Supabase is configured. Available local image bytes are
+uploaded to private R2 objects before media metadata is marked synced. It does
+not confirm scan drafts, delete retained R2 objects, or run provider
+synchronization. Existing local data
 owned by another authenticated user remains blocked for explicit review rather
 than being claimed automatically.
+
+## Production Deployment Rule
+
+Production Supabase schema changes use the repository migration path described
+in [Supabase Deployment Policy](../../engineering/supabase-deployment.md).
+The GitHub integration watches `main`; new migrations are deployed from
+reviewed Git history. The dashboard SQL Editor and direct production
+`supabase db push` are break-glass-only paths and must be followed by a tracked
+forward-only migration.
 
 ## Verification Evidence
 
 The current branch was re-verified after the meal/media/source queue slice,
-invoice-import spike documentation, Supabase configuration hardening, changed-
-local-target requeue fix, exact minor-unit aggregation fix, and category
-uniqueness hardening. Pending queue execution also reorders legacy transfer
-items behind linked fee records. Temporary scan links now use `receipt-evidence` or
-`invoice-scan`, matching the canonical enum:
+Supabase configuration hardening, changed-local-target requeue fix, exact
+minor-unit aggregation fix, category uniqueness hardening, account-only
+reference queue coverage, profile persistence, and category alias bootstrap.
+Pending queue execution also reorders legacy transfer items behind linked fee
+records. Temporary scan links now use
+`receipt-evidence` or `invoice-scan`, matching the canonical enum:
 
-- `npm run test`: 35 files, 213 tests passed.
-- `npm run test:coverage`: 83.08% statements, 73.67% branches, 84.37% functions,
-  84.16% lines.
-- `npm run test:e2e`: 6 browser smoke tests passed.
+- `npm run test`: 36 files, 245 tests passed.
+- `npm run test:coverage`: 83.23% statements, 72.47% branches, 84.78% functions,
+  86.23% lines.
+- `npm run test:e2e`: 9 browser smoke tests passed.
 - `npm run build`: TypeScript and Vite build passed.
-- Real Supabase/RLS execution remains environment-gated; mocked authenticated
-  persistence tests cover the adapter contract.
+- `npm run test:rls`: local Supabase execution passed with two authenticated
+  identities, owner-only visibility, cross-owner rejection, and cleanup.
+- Mocked authenticated persistence tests continue to cover adapter failure and
+  retry behavior that is independent of the local database runtime.
+- Remote Supabase migrations `0001` through `0003` are applied and match the
+  local migration list.
+- Remote authenticated persistence smoke passed with a temporary user,
+  covering profile, account/reference, ledger, transfer RPC replay,
+  idempotency, draft, source, media, and meal writes. Smoke rows are removed
+  in dependency order before the temporary user is deleted.
+- Remote smoke user administration uses the Supabase SDK so both legacy
+  service-role JWTs and current secret keys follow the supported server-only
+  boundary.
+- The frontend remote endpoint is configured only through ignored local
+  environment files; no project secret is tracked in Git.
 
 The Supabase configuration boundary also rejects template placeholders and
 keeps production deployments fail-closed when cloud authentication is missing.

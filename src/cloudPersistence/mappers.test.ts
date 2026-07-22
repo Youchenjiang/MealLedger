@@ -72,14 +72,22 @@ describe("cloud row mappers", () => {
     kind: "meal-photo",
   };
 
-  test("maps a local account without treating a client key as a UUID", () => {
+  test("maps a local account to a user-scoped stable cloud UUID", () => {
     expect(mapLocalAccount({ id: "account-local-1", name: " Cash ", currency: "twd" }, "user-1")).toEqual({
+      id: "961ce2fe-c631-4b11-88ad-7b5e769cee43",
       user_id: "user-1",
       name: " Cash ",
       currency: "TWD",
       account_type: "cash",
       allow_negative_balance: true,
     });
+  });
+
+  test("scopes the same local account id to different cloud users", () => {
+    const first = mapLocalAccount({ id: "account-local-1", name: "Cash", currency: "TWD" }, "user-1");
+    const second = mapLocalAccount({ id: "account-local-1", name: "Cash", currency: "TWD" }, "user-2");
+
+    expect(first.id).not.toBe(second.id);
   });
 
   test("preserves exact minor units and record kind", () => {
@@ -89,6 +97,16 @@ describe("cloud row mappers", () => {
     if (result.ok) {
       expect(result.value.ledgerRecord).toMatchObject({ kind: "fund-addition", amount_minor: "1000", source: "Initial funds" });
     }
+  });
+
+  test("links an expense to its bootstrapped merchant reference", () => {
+    const result = mapLedgerRecord(record(), "user-1", {
+      ...references,
+      merchantIds: { Market: "88888888-8888-4888-8888-888888888888" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) expect(result.value.ledgerRecord).toMatchObject({ merchant_id: "88888888-8888-4888-8888-888888888888" });
   });
 
   test("maps non-UUID audit ids to stable cloud ids for retries", () => {
@@ -122,6 +140,33 @@ describe("cloud row mappers", () => {
         destination_amount_minor: "46000",
         destination_currency: "JPY",
       }));
+    }
+  });
+
+  test("rejects a stale source account reference instead of sending it to cloud", () => {
+    const result = mapLedgerRecord(record({
+      accountId: "11111111-1111-4111-8111-111111111111",
+    }), "user-1", references);
+
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) {
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "missing-reference", field: "account_id" }),
+      ]));
+    }
+  });
+
+  test("rejects a stale transfer destination reference instead of sending it to cloud", () => {
+    const result = mapLedgerRecord(record({
+      kind: "transfer",
+      transferAccountId: "99999999-9999-4999-8999-999999999999",
+    }), "user-1", references);
+
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) {
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "missing-reference", field: "destination_account_id" }),
+      ]));
     }
   });
 

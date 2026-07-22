@@ -13,6 +13,14 @@
 
 ## Repository Integration
 
+- Creating an account without a ledger record still queues and persists the
+  owned account reference.
+- Authenticated synchronization upserts the owner profile before dependent
+  writes, and profile failure remains retryable.
+- Category aliases are deduplicated and linked to the resolved canonical
+  category without creating duplicate alias rows.
+- Merchant names are normalized and expense-like ledger rows retain their
+  owned `merchant_id` reference.
 - A successful account/record bundle calls tables in dependency order.
 - Replaying the same idempotency key returns the original result and does not
   insert a second parent or fee record.
@@ -28,6 +36,10 @@
 - No Supabase configuration continues to save records locally.
 - A missing session never displays a synced state.
 - A cloud failure keeps the local record and queue item available.
+- A media item uploads available local bytes before its metadata is marked
+  synced; a missing byte payload stays pending for explicit re-selection.
+- A late upload or metadata result does not recreate a scan the user already
+  discarded.
 - Existing clean CSV, JSON, and ZIP exports contain ledger fields only and no
   image bytes or base64 payloads.
 
@@ -35,6 +47,9 @@
 
 - Local-only mode can create and review a record without a network request.
 - Configured-mode auth/loading/error states remain reachable.
+- After email/password sign-in, the browser can create a record, show cloud
+  sync readiness, and flush that record through the authenticated Supabase
+  client.
 - Offline/local-only status is visible when the cloud queue is pending.
 - Desktop and mobile layouts do not expose raw Supabase errors or console
   errors.
@@ -44,12 +59,27 @@
 ```text
 npm run test
 npm run test:coverage
+npm run test:rls
+npm run test:remote
 npm run test:e2e
 npm run build
 git diff --check
 git status --short
 ```
 
-Real Supabase RLS integration tests are a separate environment-gated check;
-they are not faked by frontend unit tests and are not a prerequisite until a
-test project is configured.
+`npm run test:rls` runs `supabase/tests/rls.integration.sql` against the local
+Supabase database. It creates isolated test identities, verifies owner-only
+visibility, rejects cross-owner ledger references, rejects cross-owner media
+links, and cleans up its rows in the same transaction.
+The runner discovers the sole active `supabase_db_*` container. When multiple
+local Supabase projects are running, set `SUPABASE_DB_CONTAINER` to the intended
+database container before running the command.
+
+`npm run test:remote` is a manual release-gate command. It requires a temporary
+server-only Supabase secret or service-role key in the process environment,
+creates an isolated confirmed test user, and uses that user's authenticated
+session for all
+application writes, verifies the canonical persistence entities and transfer
+idempotency replay against the remote project, removes the smoke rows in
+dependency order, then deletes the test user. The key is never read from a
+committed file and no image bytes are uploaded.

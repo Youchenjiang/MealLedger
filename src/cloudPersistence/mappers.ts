@@ -52,7 +52,9 @@ function reference(
   localId: string,
   field: string,
 ): CloudMappingResult<string> {
-  const remoteId = values?.[localId] ?? (isUuid(localId) ? localId : undefined);
+  // A local UUID is not evidence that the row belongs to the current cloud user.
+  // Only bootstrap-resolved references are safe to send to an ownership-checked RPC.
+  const remoteId = values?.[localId];
   return remoteId
     ? { ok: true, value: remoteId }
     : { ok: false, issues: [issue("missing-reference", field, `No cloud reference was resolved for ${localId}.`)] };
@@ -84,10 +86,10 @@ function collect<T>(results: CloudMappingResult<T>[]): CloudMappingIssue[] {
 
 export function mapLocalAccount(account: LocalAccount, userId: string): CloudRow {
   return {
-    ...(isUuid(account.id) ? { id: account.id } : {}),
+    id: stableCloudUuid(`account:${userId}:${account.id}`),
     user_id: userId,
     name: account.name,
-    currency: account.currency.toUpperCase(),
+    currency: account.currency?.trim().toUpperCase() || "TWD",
     account_type: account.accountType ?? "cash",
     allow_negative_balance: account.allowNegativeBalance ?? true,
   };
@@ -105,14 +107,14 @@ export function mapDraft(draft: TransactionDraft, userId: string): CloudRow {
 
 export function mapMediaAsset(item: UploadQueueItem, userId: string, now: string): CloudRow {
   const kind: UploadMediaKind = item.kind ?? "attachment";
-  const mediaId = stableCloudUuid(`media:${userId}:${item.id}`);
+  const mediaId = item.remoteMediaId ?? stableCloudUuid(`media:${userId}:${item.id}`);
   const temporary = kind === "receipt-scan" || kind === "invoice-scan";
   return {
     id: mediaId,
     user_id: userId,
     storage_provider: "r2",
-    bucket: "pending",
-    object_key: `pending/${userId}/${mediaId}/${encodeURIComponent(item.name)}`,
+    bucket: item.bucket ?? "pending",
+    object_key: item.objectKey ?? `pending/${userId}/${mediaId}/${encodeURIComponent(item.name)}`,
     content_type: item.type || "application/octet-stream",
     byte_size: item.size,
     captured_at: now,
@@ -141,10 +143,10 @@ export function mapTemporaryScan(scan: TemporaryScan, userId: string): CloudRow 
   };
 }
 
-export function mapTemporaryScanMediaLink(scan: TemporaryScan, userId: string): CloudRow {
+export function mapTemporaryScanMediaLink(scan: TemporaryScan, userId: string, mediaId?: string): CloudRow {
   return {
     user_id: userId,
-    media_asset_id: stableCloudUuid(`media:${userId}:${scan.id}`),
+    media_asset_id: mediaId ?? stableCloudUuid(`media:${userId}:${scan.id}`),
     target_type: "source-payload",
     target_id: stableCloudUuid(`source:${userId}:${scan.id}`),
     link_intent: scan.intent === "scan-invoice" ? "invoice-scan" : "receipt-evidence",
@@ -182,7 +184,7 @@ export function mapMealEntry(
 
   const mediaLinks: CloudRow[] = meal.mediaAssetIds.map((mediaAssetId) => ({
     user_id: userId,
-    media_asset_id: stableCloudUuid(`media:${userId}:${mediaAssetId}`),
+    media_asset_id: references.mediaIds?.[mediaAssetId] ?? stableCloudUuid(`media:${userId}:${mediaAssetId}`),
     target_type: "meal",
     target_id: mealId,
     link_intent: "meal-photo",
@@ -286,6 +288,7 @@ function mapTransferDetails(
     value: {
       ledger_record_id: recordId,
       destination_account_id: mapped.value.destinationId,
+      destination_account_name: record.transferAccountName,
       destination_amount_minor: mapped.value.destinationAmount,
       destination_currency: mapped.value.destinationCurrency,
       fee_ledger_record_id: mapped.value.feeId,
@@ -409,11 +412,12 @@ type LedgerRowInput = {
   accountId: string;
   amount: string;
   categoryId: string | undefined;
+  merchantId: string | undefined;
   eventId: string | undefined;
   recordId: string;
 };
 
-function createLedgerRow({ record, userId, timezone, accountId, amount, categoryId, eventId, recordId }: LedgerRowInput): CloudRow {
+function createLedgerRow({ record, userId, timezone, accountId, amount, categoryId, merchantId, eventId, recordId }: LedgerRowInput): CloudRow {
   const isDay = record.timePrecision === "day";
   const source = record.kind === "income" || record.kind === "fund-addition" ? optionalText(record.counterparty) : null;
   return {
@@ -430,6 +434,7 @@ function createLedgerRow({ record, userId, timezone, accountId, amount, category
     amount_minor: amount,
     currency: record.currency.toUpperCase(),
     category_id: categoryId ?? null,
+    merchant_id: merchantId ?? null,
     merchant_text: optionalText(record.counterparty),
     item_name: optionalText(record.itemName),
     source,
@@ -477,9 +482,10 @@ export function mapLedgerRecord(
   auditEvents: LocalAuditEvent[] = [],
   feeLedgerRecordId?: string,
 ): CloudMappingResult<CloudRecordBundle> {
+  const normalizedRecord = { ...record, currency: record.currency?.trim() || "TWD" };
   const recordId = ledgerReference(references.ledgerRecordIds, record.id, userId, "id");
   const accountId = reference(references.accountIds, record.accountId, "account_id");
-  const amount = money(record.amount, record.currency, "amount", record.kind !== "adjustment");
+  const amount = money(record.amount, normalizedRecord.currency, "amount", record.kind !== "adjustment");
   const issues = collect([recordId, accountId, amount]);
 
   const needsCategory = ["expense", "income", "refund"].includes(record.kind);
@@ -491,23 +497,31 @@ export function mapLedgerRecord(
   const eventId = optionalReference(record.event ?? "", references.eventIds, "event_id");
   if (!eventId.ok) issues.push(...eventId.issues);
 
+  const merchantKinds = ["expense", "refund", "unresolved-expense"];
+  const merchantId = references.merchantIds && merchantKinds.includes(record.kind)
+    ? optionalReference(record.counterparty, references.merchantIds, "merchant_id")
+    : { ok: true as const, value: undefined };
+  if (!merchantId.ok) issues.push(...merchantId.issues);
+
   const tagMapping = mapLedgerTags(record, userId, references, recordId);
   issues.push(...tagMapping.issues);
 
-  if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok || !categoryId.ok || !eventId.ok) {
+  if (issues.length > 0 || !recordId.ok || !accountId.ok || !amount.ok || !categoryId.ok || !eventId.ok || !merchantId.ok) {
     return { ok: false, issues };
   }
 
   const ledgerRecord = createLedgerRow({
-    record,
+    record: normalizedRecord,
     userId,
     timezone,
     accountId: accountId.value,
     amount: amount.value,
     categoryId: categoryId.value,
+    merchantId: merchantId.value,
     eventId: eventId.value,
     recordId: recordId.value,
   });
+  ledgerRecord.account_name = record.accountName;
 
   const bundle: CloudRecordBundle = {
     ledgerRecord,
@@ -516,7 +530,7 @@ export function mapLedgerRecord(
     auditEvents: [],
   };
 
-  const detailMapping = mapLedgerDetails(record, userId, references, recordId.value, amount.value, feeLedgerRecordId);
+  const detailMapping = mapLedgerDetails(normalizedRecord, userId, references, recordId.value, amount.value, feeLedgerRecordId);
   if (!detailMapping.ok) return { ok: false, issues: [...issues, ...detailMapping.issues] };
 
   bundle.transferDetails = detailMapping.value.transferDetails;

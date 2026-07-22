@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import schemaSql from "../../supabase/schema.sql?raw";
 import migrationSql from "../../supabase/migrations/0001_schema_core.sql?raw";
 import { ledgerRecordKinds } from "./contracts";
+
+const uploadFunction = readFileSync(
+  resolve(process.cwd(), "supabase/functions/create-r2-upload-url/index.ts"),
+  "utf8",
+);
 
 const requiredTables = [
   "profiles",
@@ -68,7 +75,7 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("alter table public.ledger_records enable row level security");
     expect(schemaSql).toContain("create policy ledger_records_owner");
     expect(schemaSql).toContain("create trigger transfer_details_valid");
-    expect(schemaSql).toContain("create trigger transfer_details_delete_guard");
+    expect(schemaSql).toContain("create constraint trigger transfer_details_delete_guard");
     expect(schemaSql).toContain("transfer fee must be an expense owned by the same user");
     expect(schemaSql).toContain("create trigger refund_links_valid");
     expect(schemaSql).toContain("refund link currency must match the refund record currency");
@@ -96,5 +103,10 @@ describe("schema core contract", () => {
     expect(schemaSql).toContain("source.user_id = auth.uid()");
     expect(schemaSql).toContain("target_record_id is null or exists (select 1 from public.ledger_records record");
     expect(schemaSql).toContain("fee_ledger_record_id is null or exists (select 1 from public.ledger_records fee_record");
+  });
+
+  test("does not create cloud media metadata before the signed upload succeeds", () => {
+    expect(uploadFunction).toContain("getSignedUrl(s3, command");
+    expect(uploadFunction).not.toContain('.from("media_assets").insert');
   });
 });

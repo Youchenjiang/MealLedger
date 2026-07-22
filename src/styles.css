@@ -154,6 +154,7 @@ a {
 .meal-form {
   display: grid;
   max-width: 640px;
+  min-width: 0;
   gap: 16px;
 }
 
@@ -193,14 +194,20 @@ a {
 }
 
 .meal-form input[type="file"] {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 44px;
+  overflow: hidden;
   padding: 7px;
   border: 1px dashed #b9afa1;
   border-radius: 8px;
   color: #4f4a43;
   background: #fcfaf5;
   font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meal-form input[type="file"]::file-selector-button {
@@ -300,9 +307,9 @@ a {
 }
 
 .source-list-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 12px;
   border: 1px solid #ebe4d8;
@@ -310,12 +317,38 @@ a {
   background: #fcfaf5;
 }
 
-.source-list-row > span:first-child {
+.source-preview-frame {
   display: grid;
+  width: 88px;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #e1d8ca;
+  border-radius: 6px;
+  color: #5f5951;
+  background: #f1ede5;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.source-preview-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.source-list-copy {
+  display: grid;
+  min-width: 0;
   gap: 4px;
 }
 
-.source-list-row small {
+.source-list-copy strong {
+  overflow-wrap: anywhere;
+}
+
+.source-list-copy small {
   color: #69645c;
 }
 
@@ -325,7 +358,29 @@ a {
   gap: 8px;
 }
 
+.source-remove-action {
+  align-self: center;
+}
+
 @media (max-width: 560px) {
+  .source-list-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .source-preview-frame {
+    width: 72px;
+  }
+
+  .source-list-actions,
+  .source-remove-action {
+    grid-column: 1 / -1;
+  }
+
+  .source-list-actions .quiet-action,
+  .source-remove-action {
+    min-height: 40px;
+  }
+
   .onboarding-balance-fields,
   .onboarding-actions {
     grid-template-columns: 1fr;
@@ -441,9 +496,8 @@ a {
 
 .page-header {
   display: grid;
-  min-height: 116px;
+  height: 58px;
   align-content: start;
-  gap: 14px;
 }
 
 .topbar,
@@ -515,6 +569,13 @@ h2 {
   background: #2f5d50;
 }
 
+.capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .primary-action:disabled {
   color: #4f4a43;
   background: #dedbd3;
@@ -572,19 +633,17 @@ h2 {
 }
 
 .status-strip {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
   min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 
 .status-item {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  flex: 0 0 auto;
   gap: 7px;
+  min-width: 0;
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid #ddd6ca;
@@ -653,6 +712,7 @@ h2 {
 .panel {
   display: grid;
   align-content: start;
+  min-width: 0;
   gap: 14px;
   padding: 18px;
 }
@@ -1431,6 +1491,32 @@ h2 {
   background: #fcfaf5;
 }
 
+.ledger-record-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
+.ledger-record-card .record-summary {
+  min-width: 0;
+}
+
+.ledger-record-card .record-summary strong {
+  overflow-wrap: anywhere;
+}
+
+.ledger-record-card .record-detail {
+  overflow-wrap: anywhere;
+}
+
+.ledger-record-card .record-actions {
+  justify-content: flex-end;
+}
+
+.ledger-record-card .record-actions > button {
+  flex: 0 1 auto;
+}
+
 .draft-card div,
 .draft-amount {
   display: grid;
@@ -1618,9 +1704,16 @@ h2 {
 }
 
 .table-empty {
+  padding: 12px 14px;
+  border: 1px solid #ddd6ca;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #69645c;
+}
+
+.table-card .table-empty {
   min-width: 1640px;
   border-top: 1px solid #ebe4d8;
-  color: #69645c;
 }
 
 .action-card {
@@ -1726,6 +1819,7 @@ button.action-card.unavailable {
 
 @media (max-width: 1100px) {
   .app-shell {
+    align-content: start;
     grid-template-columns: 1fr;
   }
 
@@ -1733,6 +1827,7 @@ button.action-card.unavailable {
     position: sticky;
     top: 0;
     z-index: 30;
+    align-self: start;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
@@ -1836,6 +1931,31 @@ button.action-card.unavailable {
   .capture-intent-button:last-child {
     grid-column: 1 / -1;
   }
+
+  .ledger-record-card {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-record-card .record-amount {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
+    text-align: left;
+    width: 100%;
+  }
+
+  .ledger-record-card .record-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .ledger-record-card .record-actions > button {
+    width: 100%;
+    min-height: 40px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1850,10 +1970,6 @@ button.action-card.unavailable {
 
   .file-picker-name {
     flex: 1 1 180px;
-  }
-
-  .page-header {
-    min-height: 108px;
   }
 
   .signed-out-panel {
@@ -1893,8 +2009,35 @@ button.action-card.unavailable {
     flex-wrap: wrap;
   }
 
-  .record-actions > button {
-    flex: 1 1 100%;
+  .status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .status-item {
+    min-height: 36px;
+    padding: 6px 8px;
+  }
+
+  .status-item strong {
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .ledger-record-card {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-record-card .record-amount {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
+    text-align: left;
+    width: 100%;
+  }
+
+  .ledger-record-card .record-actions > button {
+    flex: 1 1 0;
   }
 
   .sync-issue {
