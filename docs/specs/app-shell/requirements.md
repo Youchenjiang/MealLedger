@@ -8,7 +8,7 @@ This spec covers:
 
 - initial PWA shell
 - top-level navigation
-- signed-out and signed-in states
+- local-only and authenticated states
 - empty states for V1 sections
 - offline and local-only status indicators
 - review queue entry point
@@ -24,7 +24,10 @@ WHEN the app first loads
 THE SYSTEM SHALL show a stable application shell without requiring ledger data.
 
 WHEN the user is not authenticated
-THE SYSTEM SHALL show a signed-out state with the product name and a sign-in entry point.
+THE SYSTEM SHALL show the local-only workspace directly without requiring account verification.
+
+WHEN the user chooses to verify an account
+THE SYSTEM SHALL provide a separate account-verification entry point without blocking local ledger use.
 
 WHEN the user is authenticated
 THE SYSTEM SHALL show the primary navigation.

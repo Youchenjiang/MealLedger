@@ -6,7 +6,7 @@ Onboarding helps a new user create a usable ledger without confusing initial fun
 
 This spec covers:
 
-- first signed-in experience
+- first workspace experience, whether local-only or authenticated
 - first account creation
 - initial funds explanation
 - default taxonomy setup
@@ -17,7 +17,7 @@ This spec does not implement full CSV import, account statement sync, provider i
 
 ## Requirements
 
-WHEN a signed-in user has no account
+WHEN a local-only or signed-in user has no ledger account
 THE SYSTEM SHALL show onboarding instead of an empty normal overview.
 
 WHEN onboarding starts

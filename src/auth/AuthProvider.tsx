@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
 import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
-import { sendMagicLink } from "./authActions";
+import { signInWithPassword } from "./authActions";
 
 type AuthContextValue = {
   state: AuthState;
@@ -10,7 +10,7 @@ type AuthContextValue = {
   email: string;
   message: string;
   configurationError: boolean;
-  signIn: (email?: string) => Promise<void>;
+  signIn: (email?: string, password?: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     email,
     message,
     configurationError,
-    signIn: async (requestedEmail = "") => {
+    signIn: async (requestedEmail = "", password = "") => {
       const normalizedEmail = requestedEmail.trim();
       setEmail(normalizedEmail);
       setMessage("");
@@ -108,15 +108,14 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       }
 
       setState("loading");
-      const result = await sendMagicLink(supabase, normalizedEmail, window.location.origin);
+      const result = await signInWithPassword(supabase, normalizedEmail, password);
       if (!result.ok) {
         setState("auth-error");
         setMessage(result.message);
         return;
       }
 
-      setState("signed-out");
-      setMessage("Magic link sent. Check your email to open the workspace.");
+      setMessage("");
     },
     signOut: async () => {
       if (isLocalDevelopmentMode) {

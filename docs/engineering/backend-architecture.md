@@ -2,6 +2,8 @@
 
 MealLedger separates structured financial records from large media files. The backend is designed around clear ownership boundaries so ledger exports stay small, media storage can grow independently, and future invoice providers can be swapped without rewriting the core ledger.
 
+Production database changes follow the [Supabase Deployment Policy](supabase-deployment.md): versioned migrations in Git are reviewed through pull requests and deployed to `main` through the Supabase GitHub integration. The production dashboard is not a parallel source of truth.
+
 ## Backend Components
 
 | Component | Technology | Responsibility |
@@ -75,10 +77,14 @@ user confirmation.
 
 1. Frontend calls `create-r2-upload-url`.
 2. Edge Function validates the user and request.
-3. Edge Function creates a `media_assets` metadata row and returns a short-lived R2 PUT URL.
+3. Edge Function reserves an owner-scoped object key and returns a short-lived
+   R2 PUT URL without creating media metadata yet.
 4. Frontend uploads the image directly to R2.
-5. Frontend creates or updates `meal_entries` and `media_links` with `target_type = 'meal'`.
-6. A later confirmation or cleanup workflow should reconcile abandoned metadata rows if the browser upload fails.
+5. After a successful PUT, the cloud queue creates `media_assets`, then creates
+   or updates `meal_entries` and `media_links` with `target_type = 'meal'`.
+6. Failed PUT requests remain local and never create a false synced metadata
+   row. A future cleanup job removes uploaded objects abandoned before metadata
+   synchronization.
 
 ### Meal-to-Transaction Matching
 

@@ -629,8 +629,8 @@ Batch import resource limits:
 
 ## First-Version Decisions
 
-- First version uses Supabase Auth for cloud sync and protected storage access. Email magic link is required for V1; Google OAuth is optional if it does not delay the core ledger flow.
-- An offline-only/no-account mode is not promised in the first version because it changes sync, backup, and recovery architecture.
+- First version uses Supabase Auth for cloud sync and protected storage access, but account verification is not required for local ledger use.
+- The normal entry flow is local-only. Magic Link is not the default or required sign-in method; the separate [auth spec](../specs/auth/requirements.md) selects Google OAuth or an ordinary email/password account before auth implementation.
 - V1 scope should prioritize manual ledger correctness: accounts, categories, merchants, transactions, transfers, refunds, fund additions, adjustments, unresolved expenses, basic meal records, clean export, and temporary scan/import drafts.
 - V1 can support cloud AI/OCR as an optional draft helper, but local/offline AI models should be treated as V2+ unless a small reliable implementation is proven.
 - V1 should not include Ministry of Finance cloud invoice sync or bank/account statement API sync as production features. Those integrations should start as separate spike or V2 work because credentials, provider limits, and background sync failure modes are high-risk. The [invoice-import-spike](../specs/invoice-import-spike/requirements.md) must pass before provider-specific implementation begins.
@@ -652,11 +652,11 @@ Batch import resource limits:
 
 Authentication defaults:
 
-- Required sign-in method: email magic link through Supabase Auth.
-- Optional sign-in method: Google OAuth.
+- Account verification is optional until the user requests cloud sync.
+- Provider choice is owned by the [auth spec](../specs/auth/requirements.md): Google OAuth or an ordinary email/password account.
+- Magic Link is not a routine sign-in requirement.
 - Not included in V1: anonymous cloud accounts, shared ledgers, organization accounts, or multi-user collaboration.
 - RLS ownership boundary should use `auth.uid()` as the primary user owner id.
-- Magic link requests should be rate-limited by email, IP, and device/session where the hosting stack supports it.
 
 Retention and TTL defaults:
 

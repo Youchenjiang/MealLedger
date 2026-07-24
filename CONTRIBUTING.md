@@ -150,6 +150,7 @@ Before requesting review, include the checks you ran. At minimum:
 
 - Frontend changes: run `npm run build`, perform a browser smoke test, and confirm the console has no errors.
 - Schema changes: verify SQL applies cleanly to a fresh Supabase project or local Supabase DB.
+- Production Supabase changes: follow [Supabase Deployment Policy](docs/engineering/supabase-deployment.md); migrations are reviewed in Git and deployed from `main` through the GitHub integration.
 - R2 changes: verify signed upload URLs never expose R2 secrets.
 - Export changes: verify exports do not include image bytes or base64 media.
 - AI changes: verify AI output remains draft/suggestion data unless explicitly confirmed by the user.

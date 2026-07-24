@@ -36,7 +36,7 @@ Do not run Vitest and coverage concurrently because both use the same temporary 
 
 ## Browser Smoke
 
-Playwright verifies signed-out entry, workspace navigation, manual capture to local ledger flow, desktop and mobile navigation without document-level horizontal overflow, no console/page errors, and no clean export containing media bytes.
+Playwright verifies local-only entry, workspace navigation, manual capture to local ledger flow, desktop and mobile navigation without document-level horizontal overflow, no console/page errors, and no clean export containing media bytes.
 
 ## Static Schema Checks
 

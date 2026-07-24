@@ -4,7 +4,12 @@ Capture media handles photo and file entry points. It is supporting context for 
 
 ## Current V1 Boundary
 
-The current branch implements a local preview: it stores capture metadata and a local upload queue, but it does not persist image bytes to cloud storage. The queue must be presented as local-only metadata until the future cloud-persistence spec is complete. Requirements below that mention cloud upload, permanent retention, object deletion, or late OCR handling are planned behavior, not current V1 acceptance criteria.
+The current branch stores capture metadata and local image bytes first. When an
+authenticated cloud client and the R2 upload boundary are configured, it uploads
+available bytes through a short-lived signed PUT URL before syncing media
+metadata. Missing bytes remain explicit re-selection work. Permanent R2 object
+deletion and late OCR handling remain planned behavior rather than current V1
+acceptance criteria.
 
 ## Scope
 

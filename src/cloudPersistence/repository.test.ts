@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import type { CloudMealBundle, CloudPersistenceClient, CloudRecordBundle, CloudRow } from "./contracts";
-import { persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload } from "./repository";
+import { persistMealBundle, persistMediaAsset, persistProfile, persistRecordBundle, persistSourcePayload } from "./repository";
 
 function bundle(): CloudRecordBundle {
   return {
@@ -47,6 +47,14 @@ const request = {
 };
 
 describe("cloud persistence repository", () => {
+  test("persists a profile with the authenticated owner key", async () => {
+    const mock = client();
+    const result = await persistProfile(mock, { user_id: "user-1", default_currency: "TWD", default_timezone: "Asia/Taipei" });
+
+    expect(result).toMatchObject({ ok: true, tables: ["profiles"] });
+    expect(mock.calls).toEqual(["profiles"]);
+  });
+
   test("writes a bundle in dependency order", async () => {
     const mock = client();
     const result = await persistRecordBundle(mock, request, bundle());
@@ -156,7 +164,16 @@ describe("cloud persistence repository", () => {
     });
 
     expect(result).toMatchObject({ ok: true, replayed: false, tables: expect.arrayContaining(["transfer_details"]) });
-    expect(mock.rpc).toHaveBeenCalledWith("persist_ledger_record_bundle", expect.objectContaining({ p_transfer_details: expect.any(Object) }));
+    expect(mock.rpc).toHaveBeenCalledWith("persist_ledger_record_bundle_resolved", expect.objectContaining({
+      p_request: {
+        user_id: "user-1",
+        action_type: "record-create",
+        idempotency_key: "action-1",
+        request_hash: "hash-1",
+        expires_at: "2026-07-14T00:00:00.000Z",
+      },
+      p_transfer_details: expect.any(Object),
+    }));
     expect(mock.calls).toEqual([]);
   });
 });

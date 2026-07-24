@@ -1,10 +1,11 @@
 import type { ReferenceBootstrapClient } from "./bootstrap";
 import { bootstrapReferences } from "./bootstrap";
 import type { CloudPersistenceClient, CloudReferenceMap } from "./contracts";
-import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink } from "./mappers";
-import { persistDraft, persistMealBundle, persistMediaAsset, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
+import { mapDraft, mapLedgerRecord, mapMealEntry, mapMediaAsset, mapTemporaryScan, mapTemporaryScanMediaLink, stableCloudUuid } from "./mappers";
+import { persistDraft, persistMealBundle, persistMediaAsset, persistProfile, persistRecordBundle, persistSourcePayload, type CloudPersistenceResult } from "./repository";
 import {
   enqueueDraftSync,
+  enqueueAccountSync,
   enqueueRecordSync,
   markCloudSyncFailure,
   markCloudSynced,
@@ -18,6 +19,7 @@ import {
 import type { TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
+import type { TaxonomyAliasSeed } from "../taxonomy/defaults";
 import type { MealEntry } from "../captureMedia/meals";
 import type { TemporaryScan } from "../captureMedia/media";
 import type { UploadQueueItem } from "../captureMedia/upload";
@@ -28,6 +30,8 @@ export type SyncLocalChangesInput = {
   userId: string;
   accounts: LocalAccount[];
   categories: string[];
+  aliases: TaxonomyAliasSeed[];
+  merchants: string[];
   tags: string[];
   events: string[];
   auditEvents: import("../manualLedger/records").LocalAuditEvent[];
@@ -61,6 +65,60 @@ function orderPendingSyncItems(items: CloudSyncQueueItem[], records: LocalLedger
 
 type SyncContext = { input: SyncLocalChangesInput; references: CloudReferenceMap };
 
+function normalizedName(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function accountsForBootstrap(accounts: LocalAccount[], records: LocalLedgerRecord[]): LocalAccount[] {
+  const result = [...accounts];
+  const names = new Set(result.map((account) => normalizedName(account.name)));
+
+  const addRecordAccount = (id: string, name: string, currency?: string | null) => {
+    const trimmedName = name.trim();
+    const normalized = normalizedName(trimmedName);
+    if (!trimmedName || names.has(normalized)) return;
+    result.push({ id: id || `sync-account:${normalized}`, name: trimmedName, currency: currency?.trim() || "TWD" });
+    names.add(normalized);
+  };
+
+  for (const record of records) {
+    addRecordAccount(record.accountId, record.accountName, record.currency);
+    if (record.kind === "transfer") {
+      addRecordAccount(record.transferAccountId, record.transferAccountName, record.destinationCurrency || record.currency);
+    }
+    if (record.feeAccountName) {
+      addRecordAccount(record.feeAccountId, record.feeAccountName, record.feeCurrency || record.currency);
+    }
+  }
+
+  return result;
+}
+
+function rebindAccountReferences(
+  references: CloudReferenceMap,
+  accounts: LocalAccount[],
+  records: LocalLedgerRecord[],
+): CloudReferenceMap {
+  const idsByName = new Map<string, string>();
+  for (const account of accounts) {
+    const cloudId = references.accountIds[account.id];
+    if (cloudId) idsByName.set(normalizedName(account.name), cloudId);
+  }
+
+  const accountIds = { ...references.accountIds };
+  for (const record of records) {
+    const sourceId = idsByName.get(normalizedName(record.accountName));
+    if (sourceId) accountIds[record.accountId] = sourceId;
+
+    if (record.kind === "transfer") {
+      const destinationId = idsByName.get(normalizedName(record.transferAccountName));
+      if (destinationId) accountIds[record.transferAccountId] = destinationId;
+    }
+  }
+
+  return { ...references, accountIds };
+}
+
 
 function markMediaSynced(media: UploadQueueItem[], id: string): UploadQueueItem[] {
   return media.map((candidate) => candidate.id === id ? { ...candidate, metadataStatus: "synced" as const } : candidate);
@@ -70,8 +128,30 @@ function markScansSynced(scans: TemporaryScan[], id: string): TemporaryScan[] {
   return scans.map((candidate) => candidate.id === id ? { ...candidate, cloudStatus: "synced" as const } : candidate);
 }
 
+export function mergeSyncedScans(current: TemporaryScan[], synced: TemporaryScan[]): TemporaryScan[] {
+  const syncedById = new Map(synced.map((scan) => [scan.id, scan]));
+
+  return current.map((scan) => {
+    const syncedScan = syncedById.get(scan.id);
+    if (syncedScan?.state !== scan.state) return scan;
+    return { ...scan, cloudStatus: syncedScan.cloudStatus };
+  });
+}
+
+export function mergeSyncedItems<T extends { id: string }>(current: T[], synced: T[]): T[] {
+  const syncedById = new Map(synced.map((item) => [item.id, item]));
+  return current.map((item) => syncedById.get(item.id) ?? item);
+}
+
 function markMealsSynced(meals: MealEntry[], id: string): MealEntry[] {
   return meals.map((candidate) => candidate.id === id ? { ...candidate, status: "synced" as const } : candidate);
+}
+
+function hasUploadedMedia(media: UploadQueueItem[], mediaIds: string[]): boolean {
+  return mediaIds.every((mediaId) => {
+    const item = media.find((candidate) => candidate.id === mediaId);
+    return Boolean(item?.status === "uploaded" && item.remoteMediaId && item.objectKey);
+  });
 }
 
 function markRecordsSynced(records: LocalLedgerRecord[], id: string): LocalLedgerRecord[] {
@@ -100,6 +180,14 @@ async function syncDraftItem(item: CloudSyncQueueItem, context: SyncContext, sta
   return { ...state, queue: applyPersistenceResult(state.queue, item, result, input.now) };
 }
 
+function syncAccountItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): SyncLocalChangesResult {
+  const { input, references } = context;
+  const account = input.accounts.find((candidate) => candidate.id === item.targetId);
+  if (!account) return applyItemFailure(state, item, "Local account is no longer available.", input.now);
+  if (!references.accountIds[account.id]) return applyItemFailure(state, item, "Cloud account reference was not returned.", input.now);
+  return { ...state, queue: markCloudSynced(state.queue, item.id, input.now) };
+}
+
 async function syncMediaItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
   const { input } = context;
   const media = input.media.find((candidate) => candidate.id === item.targetId);
@@ -113,8 +201,10 @@ async function syncScanItem(item: CloudSyncQueueItem, context: SyncContext, stat
   const { input } = context;
   const scan = input.scans.find((candidate) => candidate.id === item.targetId);
   if (!scan) return applyItemFailure(state, item, "Local scan metadata is no longer available.", input.now);
-  const mediaLink = input.media.some((candidate) => candidate.id === scan.id)
-    ? [mapTemporaryScanMediaLink(scan, input.userId)]
+  const media = input.media.find((candidate) => candidate.id === scan.id);
+  if (media && !hasUploadedMedia(input.media, [scan.id])) return state;
+  const mediaLink = media
+    ? [mapTemporaryScanMediaLink(scan, input.userId, media.remoteMediaId ?? stableCloudUuid(`media:${input.userId}:${scan.id}`))]
     : [];
   const result = await persistSourcePayload(input.client, mapTemporaryScan(scan, input.userId), mediaLink);
   const nextScans = result.ok ? markScansSynced(state.scans, scan.id) : state.scans;
@@ -125,7 +215,12 @@ async function syncMealItem(item: CloudSyncQueueItem, context: SyncContext, stat
   const { input, references } = context;
   const meal = input.meals.find((candidate) => candidate.id === item.targetId);
   if (!meal) return applyItemFailure(state, item, "Local meal metadata is no longer available.", input.now);
-  const mappedMeal = mapMealEntry(meal, input.userId, references);
+  if (!hasUploadedMedia(input.media, meal.mediaAssetIds)) return state;
+  const mediaIds = Object.fromEntries(input.media.map((media) => [
+    media.id,
+    media.remoteMediaId ?? stableCloudUuid(`media:${input.userId}:${media.id}`),
+  ]));
+  const mappedMeal = mapMealEntry(meal, input.userId, { ...references, mediaIds });
   if (!mappedMeal.ok) return applyItemFailure(state, item, mappedMeal.issues.map((entry) => entry.message).join(" "), input.now);
   const result = await persistMealBundle(input.client, mappedMeal.value);
   const nextMeals = result.ok ? markMealsSynced(state.meals, meal.id) : state.meals;
@@ -153,6 +248,7 @@ async function syncRecordItem(item: CloudSyncQueueItem, context: SyncContext, st
 }
 
 async function syncItem(item: CloudSyncQueueItem, context: SyncContext, state: SyncLocalChangesResult): Promise<SyncLocalChangesResult> {
+  if (item.target === "account") return syncAccountItem(item, context, state);
   if (item.target === "draft") return await syncDraftItem(item, context, state);
   if (item.target === "media") return await syncMediaItem(item, context, state);
   if (item.target === "scan") return await syncScanItem(item, context, state);
@@ -165,10 +261,29 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
   let state: SyncLocalChangesResult = { records: input.records, meals: input.meals, media: input.media, scans: input.scans, queue: input.queue };
   if (pending.length === 0) return state;
 
+  const syncAccounts = accountsForBootstrap(input.accounts, input.records);
+
+  const profileResult = await persistProfile(input.client, {
+    user_id: input.userId,
+    default_currency: syncAccounts[0]?.currency.toUpperCase() ?? "TWD",
+    default_timezone: "Asia/Taipei",
+  });
+  if (!profileResult.ok) {
+    return {
+      ...state,
+      queue: pending.reduce(
+        (current, item) => markCloudSyncFailure(current, item.id, profileResult.failure.message, profileResult.failure.retryable, input.now),
+        state.queue,
+      ),
+    };
+  }
+
   const bootstrap = await bootstrapReferences(input.referenceClient, {
     userId: input.userId,
-    accounts: input.accounts,
+    accounts: syncAccounts,
     categories: input.categories,
+    aliases: input.aliases,
+    merchants: input.merchants,
     tags: input.tags,
     events: input.events,
   });
@@ -180,7 +295,8 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
     return state;
   }
 
-  const context: SyncContext = { input, references: bootstrap.references };
+  const references = rebindAccountReferences(bootstrap.references, syncAccounts, input.records);
+  const context: SyncContext = { input, references };
   for (const item of pending) {
     state = { ...state, queue: markCloudSyncing(state.queue, item.id, input.now) };
     state = await syncItem(item, context, state);
@@ -188,16 +304,27 @@ export async function syncLocalChanges(input: SyncLocalChangesInput): Promise<Sy
   return state;
 }
 
-export function enqueueLocalChanges(
-  queue: CloudSyncQueueItem[],
-  records: LocalLedgerRecord[],
-  drafts: TransactionDraft[],
-  meals: MealEntry[],
-  media: UploadQueueItem[],
-  scans: TemporaryScan[],
-  now: string,
-): CloudSyncQueueItem[] {
+export function enqueueLocalChanges({
+  queue,
+  accounts,
+  records,
+  drafts,
+  meals,
+  media,
+  scans,
+  now,
+}: Readonly<{
+  queue: CloudSyncQueueItem[];
+  accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
+  drafts: TransactionDraft[];
+  meals: MealEntry[];
+  media: UploadQueueItem[];
+  scans: TemporaryScan[];
+  now: string;
+}>): CloudSyncQueueItem[] {
   let next = queue;
+  for (const account of accounts) next = enqueueAccountSync(next, account, now);
   for (const item of media) {
     next = enqueueMediaSync(next, item, now);
   }

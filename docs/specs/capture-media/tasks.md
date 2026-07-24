@@ -67,7 +67,12 @@ Expected verification:
 
 ## V1 Closeout Evidence
 
-The current implementation is local-only for media bytes. Tasks that require cloud upload, permanent object retention, or OCR processing remain deferred even though their future behavior is described in the requirements. The historical capture-media test counts are superseded by the consolidated `v1-hardening` verification evidence.
+The current implementation is local-first for media bytes. Authenticated,
+configured workspaces upload available bytes through signed R2 PUT URLs before
+media metadata sync; missing bytes remain pending for re-selection. Physical R2
+object deletion, thumbnail processing, and OCR remain deferred. The historical
+capture-media test counts are superseded by the consolidated `v1-hardening` and
+cloud-persistence verification evidence.
 
 ## Explicitly Deferred
 

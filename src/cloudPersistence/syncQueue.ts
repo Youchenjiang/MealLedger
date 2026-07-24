@@ -1,11 +1,12 @@
 import type { TransactionDraft } from "../appShell/drafts";
+import type { LocalAccount } from "../manualLedger/accounts";
 import type { LocalLedgerRecord } from "../manualLedger/records";
 import type { MealEntry } from "../captureMedia/meals";
 import type { TemporaryScan } from "../captureMedia/media";
 import type { UploadQueueItem } from "../captureMedia/upload";
 import { nextRetryAt } from "./retry";
 
-export type CloudSyncTarget = "record" | "draft" | "meal" | "media" | "scan";
+export type CloudSyncTarget = "account" | "record" | "draft" | "meal" | "media" | "scan";
 export type CloudSyncState = "pending" | "syncing" | "retryable-error" | "failed" | "conflict" | "synced";
 
 export type CloudSyncQueueItem = {
@@ -55,6 +56,31 @@ function refreshExisting(
       updatedAt: now,
     }
     : item);
+}
+
+export function enqueueAccountSync(
+  current: CloudSyncQueueItem[],
+  account: LocalAccount,
+  now: string,
+): CloudSyncQueueItem[] {
+  const idempotencyKey = `account:${account.id}`;
+  const requestHash = `account:${account.id}:${account.name}:${account.currency}:${account.accountType ?? ""}:${String(account.allowNegativeBalance ?? true)}`;
+  const refreshed = refreshExisting(current, "account", account.id, requestHash, idempotencyKey, now);
+  if (refreshed) return refreshed;
+  return [...current, {
+    id: queueId("account", account.id),
+    target: "account",
+    targetId: account.id,
+    actionType: "account-reference",
+    idempotencyKey,
+    requestHash,
+    state: "pending",
+    attempts: 0,
+    nextAttemptAt: now,
+    lastError: "",
+    createdAt: now,
+    updatedAt: now,
+  }];
 }
 
 export function enqueueRecordSync(
@@ -138,8 +164,11 @@ export function enqueueMediaSync(
   media: UploadQueueItem,
   now: string,
 ): CloudSyncQueueItem[] {
+  // Metadata must follow the object upload. A local queue item has no stable
+  // remote object yet, so syncing it would create a misleading cloud record.
+  if (media.status !== "uploaded" || !media.remoteMediaId || !media.objectKey) return current;
   const idempotencyKey = `media:${media.id}`;
-  const requestHash = `media:${media.id}:${JSON.stringify({ name: media.name, type: media.type, size: media.size, status: media.status, kind: media.kind })}`;
+  const requestHash = `media:${media.id}:${JSON.stringify({ name: media.name, type: media.type, size: media.size, status: media.status, kind: media.kind, remoteMediaId: media.remoteMediaId, objectKey: media.objectKey })}`;
   if (media.metadataStatus === "synced") return current;
   const refreshed = refreshExisting(current, "media", media.id, requestHash, idempotencyKey, now);
   if (refreshed) return refreshed;

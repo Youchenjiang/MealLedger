@@ -12,8 +12,13 @@ export type UploadMediaKind = "meal-photo" | "receipt-scan" | "invoice-scan" | "
 export type UploadQueueItem = UploadFileLike & {
   id: string;
   status: "queued" | "local-only" | "uploaded" | "failed";
+  bytesStatus?: "available" | "metadata-only";
   kind?: UploadMediaKind;
   metadataStatus?: "local-only" | "synced";
+  remoteMediaId?: string;
+  bucket?: string;
+  objectKey?: string;
+  error?: string;
 };
 
 export type UploadBatchValidation = {
@@ -40,6 +45,7 @@ export function queueUploadFiles(files: readonly UploadFileLike[], prefix: strin
     ...file,
     id: `${prefix}-${index}-${file.name}`,
     status: "queued",
+    bytesStatus: "available",
     ...(kind ? { kind } : {}),
   }));
 }
@@ -54,8 +60,62 @@ export type SignedUploadResult = {
   mediaId: string;
   putUrl: string;
   objectKey: string;
+  bucket?: string;
   expiresInSeconds: number;
 };
+
+export async function uploadMediaFile(
+  client: SignedUploadClient,
+  file: File,
+  item: UploadQueueItem,
+  capturedAt?: string,
+): Promise<UploadQueueItem> {
+  const kind = item.kind ?? "attachment";
+  let signed: Awaited<ReturnType<typeof requestSignedUpload>>;
+  try {
+    signed = await requestSignedUpload(client, {
+      contentType: file.type || item.type,
+      kind,
+      capturedAt,
+    });
+  } catch (error: unknown) {
+    return {
+      ...item,
+      status: "failed",
+      error: error instanceof Error ? error.message : "The upload boundary could not be reached.",
+    };
+  }
+  if (!signed.ok) {
+    return { ...item, status: "failed", error: signed.error };
+  }
+
+  try {
+    const response = await fetch(signed.value.putUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || item.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!response.ok) {
+      return { ...item, status: "failed", error: `Media upload failed with HTTP ${response.status}.` };
+    }
+    return {
+      ...item,
+      status: "uploaded",
+      bytesStatus: "available",
+      error: undefined,
+      remoteMediaId: signed.value.mediaId,
+      bucket: signed.value.bucket,
+      objectKey: signed.value.objectKey,
+      metadataStatus: "local-only",
+    };
+  } catch (error: unknown) {
+    return {
+      ...item,
+      status: "failed",
+      error: error instanceof Error ? error.message : "Media upload failed.",
+    };
+  }
+}
 
 export async function requestSignedUpload(
   client: SignedUploadClient,

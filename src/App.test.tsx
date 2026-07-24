@@ -179,8 +179,8 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
 
     await user.click(screen.getByRole("button", { name: "Overview" }));
-    expect(screen.getByText("Media metadata only")).toBeInTheDocument();
-    expect(screen.getByLabelText(/image bytes are not backed up/)).toBeInTheDocument();
+    expect(screen.getByText(/Cloud sync incomplete|Local-only/)).toBeInTheDocument();
+    expect(screen.getByText("2 local images")).toBeInTheDocument();
   });
 
   test("opens a real camera capture dialog for meal photos", async () => {
@@ -204,23 +204,40 @@ describe("App shell draft flow", () => {
 
   test("keeps scanned sources separate from official ledger records", async () => {
     const user = userEvent.setup();
+    const originalCreateObjectURL = window.URL.createObjectURL;
+    const originalRevokeObjectURL = window.URL.revokeObjectURL;
+    const createObjectURL = vi.fn(() => "blob:scan-preview");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
     renderWorkspace();
 
     await openWorkspace(user);
     await goToCapture(user);
     await user.click(screen.getByRole("button", { name: /Scan receipt/ }));
     await user.upload(screen.getByLabelText("Scan images"), new File(["scan"], "receipt.jpg", { type: "image/jpeg" }));
-    await user.click(screen.getByRole("button", { name: "Save scan drafts" }));
+    await user.click(screen.getByRole("button", { name: "Keep scan drafts" }));
 
     expect(screen.getByText("1 scan draft saved locally for review.")).toBeInTheDocument();
     expect(screen.getByText("receipt.jpg")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Preview of receipt.jpg" })).toHaveAttribute("src", "blob:scan-preview");
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
 
     await user.click(screen.getByRole("button", { name: "Keep source" }));
-    expect(screen.getByText("Retained source")).toBeInTheDocument();
+    expect(screen.getByText("Kept for review")).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("mealledger.capture.temporary-scans") ?? "[]")).toEqual(
       [expect.objectContaining({ state: "retained", expiresAt: null })],
     );
+
+    await user.click(screen.getByRole("button", { name: "Remove source" }));
+    expect(screen.queryByText("Kept for review")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 scan file queued locally for a future upload.")).not.toBeInTheDocument();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:scan-preview");
+    expect(JSON.parse(window.localStorage.getItem("mealledger.capture.temporary-scans") ?? "[]")).toEqual(
+      [expect.objectContaining({ state: "discarded" })],
+    );
+    Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: originalCreateObjectURL });
+    Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectURL });
   });
 
   test("saves explicit fixed labels when expense details are unavailable", async () => {
@@ -291,7 +308,9 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: "Settings" }));
 
     await user.click(screen.getByRole("button", { name: "Export CSV" }));
+    expect(screen.getByText("CSV export downloaded. Image bytes were not included.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Export JSON" }));
+    expect(screen.getByText("JSON export downloaded. Image bytes were not included.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Export ZIP" }));
 
     expect(createObjectURL).toHaveBeenCalledTimes(3);
@@ -582,7 +601,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Offline")).toBeInTheDocument();
 
     act(() => window.dispatchEvent(new Event("online")));
-    expect(screen.getByText("Sync not enabled")).toBeInTheDocument();
+    expect(screen.getByText("Local-only")).toBeInTheDocument();
   });
 
   test("keeps an offline manual record visibly local-only", async () => {
@@ -599,7 +618,7 @@ describe("App shell draft flow", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Open Ledger" }));
-    expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("local-only");
+    expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("Local only");
   });
 
   test("rejects malformed CSV without touching the local ledger", async () => {
@@ -625,7 +644,7 @@ describe("App shell draft flow", () => {
     await goToCapture(user);
     await createExpenseRecord(user);
 
-    expect(screen.getByText("1 local record")).toBeInTheDocument();
+    expect(screen.getByText(/1 record (synced|local-only)/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.getByText("Ledger records")).toBeInTheDocument();
@@ -760,6 +779,58 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ kind: "income", accountName: "Travel cash", amount: "2500" })]),
     );
+  });
+
+  test("allows a quick-added account to start from zero", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: "Create first account" }));
+    await user.type(screen.getByLabelText("Account name"), "Empty wallet");
+    await user.clear(screen.getByLabelText("Initial balance (optional)"));
+    await user.type(screen.getByLabelText("Initial balance (optional)"), "0");
+
+    expect(screen.queryByLabelText("Balance as of")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add and select" }));
+
+    expect(screen.getByLabelText("Account")).toHaveValue("Empty wallet");
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+  });
+
+  test("saves attachment photos without creating a meal or ledger record", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: /Attach photo/ }));
+    await user.upload(screen.getByLabelText("Attachment photos"), [
+      new File(["evidence"], "evidence-1.jpg", { type: "image/jpeg" }),
+      new File(["evidence-2"], "evidence-2.jpg", { type: "image/jpeg" }),
+    ]);
+    await user.click(screen.getByRole("button", { name: "Clear selected" }));
+    expect(screen.getByRole("button", { name: "Keep attachments" })).toBeDisabled();
+
+    await user.upload(screen.getByLabelText("Attachment photos"), [
+      new File(["evidence"], "evidence-1.jpg", { type: "image/jpeg" }),
+      new File(["evidence-2"], "evidence-2.jpg", { type: "image/jpeg" }),
+    ]);
+    await user.click(screen.getByRole("button", { name: "Keep attachments" }));
+
+    expect(screen.getByText("2 photos saved locally as attachment evidence.")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.capture.upload-queue") ?? "[]")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "attachment", name: "evidence-1.jpg" }),
+        expect.objectContaining({ kind: "attachment", name: "evidence-2.jpg" }),
+      ]),
+    );
+    expect(JSON.parse(window.localStorage.getItem("mealledger.capture.meals") ?? "[]")).toEqual([]);
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Clear pending attachments" }));
+    expect(JSON.parse(window.localStorage.getItem("mealledger.capture.upload-queue") ?? "[]")).toEqual([]);
   });
 
   test("offers practical quick amount adjustments", async () => {

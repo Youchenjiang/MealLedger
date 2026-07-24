@@ -2,7 +2,11 @@
 
 ## Current V1 Boundary
 
-This document describes the future cloud-backed media design. The current V1 branch only stores local metadata and a local upload queue; it does not claim that image bytes have been uploaded or durably backed up.
+The current V1 branch stores media locally first and, when authenticated cloud
+upload is configured, sends available image bytes to private R2 objects through
+short-lived signed PUT URLs before media metadata is marked synced. It does not
+yet claim complete media lifecycle management because physical R2 deletion,
+thumbnail generation, and scheduled cleanup remain deferred.
 
 ## Capture Choices
 
