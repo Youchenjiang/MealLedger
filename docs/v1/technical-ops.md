@@ -80,9 +80,10 @@ Failures should degrade to manual entry. A failed AI/OCR job should not block sa
 
 ## Authentication And Access Security
 
-V1 uses Supabase Auth. Email magic link is the default first login method unless implementation chooses an OAuth provider before coding starts.
-
-Magic links should expire after 15 minutes. Resend should have at least a 60 second cooldown, with per-email and per-IP limits.
+V1 uses Supabase Auth. Account verification is optional until the user enables
+cloud sync. The configured provider surface supports ordinary email/password,
+Google OAuth, and Facebook OAuth. Magic Link and LINE Login are deferred and
+must not appear in the V1 UI.
 
 RLS must enforce `user_id` ownership on every user table. Object storage signed URL creation must verify the database media row before issuing any URL.
 
