@@ -14,7 +14,6 @@ import {
   Plus,
   ReceiptText,
   Settings,
-  ShieldCheck,
   Upload,
   Wifi,
   WifiOff,
@@ -52,6 +51,8 @@ const navItems: NavItem[] = [
   { route: "capture", label: "Capture", path: "/capture", icon: Camera },
   { route: "settings", label: "Settings", path: "/settings", icon: Settings },
 ];
+const primaryNavItems = navItems.filter((item) => item.route !== "settings");
+const settingsNavItems = navItems.filter((item) => item.route === "settings");
 
 type RouteDefinition = {
   segments: string[];
@@ -512,10 +513,16 @@ function readStoredDrafts(): TransactionDraft[] {
   }
 }
 
-function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
+function PrimaryNav({ items, route, reviewCount, navigate, className = "nav-list" }: Readonly<{
+  items: NavItem[];
+  route: AppRoute;
+  reviewCount: number;
+  navigate: (item: NavItem) => void;
+  className?: string;
+}>) {
   return (
-    <nav className="nav-list">
-      {navItems.map((item) => {
+    <nav className={className}>
+      {items.map((item) => {
         const Icon = item.icon;
         return (
           <button
@@ -527,6 +534,7 @@ function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (
           >
             <Icon size={18} aria-hidden="true" />
             <span>{item.label}</span>
+            {item.route === "ledger" && reviewCount > 0 ? <span className="nav-badge" aria-hidden="true">{reviewCount}</span> : null}
           </button>
         );
       })}
@@ -730,9 +738,22 @@ function buildStatusItems({
   ];
 }
 
-function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
+function shellStatusItems(items: StatusItem[]): StatusItem[] {
+  return items.filter((item) => (
+    item.label !== "Local-only"
+      && item.label !== "Local-only data"
+      && !item.label.toLowerCase().includes("draft")
+      && !item.label.endsWith("synced")
+      && !item.label.endsWith("local-only")
+      && item.label !== "Cloud sync ready"
+  ));
+}
+
+function StatusStrip({ items, compact = false }: Readonly<{ items: StatusItem[]; compact?: boolean }>) {
+  if (items.length === 0) return null;
+
   return (
-    <section className="status-strip" aria-label="Application status">
+    <section className={`status-strip ${compact ? "status-strip-compact" : ""}`} aria-label="Application status">
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -760,20 +781,23 @@ function Brand({ caption, large = false }: Readonly<{ caption: string; large?: b
   );
 }
 
-function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
+function Sidebar({ route, reviewCount, navigate }: Readonly<{
+  route: AppRoute;
+  reviewCount: number;
+  navigate: (item: NavItem) => void;
+}>) {
   return (
     <aside className="sidebar" aria-label="MealLedger navigation">
       <Brand caption="Personal ledger with optional meal notes" />
-      <PrimaryNav route={route} navigate={navigate} />
-      <div className="storage-note">
-        <ShieldCheck size={18} aria-hidden="true" />
-        <span>Ledger exports stay separate from receipt and meal photos.</span>
+      <div className="sidebar-navigation">
+        <PrimaryNav items={primaryNavItems} route={route} reviewCount={reviewCount} navigate={navigate} />
+        <PrimaryNav items={settingsNavItems} className="sidebar-settings-nav" route={route} reviewCount={reviewCount} navigate={navigate} />
       </div>
     </aside>
   );
 }
 
-function WorkspaceHeader({ route }: Readonly<{ route: AppRoute }>) {
+function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -781,6 +805,7 @@ function WorkspaceHeader({ route }: Readonly<{ route: AppRoute }>) {
           <p className="eyebrow">Personal finance workspace</p>
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
+        <StatusStrip items={statusItems} compact />
       </header>
     </section>
   );
@@ -853,6 +878,7 @@ function AuthenticatedApp() {
   const cloudSyncInFlight = useRef(false);
   const route = location.route;
   const draftCount = drafts.length;
+  const reviewCount = draftCount + scans.filter((scan) => scan.state === "temporary" || scan.state === "retained").length;
   const recordCount = records.length;
 
   useEffect(() => {
@@ -1203,11 +1229,17 @@ function AuthenticatedApp() {
 
   return (
     <main className="app-shell">
-      <Sidebar route={route} navigate={navigate} />
+      <Sidebar
+        route={route}
+        reviewCount={reviewCount}
+        navigate={navigate}
+      />
 
       <section className="workspace">
-        <WorkspaceHeader route={route} />
-        <StatusStrip items={statusItems} />
+        <WorkspaceHeader
+          route={route}
+          statusItems={route !== "settings" && route !== "account" ? shellStatusItems(statusItems) : []}
+        />
         {renderRoute({
           route,
           authState,
