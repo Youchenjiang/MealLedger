@@ -17,6 +17,20 @@ export type PasswordResetClient = {
   };
 };
 
+export type OAuthProvider = "google" | "facebook";
+
+export type OAuthClient = {
+  auth: {
+    signInWithOAuth: (options: { provider: OAuthProvider; options: { redirectTo: string } }) => Promise<{ error: unknown }>;
+  };
+};
+
+export type OAuthCallbackClient = {
+  auth: {
+    setSession: (session: { access_token: string; refresh_token: string }) => Promise<{ data: { session?: PasswordSession } | null; error: unknown }>;
+  };
+};
+
 export type PasswordSession = { user?: { id?: string } } | null;
 export type PasswordAuthResult = { ok: true; session: PasswordSession } | { ok: false; message: string };
 
@@ -80,4 +94,25 @@ export async function updatePassword(client: PasswordResetClient, password: stri
   return error
     ? { ok: false, message: authFailureMessage(error) }
     : { ok: true, message: "Password updated. You can continue to cloud setup." };
+}
+
+export async function signInWithOAuth(client: OAuthClient, provider: OAuthProvider, redirectTo: string): Promise<{ ok: boolean; message: string }> {
+  const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo } });
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: `Opening ${provider} sign-in...` };
+}
+
+export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, href: string): Promise<{ handled: false } | { handled: true; result: PasswordAuthResult }> {
+  const params = new URLSearchParams(new URL(href).hash.slice(1));
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (!accessToken || !refreshToken) return { handled: false };
+
+  const { data, error } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+  if (error) return { handled: true, result: { ok: false, message: authFailureMessage(error) } };
+  if (!data?.session) {
+    return { handled: true, result: { ok: false, message: "Authentication did not return a workspace session." } };
+  }
+  return { handled: true, result: { ok: true, session: data.session } };
 }
