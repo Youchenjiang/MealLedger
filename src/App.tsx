@@ -1578,6 +1578,7 @@ function renderRoute({
         <LedgerPage
           records={records}
           drafts={drafts}
+          accounts={accounts}
           navigate={navigate}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onEditDraft={(draft) => {
@@ -1627,6 +1628,9 @@ function renderRoute({
             setRecords((current) => current.map((item) => item.id === id ? result.record : item));
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`)}
+          onReopenOnboarding={onReopenOnboarding}
         />
       );
     case "capture":
@@ -1894,6 +1898,7 @@ function ledgerRecordStatusLabel(record: LocalLedgerRecord, isVoided: boolean): 
 function LedgerPage({
   records,
   drafts,
+  accounts,
   navigate,
   onDiscardDraft,
   onEditDraft,
@@ -1901,9 +1906,13 @@ function LedgerPage({
   onUpdateRecord,
   onConvertUnresolved,
   onVoidRecord,
+  onAddAccount,
+  onSaveInitialFunding,
+  onReopenOnboarding,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
+  accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
   onEditDraft: (draft: TransactionDraft) => void;
@@ -1911,13 +1920,25 @@ function LedgerPage({
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
   onVoidRecord: (id: string) => void;
+  onAddAccount: (account: LocalAccount) => void;
+  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
+  onReopenOnboarding: () => void;
 }>) {
   const draftCount = drafts.length;
+  const [section, setSection] = useState<"records" | "accounts">("records");
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
   return (
     <div className="route-stack">
+      <div className="settings-tabs ledger-tabs" role="tablist" aria-label="Ledger sections">
+        <button className={`settings-tab ${section === "records" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "records"} onClick={() => setSection("records")}>Records</button>
+        <button className={`settings-tab ${section === "accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "accounts"} onClick={() => setSection("accounts")}>Accounts</button>
+      </div>
+      {section === "accounts" ? (
+        <LedgerAccountsPanel accounts={accounts} onAddAccount={onAddAccount} onSaveInitialFunding={onSaveInitialFunding} onReopenOnboarding={onReopenOnboarding} />
+      ) : (
+        <>
       <section className="content-grid">
         <Panel title="Ledger records" eyebrow="Confirmed records">
           <p className="panel-copy">Manual records are written locally as official ledger records. Cloud status appears in the workspace header.</p>
@@ -2007,6 +2028,8 @@ function LedgerPage({
       ) : null}
         {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
       {records.length === 0 ? <p className="table-empty">No confirmed ledger records yet.</p> : null}
+        </>
+      )}
     </div>
   );
 }
@@ -4062,12 +4085,12 @@ function AccountSetupForm({
   onBalanceChange, onBalanceDateChange, onSubmit,
 }: Readonly<AccountSetupFormProps>) {
   return (
-    <form className="draft-form" noValidate onSubmit={onSubmit}>
+    <form className="draft-form account-setup-form" noValidate onSubmit={onSubmit}>
       <label><span>Account name</span><input required pattern=".*\S.*" value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" /></label>
       <label><span>Currency</span><select value={accountCurrency} onChange={(event) => onAccountCurrencyChange(event.target.value)}><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="USD">USD</option></select></label>
       <label><span>Account type</span><select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}><option value="cash">Cash</option><option value="bank">Bank account</option><option value="card">Credit card</option><option value="wallet">Stored-value wallet</option><option value="other">Other</option></select></label>
       <label className="checkbox-row"><input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} /><span>Allow negative balance</span></label>
-      <fieldset>
+      <fieldset className="starting-balance-fieldset">
         <legend>Starting balance</legend>
         <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>Start from zero</span></label>
         <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>Enter current balance</span></label>
@@ -4085,9 +4108,11 @@ function AccountSetupPanel({
   onBalanceChange, onBalanceDateChange, onReopenOnboarding, onSubmit,
 }: Readonly<AccountSetupPanelProps>) {
   return (
-    <Panel title="Accounts" eyebrow="Local setup">
+    <Panel title="Ledger accounts" eyebrow="Local setup">
       <p className="panel-copy">Create the accounts that manual records may use. Accounts stay in this workspace and sync when cloud sync is enabled.</p>
-      <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
+      <div className="account-setup-actions">
+        <button className="secondary-action align-start" type="button" onClick={onReopenOnboarding}>Open first-account setup</button>
+      </div>
       <AccountSetupForm
         accountName={accountName}
         accountCurrency={accountCurrency}
