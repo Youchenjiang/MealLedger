@@ -4464,6 +4464,16 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
         Clean exports include confirmed ledger records only. Attachments stay as metadata
         references, not image bytes, and CSV/JSON use the same stable field set.
       </p>
+      <section className="portability-section" aria-labelledby="ledger-export-heading">
+        <h3 id="ledger-export-heading">Export ledger</h3>
+        <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
+        <div className="export-actions">
+          <button className="primary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage("CSV export downloaded. Image bytes were not included."); }}>Export CSV</button>
+          <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage("JSON export downloaded. Image bytes were not included."); }}>Export JSON</button>
+          <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
+        </div>
+        {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
+      </section>
       <section className="portability-section" aria-labelledby="csv-import-heading">
         <h3 id="csv-import-heading">Import a CSV</h3>
         <div className="file-picker">
@@ -4505,16 +4515,6 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
           ))}
         </section>
       ) : null}
-      <section className="portability-section" aria-labelledby="ledger-export-heading">
-        <h3 id="ledger-export-heading">Export ledger</h3>
-        <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
-       <div className="export-actions">
-         <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage("CSV export downloaded. Image bytes were not included."); }}>Export CSV</button>
-         <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage("JSON export downloaded. Image bytes were not included."); }}>Export JSON</button>
-        <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
-      </div>
-      {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
-      </section>
     </Panel>
   );
 }
