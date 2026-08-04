@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "dev:5200": "vite --host 127.0.0.1 --port 5200 --strictPort",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "dev:e2e": "vite --mode test --host 127.0.0.1 --port 4174 --strictPort",
