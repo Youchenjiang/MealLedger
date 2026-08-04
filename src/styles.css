@@ -1034,6 +1034,25 @@ h2 {
   outline: none;
 }
 
+.account-setup-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.account-setup-form > .starting-balance-fieldset {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.account-setup-form > .starting-balance-fieldset legend {
+  padding: 0;
+}
+
+.account-setup-form > .primary-action {
+  align-self: start;
+}
+
 .report-list {
   display: grid;
   gap: 10px;
