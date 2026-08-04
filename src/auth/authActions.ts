@@ -10,6 +10,13 @@ export type PasswordRegistrationClient = {
   };
 };
 
+export type PasswordResetClient = {
+  auth: {
+    resetPasswordForEmail: (email: string, options: { redirectTo: string }) => Promise<{ error: unknown }>;
+    updateUser: (attributes: { password: string }) => Promise<{ error: unknown }>;
+  };
+};
+
 export type PasswordSession = { user?: { id?: string } } | null;
 export type PasswordAuthResult = { ok: true; session: PasswordSession } | { ok: false; message: string };
 
@@ -57,4 +64,20 @@ export async function signUpWithPassword(client: PasswordRegistrationClient, ema
     return { ok: false, message: "Account created. Verify your email, then sign in to enable cloud sync." };
   }
   return { ok: true, session: data.session };
+}
+
+export async function requestPasswordReset(client: PasswordResetClient, email: string, redirectTo: string): Promise<{ ok: boolean; message: string }> {
+  if (!email.trim()) return { ok: false, message: "Email is required." };
+  const { error } = await client.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: "Password reset link sent. Check your email." };
+}
+
+export async function updatePassword(client: PasswordResetClient, password: string): Promise<{ ok: boolean; message: string }> {
+  if (!password.trim()) return { ok: false, message: "Password is required." };
+  const { error } = await client.auth.updateUser({ password });
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: "Password updated. You can continue to cloud setup." };
 }
