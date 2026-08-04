@@ -961,6 +961,42 @@ h2 {
   white-space: nowrap;
 }
 
+.account-page {
+  width: min(640px, 100%);
+  margin-inline: auto;
+}
+
+.account-page-form {
+  width: min(520px, 100%);
+  max-width: 520px;
+}
+
+.auth-password-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-storage-status {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #b9d8c9;
+  border-radius: 8px;
+  color: #285447;
+  background: #edf4ef;
+  font: inherit;
+  text-align: left;
+}
+
+.account-storage-status span {
+  color: #5f594f;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .report-list {
   display: grid;
   gap: 10px;
@@ -2207,13 +2243,8 @@ button.action-card.unavailable {
     flex-wrap: wrap;
   }
 
-  .status-strip {
+  .handoff-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .status-item {
-    min-height: 36px;
-    padding: 6px 8px;
   }
 
   .status-item strong {
