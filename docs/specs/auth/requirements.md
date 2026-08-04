@@ -27,8 +27,10 @@ or media upload authorization.
 - Authentication SHALL be required only for cloud sync, cloud-backed recovery,
   and other protected cloud features.
 - Magic Link SHALL NOT be part of the V1 provider surface.
-- V1 SHALL use an ordinary email/password account. Google OAuth remains a
-  deferred provider option behind the same adapter boundary.
+- V1 SHALL support ordinary email/password accounts, password reset, Google
+  OAuth, and Facebook OAuth behind the same adapter boundary.
+- Magic Link and LINE Login remain deferred. LINE Login SHALL NOT appear in
+  the V1 UI until its custom OAuth/OIDC provider is configured and tested.
 - Anonymous cloud accounts, shared ledgers, organization accounts, and
   multi-user collaboration remain out of scope.
 - Provider-specific code SHALL stay behind an auth adapter so changing the
@@ -58,6 +60,15 @@ stop cloud writes.
 WHEN authentication fails or the provider is unavailable
 THE SYSTEM SHALL keep the local workspace usable and show an actionable error
 without presenting the workspace as synced.
+
+WHEN a user forgets an email/password account password
+THE SYSTEM SHALL send a password-reset link and require a new password before
+the account can sign in again.
+
+WHEN a user chooses Google or Facebook sign-in
+THE SYSTEM SHALL complete the provider redirect, validate the resulting
+Supabase session, and apply the same local-data handoff rule as email/password
+sign-in.
 
 WHEN the provider is changed
 THE SYSTEM SHALL preserve the same user-owned ledger boundary and must not
