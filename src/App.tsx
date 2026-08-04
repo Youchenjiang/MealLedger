@@ -1158,15 +1158,7 @@ function AuthenticatedApp() {
     setLocation({ route: item.route, params: {} });
   };
 
-  if (authState === "loading" && !authMessage) {
-    return <AuthLoadingShell />;
-  }
-
-  if (authState !== "signed-in" && isLocalDevelopmentMode) {
-    return <SignedOutShell authState={authState} authMessage={authMessage} configurationError={configurationError} onSignIn={signIn} />;
-  }
-
-  if (onboardingOpen || (!onboardingCompleted && accounts.length === 0)) {
+  if (onboardingOpen) {
     return (
       <OnboardingPage
         onComplete={() => { setOnboardingCompleted(true); setOnboardingOpen(false); }}
@@ -1405,64 +1397,6 @@ function OnboardingActions({ onComplete }: Readonly<{ onComplete: () => void }>)
       <button className="primary-action" type="submit">Create account</button>
       <button className="quiet-action" type="button" onClick={onComplete}>Browse workspace</button>
     </div>
-  );
-}
-
-function AuthLoadingShell() {
-  return (
-    <main className="signed-out-shell">
-      <section className="signed-out-panel" aria-live="polite">
-        <Brand caption="Personal finance records" large />
-        <p className="eyebrow">MealLedger</p>
-        <h1>Checking your workspace session...</h1>
-      </section>
-    </main>
-  );
-}
-
-function SignedOutShell({ authState, authMessage, configurationError, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; configurationError: boolean; onSignIn: (email?: string, password?: string) => Promise<void> }>) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  let authControl: React.ReactNode = null;
-
-  if (!configurationError && isLocalDevelopmentMode) {
-    authControl = (
-      <button className="primary-action" type="button" onClick={() => { onSignIn().catch(() => undefined); }}>
-        <LogIn size={18} aria-hidden="true" />
-        Open workspace
-      </button>
-    );
-  } else if (!configurationError) {
-    authControl = (
-      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email, password).catch(() => undefined); }}>
-        <label htmlFor="auth-email">Email</label>
-        <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
-        <label htmlFor="auth-password">Password</label>
-        <input id="auth-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-        <button className="primary-action" type="submit" disabled={authState === "loading"}>
-          <LogIn size={18} aria-hidden="true" />
-          {authState === "loading" ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
-    );
-  }
-
-  return (
-    <main className="signed-out-shell">
-      <section className="signed-out-panel">
-        <Brand caption="Personal finance records" large />
-        <div>
-          <p className="eyebrow">MealLedger</p>
-          <h1>Track spending first, attach meals when useful.</h1>
-          <p className="lede">
-            Start with ledger records, keep scans and photos separate, and review every draft before
-            a later ledger workflow writes it.
-          </p>
-        </div>
-        {authControl}
-        {authMessage ? <p className="auth-message" aria-live={authState === "auth-error" ? "assertive" : "polite"}>{authMessage}</p> : null}
-      </section>
-    </main>
   );
 }
 
