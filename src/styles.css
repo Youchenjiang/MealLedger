@@ -997,6 +997,43 @@ h2 {
   line-height: 1.4;
 }
 
+.settings-page {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #ddd6ca;
+  border-radius: 8px;
+  background: #ece6dc;
+}
+
+.settings-tab {
+  flex: 1 1 180px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  color: #4c4740;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.settings-tab.active,
+.settings-tab:hover,
+.settings-tab:focus-visible {
+  color: #173f36;
+  background: #d8e5de;
+  outline: none;
+}
+
 .report-list {
   display: grid;
   gap: 10px;
