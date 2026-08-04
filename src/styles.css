@@ -961,6 +961,11 @@ h2 {
   white-space: nowrap;
 }
 
+.export-actions .primary-action {
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .account-page {
   width: min(640px, 100%);
   margin-inline: auto;
