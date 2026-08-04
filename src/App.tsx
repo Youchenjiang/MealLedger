@@ -699,13 +699,14 @@ function buildStatusItems({
   firstUploadError?: string;
   recordCount: number;
 }>): StatusItem[] {
-  const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
+  const signedInCloudAccount = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
+  const cloudSyncEnabled = signedInCloudAccount && cloudDataOwnerMatches;
   const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
   const syncItem = syncStatusItem({
       authState,
       userId,
       enabled: cloudSyncEnabled,
-      blocked: cloudSyncEnabled && !cloudDataOwnerMatches,
+      blocked: signedInCloudAccount && !cloudDataOwnerMatches,
       online: isOnline,
       pendingCount: cloudSyncQueue.filter((item) => item.state !== "synced").length,
       conflictCount: cloudSyncQueue.filter((item) => item.state === "conflict").length,
