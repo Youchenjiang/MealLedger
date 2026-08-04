@@ -47,7 +47,7 @@ import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChang
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 
 const navItems: NavItem[] = [
-  { route: "overview", label: "Overview", path: "/overview", icon: Home },
+  { route: "overview", label: "Overview", path: "/", icon: Home },
   { route: "ledger", label: "Ledger", path: "/ledger", icon: Banknote },
   { route: "capture", label: "Capture", path: "/capture", icon: Camera },
   { route: "settings", label: "Settings", path: "/settings", icon: Settings },
@@ -786,6 +786,10 @@ function WorkspaceHeader({ route }: Readonly<{ route: AppRoute }>) {
 }
 
 function routeFromLocation(): AppLocation {
+  if (window.location.pathname === "/overview") {
+    window.history.replaceState(null, "", "/");
+  }
+
   const segments = window.location.pathname
     .split("/")
     .filter(Boolean)
