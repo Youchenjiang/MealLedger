@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import type { OAuthProvider } from "./auth/authActions";
+import googleG from "./assets/google-g.svg";
+import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
@@ -77,6 +80,7 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["capture"], route: "capture" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
+  { segments: ["account"], route: "account" },
 ];
 
 function navItemFor(route: AppRoute): NavItem {
@@ -543,6 +547,21 @@ function PrimaryNav({ items, route, reviewCount, navigate, className = "nav-list
 }
 
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
+type HandoffCounts = { accounts: number; records: number; drafts: number; meals: number; media: number };
+type AccountPageProps = Readonly<{
+  authState: AuthState;
+  authMessage: string;
+  cloudDataOwnerMatches: boolean;
+  handoffCounts: HandoffCounts;
+  storageStatus: Pick<StatusItem, "label" | "detail" | "tone">;
+  onSignIn: (email?: string, password?: string) => Promise<void>;
+  onSignUp: (email?: string, password?: string) => Promise<void>;
+  onRequestPasswordReset: (email?: string) => Promise<void>;
+  onUpdatePassword: (password?: string) => Promise<void>;
+  onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  onClaimLocalWorkspace: () => void;
+  onSignOut: () => Promise<void>;
+}>;
 
 function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspace: boolean): StatusItem {
   if (!online) {
@@ -854,7 +873,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, userId, message: authMessage, configurationError, signIn, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -1246,6 +1265,14 @@ function AuthenticatedApp() {
           userId,
           authMessage,
           cloudDataOwnerMatches,
+          storageStatus: statusItems[0],
+          handoffCounts: {
+            accounts: accounts.length,
+            records: records.length,
+            drafts: drafts.length,
+            meals: meals.length,
+            media: uploadQueue.length,
+          },
           drafts,
           setDrafts,
           draftToEdit,
@@ -1261,6 +1288,10 @@ function AuthenticatedApp() {
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
           onSignIn: signIn,
+          onSignUp: signUp,
+          onRequestPasswordReset: requestPasswordReset,
+          onUpdatePassword: updatePassword,
+          onSignInWithOAuth: signInWithOAuth,
           onClaimLocalWorkspace: claimLocalWorkspace,
           onSignOut: signOut,
           onSaveMeal: (meal) => setMeals((current) => [...current, meal]),
@@ -1439,6 +1470,8 @@ type RouteRenderContext = {
   userId: string;
   authMessage: string;
   cloudDataOwnerMatches: boolean;
+  storageStatus: Pick<StatusItem, "label" | "detail" | "tone">;
+  handoffCounts: HandoffCounts;
   drafts: TransactionDraft[];
   setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>;
   draftToEdit: TransactionDraft | null;
@@ -1454,6 +1487,10 @@ type RouteRenderContext = {
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
   onSignIn: (email?: string, password?: string) => Promise<void>;
+  onSignUp: (email?: string, password?: string) => Promise<void>;
+  onRequestPasswordReset: (email?: string) => Promise<void>;
+  onUpdatePassword: (password?: string) => Promise<void>;
+  onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
   onSaveMeal: (meal: MealEntry) => void;
@@ -1472,6 +1509,8 @@ function renderRoute({
   userId,
   authMessage,
   cloudDataOwnerMatches,
+  storageStatus,
+  handoffCounts,
   drafts,
   setDrafts,
   draftToEdit,
@@ -1487,6 +1526,10 @@ function renderRoute({
   navigate,
   onReopenOnboarding,
   onSignIn,
+  onSignUp,
+  onRequestPasswordReset,
+  onUpdatePassword,
+  onSignInWithOAuth,
   onClaimLocalWorkspace,
   onSignOut,
   onSaveMeal,
@@ -1609,13 +1652,40 @@ function renderRoute({
           onClearUploads={onClearUploads}
         />
       );
+    case "account":
+      return (
+        <AccountPage
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
+        />
+      );
     case "settings":
       return (
         <SettingsPage
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
           accounts={accounts}
           records={records}
-          onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
@@ -1633,13 +1703,6 @@ function renderRoute({
             setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
             return true;
           }}
-          onReopenOnboarding={onReopenOnboarding}
-          authState={authState}
-          authMessage={authMessage}
-          cloudDataOwnerMatches={cloudDataOwnerMatches}
-          onSignIn={onSignIn}
-          onClaimLocalWorkspace={onClaimLocalWorkspace}
-          onSignOut={onSignOut}
         />
       );
     default:
@@ -4049,20 +4112,11 @@ function AccountSetupPanel({
   );
 }
 
-function SettingsPage({ accounts, records, authState, authMessage, cloudDataOwnerMatches, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{
+function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onReopenOnboarding }: Readonly<{
   accounts: LocalAccount[];
-  records: LocalLedgerRecord[];
-  authState: AuthState;
-  authMessage: string;
-  cloudDataOwnerMatches: boolean;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
-  onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
   onReopenOnboarding: () => void;
-  onSignIn: (email?: string, password?: string) => Promise<void>;
-  onClaimLocalWorkspace: () => void;
-  onSignOut: () => Promise<void>;
 }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
@@ -4097,86 +4151,164 @@ function SettingsPage({ accounts, records, authState, authMessage, cloudDataOwne
   };
 
   return (
-    <section className="content-grid">
-      <AccountSetupPanel
-        accounts={accounts}
-        accountName={accountName}
-        accountCurrency={accountCurrency}
-        accountType={accountType}
-        allowNegativeBalance={allowNegativeBalance}
-        balanceMode={balanceMode}
-        balance={balance}
-        balanceDate={balanceDate}
-        accountError={accountError}
-        onAccountNameChange={setAccountName}
-        onAccountCurrencyChange={setAccountCurrency}
-        onAccountTypeChange={setAccountType}
-        onAllowNegativeBalanceChange={setAllowNegativeBalance}
-        onBalanceModeChange={setBalanceMode}
-        onBalanceChange={setBalance}
-        onBalanceDateChange={setBalanceDate}
-        onReopenOnboarding={onReopenOnboarding}
-        onSubmit={handleAccountSubmit}
-      />
-      <AccountSyncPanel authState={authState} authMessage={authMessage} cloudDataOwnerMatches={cloudDataOwnerMatches} onSignIn={onSignIn} onClaimLocalWorkspace={onClaimLocalWorkspace} onSignOut={onSignOut} />
-      <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+    <AccountSetupPanel
+      accounts={accounts}
+      accountName={accountName}
+      accountCurrency={accountCurrency}
+      accountType={accountType}
+      allowNegativeBalance={allowNegativeBalance}
+      balanceMode={balanceMode}
+      balance={balance}
+      balanceDate={balanceDate}
+      accountError={accountError}
+      onAccountNameChange={setAccountName}
+      onAccountCurrencyChange={setAccountCurrency}
+      onAccountTypeChange={setAccountType}
+      onAllowNegativeBalanceChange={setAllowNegativeBalance}
+      onBalanceModeChange={setBalanceMode}
+      onBalanceChange={setBalance}
+      onBalanceDateChange={setBalanceDate}
+      onReopenOnboarding={onReopenOnboarding}
+      onSubmit={handleAccountSubmit}
+    />
+  );
+}
+
+type SettingsPageProps = AccountPageProps & {
+  accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
+  onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
+  onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
+};
+
+function SettingsPage({
+  authState,
+  authMessage,
+  cloudDataOwnerMatches,
+  handoffCounts,
+  storageStatus,
+  onSignIn,
+  onSignUp,
+  onRequestPasswordReset,
+  onUpdatePassword,
+  onSignInWithOAuth,
+  onClaimLocalWorkspace,
+  onSignOut,
+  accounts,
+  records,
+  onImportRecord,
+  onMergeImportDraft,
+}: Readonly<SettingsPageProps>) {
+  const [section, setSection] = useState<"account" | "portability">("account");
+
+  return (
+    <section className="settings-page">
+      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button className={`settings-tab ${section === "account" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "account"} onClick={() => setSection("account")}>Account</button>
+        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
+      </div>
+      {section === "account" ? (
+        <AccountPage
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
+        />
+      ) : (
+        <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+      )}
     </section>
   );
 }
 
-function authenticationStatusLabel(isLocalPreview: boolean, isSignedIn: boolean): string {
-  if (isLocalPreview) return "Local preview mode";
-  return isSignedIn ? "Cloud account verified" : "Local-only until an account is verified";
-}
-
-function AccountSyncPanel({ authState, authMessage, cloudDataOwnerMatches, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{ authState: AuthState; authMessage: string; cloudDataOwnerMatches: boolean; onSignIn: (email?: string, password?: string) => Promise<void>; onClaimLocalWorkspace: () => void; onSignOut: () => Promise<void> }>) {
+function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, onSignIn, onSignUp, onRequestPasswordReset, onSignInWithOAuth, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
-  const isLocalPreview = isLocalDevelopmentMode;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const handleSignIn = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSignIn(email, password).catch(() => undefined);
+  };
+
   return (
-    <Panel title="Account and sync" eyebrow="Settings">
-      <dl className="settings-list">
-        <div>
-          <dt>Authentication</dt>
-          <dd>{authenticationStatusLabel(isLocalPreview, isSignedIn)}</dd>
-        </div>
-        <div>
-          <dt>Storage</dt>
-          <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
-        </div>
-      </dl>
-      {isLocalPreview ? <p className="field-help">Cloud sync is disabled in this local preview. Configure Supabase to test a real account.</p> : null}
-      {!isSignedIn && isSupabaseConfigured && !isLocalPreview ? (
-        <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email, password).catch(() => undefined); }}>
-          <label htmlFor="cloud-email">Cloud email</label>
-          <input id="cloud-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
-          <label htmlFor="cloud-password">Cloud password</label>
-          <input id="cloud-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-          <button className="primary-action align-start" type="submit" disabled={authState === "loading"}>
-            <LogIn size={18} aria-hidden="true" />
-            {authState === "loading" ? "Signing in..." : "Sign in to enable cloud sync"}
-          </button>
-          {authMessage ? <p className="auth-message" role={authState === "auth-error" ? "alert" : undefined}>{authMessage}</p> : null}
-        </form>
-      ) : null}
-      {isSignedIn && !cloudDataOwnerMatches ? (
-        <div className="auth-form">
-          <p className="field-help">Local records are still owned by this device. Confirm once to associate them with this signed-in cloud account.</p>
-          <button className="primary-action align-start" type="button" onClick={onClaimLocalWorkspace}>
-            <Cloud size={18} aria-hidden="true" />
-            Use this cloud account for local data
-          </button>
-        </div>
-      ) : null}
-      {isSignedIn ? (
-        <button className="secondary-action align-start" type="button" onClick={() => { onSignOut().catch(() => undefined); }}>
-          <LogOut size={18} aria-hidden="true" />
-          Sign out
-        </button>
-      ) : null}
-    </Panel>
+    <div className="account-page">
+      <Panel title="Account settings" eyebrow="User account">
+        {!isSignedIn ? (
+          isLocalDevelopmentMode ? (
+            <p className="field-help">Cloud authentication is unavailable in this local preview.</p>
+          ) : (
+            <form className="auth-form account-page-form" onSubmit={handleSignIn}>
+              <label htmlFor="account-email">Email</label>
+              <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <div className="auth-password-row">
+                <label htmlFor="account-password">Password</label>
+                <button className="quiet-action auth-forgot-action" type="button" onClick={() => onRequestPasswordReset(email).catch(() => undefined)}>Forgot password?</button>
+              </div>
+              <input id="account-password" type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+                <LogIn size={18} aria-hidden="true" />
+                {authState === "loading" ? "Signing in..." : "Sign in"}
+              </button>
+              <div className="auth-helper-actions">
+                <button className="quiet-action" type="button" onClick={() => onSignUp(email, password).catch(() => undefined)}>Create an account</button>
+              </div>
+              <p className="auth-divider">or continue with</p>
+              <div className="auth-provider-actions">
+                <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
+                  <img className="auth-provider-mark" src={googleG} alt="" />
+                  Continue with Google
+                </button>
+                <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
+                  <img className="auth-provider-mark" src={facebookF} alt="" />
+                  Continue with Facebook
+                </button>
+              </div>
+              {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+            </form>
+          )
+        ) : !cloudDataOwnerMatches ? (
+          <div className="auth-form account-page-form">
+            <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
+            <dl className="handoff-list" aria-label="Local data handoff summary">
+              <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
+              <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
+              <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
+              <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
+              <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
+            </dl>
+            <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
+              <Cloud size={18} aria-hidden="true" />
+              Confirm cloud handoff
+            </button>
+            <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+              <LogOut size={18} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <div className="auth-form account-page-form">
+            <p className="field-help">Cloud sync is enabled for this workspace.</p>
+            <output className={`account-storage-status ${storageStatus.tone}`} aria-live="polite">
+              <strong>{storageStatus.label}</strong>
+              <span>{storageStatus.detail}</span>
+            </output>
+            <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+              <LogOut size={18} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
+        )}
+      </Panel>
+    </div>
   );
 }
 
@@ -4422,6 +4554,8 @@ function routeTitle(route: AppRoute) {
       return "Capture";
     case "settings":
       return "Settings";
+    case "account":
+      return "Account";
     default:
       return "Unknown route";
   }
