@@ -53,6 +53,21 @@ supabase secrets set R2_BUCKET="meal-ledger-media"
 supabase secrets set R2_PUBLIC_BASE_URL="https://media.example.com"
 ```
 
+## Authentication
+
+Local email/password, Google, and Facebook sign-in runs against the linked
+non-production Supabase Auth environment. Start the local review server with:
+
+```sh
+npm run dev:5200
+```
+
+Password reset and provider callbacks return to
+`http://127.0.0.1:5200/settings`. Creating the OAuth clients, adding redirect
+URLs, and entering credentials in Supabase Auth follows the [Auth provider
+setup](../specs/auth/provider-setup.md) guide. Keep provider client secrets out
+of Vite environment files.
+
 ## Cloudflare R2
 
 1. Create a bucket, for example `meal-ledger-media`.

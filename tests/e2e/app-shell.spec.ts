@@ -15,16 +15,12 @@ function collectBrowserErrors(page: Page) {
 
 async function openWorkspace(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
-  const skipSetup = page.getByRole("button", { name: "Browse workspace" });
-  if (await skipSetup.isVisible()) {
-    await skipSetup.click();
-  }
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
 }
 
 async function addAccount(page: Page, name: string) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("tab", { name: "Accounts", exact: true }).click();
   await page.getByLabel("Account name").fill(name);
   await page.getByRole("button", { name: "Add account" }).click();
   await expect(page.getByLabel("Available accounts")).toContainText(name);
@@ -77,6 +73,31 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
   expect(errors).toEqual([]);
 });
 
+test("opens the account page with provider sign-in actions", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Account", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account settings", exact: true })).toBeVisible();
+  expect(page.url()).toMatch(/\/settings$/);
+  const emailInput = page.getByLabel("Email", { exact: true });
+  if (await emailInput.count()) {
+    await expect(emailInput).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue with Google", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue with Facebook", exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByText("Cloud authentication is unavailable in this local preview.", { exact: false })).toBeVisible();
+  }
+  await expectNoHorizontalOverflow(page);
+
+  expect(errors).toEqual([]);
+});
+
 test("captures a meal with multiple photos without a ledger write", async ({ page }) => {
   const errors = collectBrowserErrors(page);
 
@@ -120,7 +141,8 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
 
   await expect(page.getByText("1 scan draft saved locally for review.")).toBeVisible();
   await expect(page.getByText("invoice.jpg")).toBeVisible();
-  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("button", { name: /^Ledger/ }).click();
+  await expect(page.getByRole("button", { name: /^Ledger/ }).locator(".nav-badge")).toHaveText("1");
   await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -136,39 +158,15 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("keeps account option controls compact and aligned", async ({ page }) => {
+test("keeps the account page compact and aligned on mobile", async ({ page }) => {
   const errors = collectBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  await page.goto("/");
-  await page.getByRole("button", { name: "Open workspace" }).click();
-  const onboardingControls = await page.locator(".onboarding-form input[type='checkbox'], .onboarding-form input[type='radio']").evaluateAll((elements) =>
-    elements.map((element) => {
-      const box = element.getBoundingClientRect();
-      return { width: box.width, height: box.height };
-    }),
-  );
-
-  expect(onboardingControls).toHaveLength(3);
-  for (const control of onboardingControls) {
-    expect(control.width).toBeLessThanOrEqual(20);
-    expect(control.height).toBeLessThanOrEqual(20);
-  }
-
-  await page.getByRole("button", { name: "Browse workspace" }).click();
+  await openWorkspace(page);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const settingsControls = await page.locator(".draft-form input[type='checkbox'], .draft-form input[type='radio']").evaluateAll((elements) =>
-    elements.map((element) => {
-      const box = element.getBoundingClientRect();
-      return { width: box.width, height: box.height };
-    }),
-  );
-
-  expect(settingsControls).toHaveLength(3);
-  for (const control of settingsControls) {
-    expect(control.width).toBeLessThanOrEqual(20);
-    expect(control.height).toBeLessThanOrEqual(20);
-  }
+  await page.getByRole("tab", { name: "Account", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account settings", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -240,9 +238,10 @@ test("keeps compact navigation stable near its breakpoint", async ({ page }) => 
   await page.setViewportSize({ width: 720, height: 900 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("tab", { name: "Accounts", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ledger accounts", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });

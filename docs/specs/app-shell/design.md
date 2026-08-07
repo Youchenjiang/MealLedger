@@ -17,9 +17,9 @@ Primary navigation:
 
 Mobile should use a bottom navigation or compact app rail. Desktop can use a sidebar. The same route names should work in both layouts.
 
-Suggested route paths:
+Route paths:
 
-- `/` or `/overview`
+- `/` (Overview; legacy `/overview` redirects here)
 - `/ledger`
 - `/capture`
 - `/settings`

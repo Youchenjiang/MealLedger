@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
 import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
-import { signInWithPassword } from "./authActions";
+import { requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, updatePassword, type OAuthProvider } from "./authActions";
 
 type AuthContextValue = {
   state: AuthState;
@@ -11,6 +11,10 @@ type AuthContextValue = {
   message: string;
   configurationError: boolean;
   signIn: (email?: string, password?: string) => Promise<void>;
+  signUp: (email?: string, password?: string) => Promise<void>;
+  requestPasswordReset: (email?: string) => Promise<void>;
+  updatePassword: (password?: string) => Promise<void>;
+  signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -45,6 +49,14 @@ function applySession(
   setState(session ? "signed-in" : "signed-out");
 }
 
+function authRedirect(): string {
+  return `${window.location.origin}/settings`;
+}
+
+function clearAuthCallbackHash(): void {
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [state, setState] = useState<AuthState>(initialAuthState);
   const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
@@ -56,13 +68,32 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       return () => undefined;
     }
 
+    const client = supabase;
     let mounted = true;
-    const handleSession = (session: SessionLike): void => {
+    const handleSession = (event: string, session: SessionLike): void => {
       if (!mounted) return;
+      if (event === "PASSWORD_RECOVERY" && session) {
+        setUserId(session.user?.id ?? "");
+        setState("password-recovery");
+        return;
+      }
       applySession(session, setUserId, setState);
     };
 
-    supabase.auth.getSession().then(({ data, error }) => {
+    const restoreSession = async (): Promise<void> => {
+      const callback = await restoreOAuthCallbackSession(client, window.location.href);
+      if (callback.handled) {
+        clearAuthCallbackHash();
+        if (callback.result.ok) {
+          handleSession("SIGNED_IN", callback.result.session);
+        } else if (mounted) {
+          setState("auth-error");
+          setMessage(callback.result.message);
+        }
+        return;
+      }
+
+      const { data, error } = await client.auth.getSession();
       if (error) {
         if (mounted) {
           setState("auth-error");
@@ -70,11 +101,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         }
         return;
       }
-      handleSession(data.session);
+      handleSession("INITIAL_SESSION", data.session);
+    };
+    restoreSession().catch((error: unknown) => {
+      if (mounted) {
+        setState("auth-error");
+        setMessage(errorMessage(error));
+      }
     });
 
-    const authStateChange = supabase.auth.onAuthStateChange((_event, session) => {
-      handleSession(session);
+    const authStateChange = client.auth.onAuthStateChange((event, session) => {
+      handleSession(event, session);
     });
 
     const cleanupAuthSubscription = (): void => {
@@ -115,7 +152,78 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return;
       }
 
+      applySession(result.session, setUserId, setState);
       setMessage("");
+    },
+    signUp: async (requestedEmail = "", password = "") => {
+      const normalizedEmail = requestedEmail.trim();
+      setEmail(normalizedEmail);
+      setMessage("");
+
+      if (isLocalDevelopmentMode) {
+        setUserId("local-user");
+        setState("signed-in");
+        return;
+      }
+
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+
+      setState("loading");
+      const result = await signUpWithPassword(supabase, normalizedEmail, password);
+      if (!result.ok) {
+        setState("auth-error");
+        setMessage(result.message);
+        return;
+      }
+
+      applySession(result.session, setUserId, setState);
+      setMessage("");
+    },
+    requestPasswordReset: async (requestedEmail = "") => {
+      const normalizedEmail = requestedEmail.trim();
+      setEmail(normalizedEmail);
+      setMessage("");
+      if (isLocalDevelopmentMode) {
+        setMessage("Password reset is available after cloud authentication is configured.");
+        return;
+      }
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+      const result = await requestPasswordReset(supabase, normalizedEmail, authRedirect());
+      setState(result.ok ? "signed-out" : "auth-error");
+      setMessage(result.message);
+    },
+    updatePassword: async (password = "") => {
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+      const result = await updatePassword(supabase, password);
+      setState(result.ok ? "signed-in" : "password-recovery");
+      setMessage(result.message);
+    },
+    signInWithOAuth: async (provider) => {
+      setMessage("");
+      if (isLocalDevelopmentMode) {
+        setMessage(`${provider} sign-in is available after cloud authentication is configured.`);
+        return;
+      }
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+      const result = await signInWithOAuth(supabase, provider, authRedirect());
+      setState(result.ok ? "loading" : "auth-error");
+      setMessage(result.message);
     },
     signOut: async () => {
       if (isLocalDevelopmentMode) {

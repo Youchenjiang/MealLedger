@@ -9,12 +9,12 @@ import {
   CloudOff,
   Home,
   ImagePlus,
+  KeyRound,
   LogIn,
   LogOut,
   Plus,
   ReceiptText,
   Settings,
-  ShieldCheck,
   Upload,
   Wifi,
   WifiOff,
@@ -22,6 +22,9 @@ import {
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import type { OAuthProvider } from "./auth/authActions";
+import googleG from "./assets/google-g.svg";
+import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
@@ -47,11 +50,13 @@ import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChang
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 
 const navItems: NavItem[] = [
-  { route: "overview", label: "Overview", path: "/overview", icon: Home },
+  { route: "overview", label: "Overview", path: "/", icon: Home },
   { route: "ledger", label: "Ledger", path: "/ledger", icon: Banknote },
   { route: "capture", label: "Capture", path: "/capture", icon: Camera },
   { route: "settings", label: "Settings", path: "/settings", icon: Settings },
 ];
+const primaryNavItems = navItems.filter((item) => item.route !== "settings");
+const settingsNavItems = navItems.filter((item) => item.route === "settings");
 
 type RouteDefinition = {
   segments: string[];
@@ -512,10 +517,16 @@ function readStoredDrafts(): TransactionDraft[] {
   }
 }
 
-function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
+function PrimaryNav({ items, route, reviewCount, navigate, className = "nav-list" }: Readonly<{
+  items: NavItem[];
+  route: AppRoute;
+  reviewCount: number;
+  navigate: (item: NavItem) => void;
+  className?: string;
+}>) {
   return (
-    <nav className="nav-list">
-      {navItems.map((item) => {
+    <nav className={className}>
+      {items.map((item) => {
         const Icon = item.icon;
         return (
           <button
@@ -527,6 +538,12 @@ function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (
           >
             <Icon size={18} aria-hidden="true" />
             <span>{item.label}</span>
+            {item.route === "ledger" && reviewCount > 0 ? (
+              <>
+                <span className="nav-badge" aria-hidden="true">{reviewCount}</span>
+                <span className="visually-hidden">, {reviewCount} item{reviewCount === 1 ? "" : "s"} to review</span>
+              </>
+            ) : null}
           </button>
         );
       })}
@@ -534,7 +551,22 @@ function PrimaryNav({ route, navigate }: Readonly<{ route: AppRoute; navigate: (
   );
 }
 
-type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
+type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon; hideInShell?: boolean };
+type HandoffCounts = { accounts: number; records: number; drafts: number; meals: number; media: number };
+type AccountPageProps = Readonly<{
+  authState: AuthState;
+  authMessage: string;
+  cloudDataOwnerMatches: boolean;
+  handoffCounts: HandoffCounts;
+  storageStatus: Pick<StatusItem, "label" | "detail" | "tone">;
+  onSignIn: (email?: string, password?: string) => Promise<void>;
+  onSignUp: (email?: string, password?: string) => Promise<void>;
+  onRequestPasswordReset: (email?: string) => Promise<void>;
+  onUpdatePassword: (password?: string) => Promise<void>;
+  onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  onClaimLocalWorkspace: () => void;
+  onSignOut: () => Promise<void>;
+}>;
 
 function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspace: boolean): StatusItem {
   if (!online) {
@@ -542,11 +574,11 @@ function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspac
   }
 
   if (localWorkspace || authState === "signed-out") {
-    return { label: "Local-only", detail: "This workspace keeps changes on this device until an account is verified.", icon: CloudOff, tone: "neutral" };
+    return { label: "Local-only", detail: "This workspace keeps changes on this device until an account is verified.", icon: CloudOff, tone: "neutral", hideInShell: true };
   }
 
   if (authState === "auth-error") {
-    return { label: "Local-only", detail: "Cloud authentication is unavailable. Changes remain on this device.", icon: CloudOff, tone: "warn" };
+    return { label: "Local-only", detail: "Cloud authentication is unavailable. Changes remain on this device.", icon: CloudOff, tone: "warn", hideInShell: true };
   }
 
   return { label: "Checking cloud connection", detail: "The workspace is checking whether cloud sync is available.", icon: Wifi, tone: "neutral" };
@@ -583,7 +615,7 @@ function enabledSyncStatus({
   if (unavailableUploadCount > 0) {
     return { label: "Media needs reselect", detail: `${countLabel(unavailableUploadCount, "image")} has metadata only; select the original file again to upload its bytes.`, icon: CloudOff, tone: "warn" };
   }
-  return { label: "Cloud sync ready", detail: "Cloud records and media have no pending writes.", icon: Wifi, tone: "neutral" };
+  return { label: "Cloud sync ready", detail: "Cloud records and media have no pending writes.", icon: Wifi, tone: "neutral", hideInShell: true };
 }
 
 function syncStatusItem({
@@ -658,6 +690,7 @@ function draftReviewStatus(draftCount: number): StatusItem {
     detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
     icon: draftCount > 0 ? AlertCircle : CheckCircle2,
     tone: draftCount > 0 ? "warn" : "good",
+    hideInShell: true,
   };
 }
 
@@ -667,9 +700,9 @@ function statusWhen(condition: boolean, item: StatusItem): StatusItem[] {
 
 function recordStorageStatus(recordCount: number, cloudSyncEnabled: boolean): StatusItem {
   if (cloudSyncEnabled) {
-    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good" };
+    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good", hideInShell: true };
   }
-  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" };
+  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn", hideInShell: true };
 }
 
 function buildStatusItems({
@@ -699,13 +732,14 @@ function buildStatusItems({
   firstUploadError?: string;
   recordCount: number;
 }>): StatusItem[] {
-  const cloudSyncEnabled = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
+  const signedInCloudAccount = isSupabaseConfigured && authState === "signed-in" && userId !== "local-user";
+  const cloudSyncEnabled = signedInCloudAccount && cloudDataOwnerMatches;
   const errorItems = cloudSyncQueue.filter((item) => item.state === "retryable-error" || item.state === "failed");
   const syncItem = syncStatusItem({
       authState,
       userId,
       enabled: cloudSyncEnabled,
-      blocked: cloudSyncEnabled && !cloudDataOwnerMatches,
+      blocked: signedInCloudAccount && !cloudDataOwnerMatches,
       online: isOnline,
       pendingCount: cloudSyncQueue.filter((item) => item.state !== "synced").length,
       conflictCount: cloudSyncQueue.filter((item) => item.state === "conflict").length,
@@ -721,7 +755,7 @@ function buildStatusItems({
     syncItem,
     draftReviewStatus(draftCount),
     ...statusWhen(persistenceWarning, { label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" }),
-    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn", hideInShell: true }),
     ...statusWhen(uploadCount > 0, { label: `${countLabel(uploadCount, "local image")}`, detail: "The image bytes are saved on this device; cloud image backup is not enabled in this spec.", icon: CloudOff, tone: "warn" }),
     ...statusWhen(uploadErrorCount > 0, { label: `${countLabel(uploadErrorCount, "image")} upload failed`, detail: firstUploadError ? `${firstUploadError}. Select the original file again to retry.` : "Select the original file again to retry.", icon: CloudOff, tone: "danger" }),
     ...statusWhen(unavailableUploadCount > 0, { label: `${countLabel(unavailableUploadCount, "image")} needs reselect`, detail: "Only metadata remains on this device; select the original file again to back up its bytes.", icon: CloudOff, tone: "warn" }),
@@ -729,9 +763,15 @@ function buildStatusItems({
   ];
 }
 
-function StatusStrip({ items }: Readonly<{ items: StatusItem[] }>) {
+function shellStatusItems(items: StatusItem[]): StatusItem[] {
+  return items.filter((item) => !item.hideInShell);
+}
+
+function StatusStrip({ items, compact = false }: Readonly<{ items: StatusItem[]; compact?: boolean }>) {
+  if (items.length === 0) return null;
+
   return (
-    <section className="status-strip" aria-label="Application status">
+    <section className={`status-strip ${compact ? "status-strip-compact" : ""}`} aria-label="Application status">
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -759,20 +799,23 @@ function Brand({ caption, large = false }: Readonly<{ caption: string; large?: b
   );
 }
 
-function Sidebar({ route, navigate }: Readonly<{ route: AppRoute; navigate: (item: NavItem) => void }>) {
+function Sidebar({ route, reviewCount, navigate }: Readonly<{
+  route: AppRoute;
+  reviewCount: number;
+  navigate: (item: NavItem) => void;
+}>) {
   return (
     <aside className="sidebar" aria-label="MealLedger navigation">
       <Brand caption="Personal ledger with optional meal notes" />
-      <PrimaryNav route={route} navigate={navigate} />
-      <div className="storage-note">
-        <ShieldCheck size={18} aria-hidden="true" />
-        <span>Ledger exports stay separate from receipt and meal photos.</span>
+      <div className="sidebar-navigation">
+        <PrimaryNav items={primaryNavItems} route={route} reviewCount={reviewCount} navigate={navigate} />
+        <PrimaryNav items={settingsNavItems} className="sidebar-settings-nav" route={route} reviewCount={reviewCount} navigate={navigate} />
       </div>
     </aside>
   );
 }
 
-function WorkspaceHeader({ route }: Readonly<{ route: AppRoute }>) {
+function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -780,12 +823,17 @@ function WorkspaceHeader({ route }: Readonly<{ route: AppRoute }>) {
           <p className="eyebrow">Personal finance workspace</p>
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
+        <StatusStrip items={statusItems} compact />
       </header>
     </section>
   );
 }
 
 function routeFromLocation(): AppLocation {
+  if (window.location.pathname === "/overview") {
+    window.history.replaceState(null, "", "/");
+  }
+
   const segments = window.location.pathname
     .split("/")
     .filter(Boolean)
@@ -824,7 +872,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, userId, message: authMessage, configurationError, signIn, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -848,6 +896,7 @@ function AuthenticatedApp() {
   const cloudSyncInFlight = useRef(false);
   const route = location.route;
   const draftCount = drafts.length;
+  const reviewCount = draftCount + scans.filter((scan) => scan.state === "temporary" || scan.state === "retained").length;
   const recordCount = records.length;
 
   useEffect(() => {
@@ -1154,15 +1203,7 @@ function AuthenticatedApp() {
     setLocation({ route: item.route, params: {} });
   };
 
-  if (authState === "loading" && !authMessage) {
-    return <AuthLoadingShell />;
-  }
-
-  if (authState !== "signed-in" && isLocalDevelopmentMode) {
-    return <SignedOutShell authState={authState} authMessage={authMessage} configurationError={configurationError} onSignIn={signIn} />;
-  }
-
-  if (onboardingOpen || (!onboardingCompleted && accounts.length === 0)) {
+  if (onboardingOpen) {
     return (
       <OnboardingPage
         onComplete={() => { setOnboardingCompleted(true); setOnboardingOpen(false); }}
@@ -1206,17 +1247,31 @@ function AuthenticatedApp() {
 
   return (
     <main className="app-shell">
-      <Sidebar route={route} navigate={navigate} />
+      <Sidebar
+        route={route}
+        reviewCount={reviewCount}
+        navigate={navigate}
+      />
 
       <section className="workspace">
-        <WorkspaceHeader route={route} />
-        <StatusStrip items={statusItems} />
+        <WorkspaceHeader
+          route={route}
+          statusItems={route !== "settings" ? shellStatusItems(statusItems) : []}
+        />
         {renderRoute({
           route,
           authState,
           userId,
           authMessage,
           cloudDataOwnerMatches,
+          storageStatus: statusItems[0],
+          handoffCounts: {
+            accounts: accounts.length,
+            records: records.length,
+            drafts: drafts.length,
+            meals: meals.length,
+            media: uploadQueue.length,
+          },
           drafts,
           setDrafts,
           draftToEdit,
@@ -1232,6 +1287,10 @@ function AuthenticatedApp() {
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
           onSignIn: signIn,
+          onSignUp: signUp,
+          onRequestPasswordReset: requestPasswordReset,
+          onUpdatePassword: updatePassword,
+          onSignInWithOAuth: signInWithOAuth,
           onClaimLocalWorkspace: claimLocalWorkspace,
           onSignOut: signOut,
           onSaveMeal: (meal) => setMeals((current) => [...current, meal]),
@@ -1404,70 +1463,14 @@ function OnboardingActions({ onComplete }: Readonly<{ onComplete: () => void }>)
   );
 }
 
-function AuthLoadingShell() {
-  return (
-    <main className="signed-out-shell">
-      <section className="signed-out-panel" aria-live="polite">
-        <Brand caption="Personal finance records" large />
-        <p className="eyebrow">MealLedger</p>
-        <h1>Checking your workspace session...</h1>
-      </section>
-    </main>
-  );
-}
-
-function SignedOutShell({ authState, authMessage, configurationError, onSignIn }: Readonly<{ authState: AuthState; authMessage: string; configurationError: boolean; onSignIn: (email?: string, password?: string) => Promise<void> }>) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  let authControl: React.ReactNode = null;
-
-  if (!configurationError && isLocalDevelopmentMode) {
-    authControl = (
-      <button className="primary-action" type="button" onClick={() => { onSignIn().catch(() => undefined); }}>
-        <LogIn size={18} aria-hidden="true" />
-        Open workspace
-      </button>
-    );
-  } else if (!configurationError) {
-    authControl = (
-      <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email, password).catch(() => undefined); }}>
-        <label htmlFor="auth-email">Email</label>
-        <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
-        <label htmlFor="auth-password">Password</label>
-        <input id="auth-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-        <button className="primary-action" type="submit" disabled={authState === "loading"}>
-          <LogIn size={18} aria-hidden="true" />
-          {authState === "loading" ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
-    );
-  }
-
-  return (
-    <main className="signed-out-shell">
-      <section className="signed-out-panel">
-        <Brand caption="Personal finance records" large />
-        <div>
-          <p className="eyebrow">MealLedger</p>
-          <h1>Track spending first, attach meals when useful.</h1>
-          <p className="lede">
-            Start with ledger records, keep scans and photos separate, and review every draft before
-            a later ledger workflow writes it.
-          </p>
-        </div>
-        {authControl}
-        {authMessage ? <p className="auth-message" aria-live={authState === "auth-error" ? "assertive" : "polite"}>{authMessage}</p> : null}
-      </section>
-    </main>
-  );
-}
-
 type RouteRenderContext = {
   route: AppRoute;
   authState: AuthState;
   userId: string;
   authMessage: string;
   cloudDataOwnerMatches: boolean;
+  storageStatus: Pick<StatusItem, "label" | "detail" | "tone">;
+  handoffCounts: HandoffCounts;
   drafts: TransactionDraft[];
   setDrafts: Dispatch<SetStateAction<TransactionDraft[]>>;
   draftToEdit: TransactionDraft | null;
@@ -1483,6 +1486,10 @@ type RouteRenderContext = {
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
   onSignIn: (email?: string, password?: string) => Promise<void>;
+  onSignUp: (email?: string, password?: string) => Promise<void>;
+  onRequestPasswordReset: (email?: string) => Promise<void>;
+  onUpdatePassword: (password?: string) => Promise<void>;
+  onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
   onSaveMeal: (meal: MealEntry) => void;
@@ -1501,6 +1508,8 @@ function renderRoute({
   userId,
   authMessage,
   cloudDataOwnerMatches,
+  storageStatus,
+  handoffCounts,
   drafts,
   setDrafts,
   draftToEdit,
@@ -1516,6 +1525,10 @@ function renderRoute({
   navigate,
   onReopenOnboarding,
   onSignIn,
+  onSignUp,
+  onRequestPasswordReset,
+  onUpdatePassword,
+  onSignInWithOAuth,
   onClaimLocalWorkspace,
   onSignOut,
   onSaveMeal,
@@ -1564,6 +1577,7 @@ function renderRoute({
         <LedgerPage
           records={records}
           drafts={drafts}
+          accounts={accounts}
           navigate={navigate}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onEditDraft={(draft) => {
@@ -1613,6 +1627,9 @@ function renderRoute({
             setRecords((current) => current.map((item) => item.id === id ? result.record : item));
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`)}
+          onReopenOnboarding={onReopenOnboarding}
         />
       );
     case "capture":
@@ -1641,10 +1658,20 @@ function renderRoute({
     case "settings":
       return (
         <SettingsPage
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
           accounts={accounts}
           records={records}
-          onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
@@ -1662,13 +1689,6 @@ function renderRoute({
             setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
             return true;
           }}
-          onReopenOnboarding={onReopenOnboarding}
-          authState={authState}
-          authMessage={authMessage}
-          cloudDataOwnerMatches={cloudDataOwnerMatches}
-          onSignIn={onSignIn}
-          onClaimLocalWorkspace={onClaimLocalWorkspace}
-          onSignOut={onSignOut}
         />
       );
     default:
@@ -1860,6 +1880,7 @@ function ledgerRecordStatusLabel(record: LocalLedgerRecord, isVoided: boolean): 
 function LedgerPage({
   records,
   drafts,
+  accounts,
   navigate,
   onDiscardDraft,
   onEditDraft,
@@ -1867,9 +1888,13 @@ function LedgerPage({
   onUpdateRecord,
   onConvertUnresolved,
   onVoidRecord,
+  onAddAccount,
+  onSaveInitialFunding,
+  onReopenOnboarding,
 }: Readonly<{
   records: LocalLedgerRecord[];
   drafts: TransactionDraft[];
+  accounts: LocalAccount[];
   navigate: (item: NavItem) => void;
   onDiscardDraft: (id: string) => void;
   onEditDraft: (draft: TransactionDraft) => void;
@@ -1877,13 +1902,90 @@ function LedgerPage({
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
   onVoidRecord: (id: string) => void;
+  onAddAccount: (account: LocalAccount) => void;
+  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
+  onReopenOnboarding: () => void;
 }>) {
   const draftCount = drafts.length;
+  const [section, setSection] = useState<"records" | "accounts">("records");
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingUnresolvedId, setEditingUnresolvedId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
   return (
     <div className="route-stack">
+      <div className="settings-tabs ledger-tabs" role="tablist" aria-label="Ledger sections">
+        <button className={`settings-tab ${section === "records" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "records"} onClick={() => setSection("records")}>Records</button>
+        <button className={`settings-tab ${section === "accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "accounts"} onClick={() => setSection("accounts")}>Accounts</button>
+      </div>
+      {section === "accounts" ? (
+        <LedgerAccountsPanel accounts={accounts} onAddAccount={onAddAccount} onSaveInitialFunding={onSaveInitialFunding} onReopenOnboarding={onReopenOnboarding} />
+      ) : (
+        <LedgerRecordsView
+          records={records}
+          drafts={drafts}
+          draftCount={draftCount}
+          draftMessage={draftMessage}
+          editingRecordId={editingRecordId}
+          editingUnresolvedId={editingUnresolvedId}
+          navigate={navigate}
+          onEditDraft={onEditDraft}
+          onConfirmDraft={onConfirmDraft}
+          onDiscardDraft={onDiscardDraft}
+          onUpdateRecord={onUpdateRecord}
+          onConvertUnresolved={onConvertUnresolved}
+          onVoidRecord={onVoidRecord}
+          onBeginEditRecord={setEditingRecordId}
+          onEndEditRecord={() => setEditingRecordId(null)}
+          onBeginUnresolved={setEditingUnresolvedId}
+          onEndUnresolved={() => setEditingUnresolvedId(null)}
+          onReportDraftMessage={setDraftMessage}
+        />
+      )}
+    </div>
+  );
+}
+
+function LedgerRecordsView({
+  records,
+  drafts,
+  draftCount,
+  draftMessage,
+  editingRecordId,
+  editingUnresolvedId,
+  navigate,
+  onEditDraft,
+  onConfirmDraft,
+  onDiscardDraft,
+  onUpdateRecord,
+  onConvertUnresolved,
+  onVoidRecord,
+  onBeginEditRecord,
+  onEndEditRecord,
+  onBeginUnresolved,
+  onEndUnresolved,
+  onReportDraftMessage,
+}: Readonly<{
+  records: LocalLedgerRecord[];
+  drafts: TransactionDraft[];
+  draftCount: number;
+  draftMessage: string;
+  editingRecordId: string | null;
+  editingUnresolvedId: string | null;
+  navigate: (item: NavItem) => void;
+  onEditDraft: (draft: TransactionDraft) => void;
+  onConfirmDraft: (draft: TransactionDraft) => boolean;
+  onDiscardDraft: (id: string) => void;
+  onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
+  onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
+  onVoidRecord: (id: string) => void;
+  onBeginEditRecord: (id: string) => void;
+  onEndEditRecord: () => void;
+  onBeginUnresolved: (id: string) => void;
+  onEndUnresolved: () => void;
+  onReportDraftMessage: (message: string) => void;
+}>) {
+  return (
+    <>
       <section className="content-grid">
         <Panel title="Ledger records" eyebrow="Confirmed records">
           <p className="panel-copy">Manual records are written locally as official ledger records. Cloud status appears in the workspace header.</p>
@@ -1912,14 +2014,14 @@ function LedgerPage({
               record={record}
               isEditing={editingRecordId === record.id}
               isEditingUnresolved={editingUnresolvedId === record.id}
-              onEdit={() => setEditingRecordId(record.id)}
-              onCancelEdit={() => setEditingRecordId(null)}
-              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); setEditingRecordId(null); }}
-              onCompleteDetails={() => setEditingUnresolvedId(record.id)}
-              onCancelDetails={() => setEditingUnresolvedId(null)}
+              onEdit={() => onBeginEditRecord(record.id)}
+              onCancelEdit={onEndEditRecord}
+              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); onEndEditRecord(); }}
+              onCompleteDetails={() => onBeginUnresolved(record.id)}
+              onCancelDetails={onEndUnresolved}
               onConvertDetails={(fields) => {
                 const converted = onConvertUnresolved(record.id, fields);
-                if (converted) setEditingUnresolvedId(null);
+                if (converted) onEndUnresolved();
                 return converted;
               }}
               onUpdate={(patch) => onUpdateRecord(record.id, patch)}
@@ -1938,42 +2040,61 @@ function LedgerPage({
             <span>{draftCount} local draft{draftCount === 1 ? "" : "s"}</span>
           </div>
           {drafts.map((draft) => (
-            <article className="draft-card" key={draft.id}>
-              <div>
-                <strong>{draftDisplayName(draft)}</strong>
-                <span>
-                  {draft.date} · {draft.account}
-                  {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
-                </span>
-              </div>
-              <div className="draft-amount">
-                <strong>
-                  {draft.currency} {draft.amount}
-                </strong>
-                <span>{draft.kind}</span>
-              </div>
-              <div className="record-actions">
-                <button className="secondary-action" type="button" onClick={() => onEditDraft(draft)}>
-                  Continue in Capture
-                </button>
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={() => setDraftMessage(onConfirmDraft(draft) ? "Draft confirmed in the local ledger." : "This draft is incomplete. Continue in Capture to fill the required fields.")}
-                >
-                  Confirm to ledger
-                </button>
-                <button className="text-action danger-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
-                  Discard
-                </button>
-              </div>
-            </article>
+            <LedgerDraftCard
+              key={draft.id}
+              draft={draft}
+              onEditDraft={onEditDraft}
+              onConfirmDraft={onConfirmDraft}
+              onDiscardDraft={onDiscardDraft}
+              onReportDraftMessage={onReportDraftMessage}
+            />
           ))}
         </section>
       ) : null}
-        {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
+      {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
       {records.length === 0 ? <p className="table-empty">No confirmed ledger records yet.</p> : null}
-    </div>
+    </>
+  );
+}
+
+function LedgerDraftCard({ draft, onEditDraft, onConfirmDraft, onDiscardDraft, onReportDraftMessage }: Readonly<{
+  draft: TransactionDraft;
+  onEditDraft: (draft: TransactionDraft) => void;
+  onConfirmDraft: (draft: TransactionDraft) => boolean;
+  onDiscardDraft: (id: string) => void;
+  onReportDraftMessage: (message: string) => void;
+}>) {
+  return (
+    <article className="draft-card">
+      <div>
+        <strong>{draftDisplayName(draft)}</strong>
+        <span>
+          {draft.date} · {draft.account}
+          {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
+        </span>
+      </div>
+      <div className="draft-amount">
+        <strong>
+          {draft.currency} {draft.amount}
+        </strong>
+        <span>{draft.kind}</span>
+      </div>
+      <div className="record-actions">
+        <button className="secondary-action" type="button" onClick={() => onEditDraft(draft)}>
+          Continue in Capture
+        </button>
+        <button
+          className="primary-action"
+          type="button"
+          onClick={() => onReportDraftMessage(onConfirmDraft(draft) ? "Draft confirmed in the local ledger." : "This draft is incomplete. Continue in Capture to fill the required fields.")}
+        >
+          Confirm to ledger
+        </button>
+        <button className="text-action danger-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
+          Discard
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -4028,12 +4149,12 @@ function AccountSetupForm({
   onBalanceChange, onBalanceDateChange, onSubmit,
 }: Readonly<AccountSetupFormProps>) {
   return (
-    <form className="draft-form" noValidate onSubmit={onSubmit}>
+    <form className="draft-form account-setup-form" noValidate onSubmit={onSubmit}>
       <label><span>Account name</span><input required pattern=".*\S.*" value={accountName} onChange={(event) => onAccountNameChange(event.target.value)} placeholder="Daily wallet" /></label>
       <label><span>Currency</span><select value={accountCurrency} onChange={(event) => onAccountCurrencyChange(event.target.value)}><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="USD">USD</option></select></label>
       <label><span>Account type</span><select value={accountType} onChange={(event) => onAccountTypeChange(event.target.value)}><option value="cash">Cash</option><option value="bank">Bank account</option><option value="card">Credit card</option><option value="wallet">Stored-value wallet</option><option value="other">Other</option></select></label>
       <label className="checkbox-row"><input type="checkbox" checked={allowNegativeBalance} onChange={(event) => onAllowNegativeBalanceChange(event.target.checked)} /><span>Allow negative balance</span></label>
-      <fieldset>
+      <fieldset className="starting-balance-fieldset">
         <legend>Starting balance</legend>
         <label className="radio-row"><input type="radio" checked={balanceMode === "zero"} onChange={() => onBalanceModeChange("zero")} /> <span>Start from zero</span></label>
         <label className="radio-row"><input type="radio" checked={balanceMode === "current"} onChange={() => onBalanceModeChange("current")} /> <span>Enter current balance</span></label>
@@ -4051,9 +4172,11 @@ function AccountSetupPanel({
   onBalanceChange, onBalanceDateChange, onReopenOnboarding, onSubmit,
 }: Readonly<AccountSetupPanelProps>) {
   return (
-    <Panel title="Accounts" eyebrow="Local setup">
+    <Panel title="Ledger accounts" eyebrow="Local setup">
       <p className="panel-copy">Create the accounts that manual records may use. Accounts stay in this workspace and sync when cloud sync is enabled.</p>
-      <button className="quiet-action" type="button" onClick={onReopenOnboarding}>Reopen first-account setup</button>
+      <div className="account-setup-actions">
+        <button className="secondary-action align-start" type="button" onClick={onReopenOnboarding}>Open first-account setup</button>
+      </div>
       <AccountSetupForm
         accountName={accountName}
         accountCurrency={accountCurrency}
@@ -4078,20 +4201,11 @@ function AccountSetupPanel({
   );
 }
 
-function SettingsPage({ accounts, records, authState, authMessage, cloudDataOwnerMatches, onAddAccount, onSaveInitialFunding, onImportRecord, onMergeImportDraft, onReopenOnboarding, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{
+function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onReopenOnboarding }: Readonly<{
   accounts: LocalAccount[];
-  records: LocalLedgerRecord[];
-  authState: AuthState;
-  authMessage: string;
-  cloudDataOwnerMatches: boolean;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
-  onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
   onReopenOnboarding: () => void;
-  onSignIn: (email?: string, password?: string) => Promise<void>;
-  onClaimLocalWorkspace: () => void;
-  onSignOut: () => Promise<void>;
 }>) {
   const [accountName, setAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState("TWD");
@@ -4126,86 +4240,191 @@ function SettingsPage({ accounts, records, authState, authMessage, cloudDataOwne
   };
 
   return (
-    <section className="content-grid">
-      <AccountSetupPanel
-        accounts={accounts}
-        accountName={accountName}
-        accountCurrency={accountCurrency}
-        accountType={accountType}
-        allowNegativeBalance={allowNegativeBalance}
-        balanceMode={balanceMode}
-        balance={balance}
-        balanceDate={balanceDate}
-        accountError={accountError}
-        onAccountNameChange={setAccountName}
-        onAccountCurrencyChange={setAccountCurrency}
-        onAccountTypeChange={setAccountType}
-        onAllowNegativeBalanceChange={setAllowNegativeBalance}
-        onBalanceModeChange={setBalanceMode}
-        onBalanceChange={setBalance}
-        onBalanceDateChange={setBalanceDate}
-        onReopenOnboarding={onReopenOnboarding}
-        onSubmit={handleAccountSubmit}
-      />
-      <AccountSyncPanel authState={authState} authMessage={authMessage} cloudDataOwnerMatches={cloudDataOwnerMatches} onSignIn={onSignIn} onClaimLocalWorkspace={onClaimLocalWorkspace} onSignOut={onSignOut} />
-      <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+    <AccountSetupPanel
+      accounts={accounts}
+      accountName={accountName}
+      accountCurrency={accountCurrency}
+      accountType={accountType}
+      allowNegativeBalance={allowNegativeBalance}
+      balanceMode={balanceMode}
+      balance={balance}
+      balanceDate={balanceDate}
+      accountError={accountError}
+      onAccountNameChange={setAccountName}
+      onAccountCurrencyChange={setAccountCurrency}
+      onAccountTypeChange={setAccountType}
+      onAllowNegativeBalanceChange={setAllowNegativeBalance}
+      onBalanceModeChange={setBalanceMode}
+      onBalanceChange={setBalance}
+      onBalanceDateChange={setBalanceDate}
+      onReopenOnboarding={onReopenOnboarding}
+      onSubmit={handleAccountSubmit}
+    />
+  );
+}
+
+type SettingsPageProps = AccountPageProps & {
+  accounts: LocalAccount[];
+  records: LocalLedgerRecord[];
+  onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
+  onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
+};
+
+function SettingsPage({
+  authState,
+  authMessage,
+  cloudDataOwnerMatches,
+  handoffCounts,
+  storageStatus,
+  onSignIn,
+  onSignUp,
+  onRequestPasswordReset,
+  onUpdatePassword,
+  onSignInWithOAuth,
+  onClaimLocalWorkspace,
+  onSignOut,
+  accounts,
+  records,
+  onImportRecord,
+  onMergeImportDraft,
+}: Readonly<SettingsPageProps>) {
+  const [section, setSection] = useState<"account" | "portability">("account");
+
+  return (
+    <section className="settings-page">
+      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button className={`settings-tab ${section === "account" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "account"} onClick={() => setSection("account")}>Account</button>
+        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
+      </div>
+      {section === "account" ? (
+        <AccountPage
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
+        />
+      ) : (
+        <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
+      )}
     </section>
   );
 }
 
-function authenticationStatusLabel(isLocalPreview: boolean, isSignedIn: boolean): string {
-  if (isLocalPreview) return "Local preview mode";
-  return isSignedIn ? "Cloud account verified" : "Local-only until an account is verified";
-}
-
-function AccountSyncPanel({ authState, authMessage, cloudDataOwnerMatches, onSignIn, onClaimLocalWorkspace, onSignOut }: Readonly<{ authState: AuthState; authMessage: string; cloudDataOwnerMatches: boolean; onSignIn: (email?: string, password?: string) => Promise<void>; onClaimLocalWorkspace: () => void; onSignOut: () => Promise<void> }>) {
+function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
-  const isLocalPreview = isLocalDevelopmentMode;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
-  return (
-    <Panel title="Account and sync" eyebrow="Settings">
-      <dl className="settings-list">
-        <div>
-          <dt>Authentication</dt>
-          <dd>{authenticationStatusLabel(isLocalPreview, isSignedIn)}</dd>
-        </div>
-        <div>
-          <dt>Storage</dt>
-          <dd>Drafts, uploads, and photo evidence show whether they are backed up.</dd>
-        </div>
-      </dl>
-      {isLocalPreview ? <p className="field-help">Cloud sync is disabled in this local preview. Configure Supabase to test a real account.</p> : null}
-      {!isSignedIn && isSupabaseConfigured && !isLocalPreview ? (
-        <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSignIn(email, password).catch(() => undefined); }}>
-          <label htmlFor="cloud-email">Cloud email</label>
-          <input id="cloud-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
-          <label htmlFor="cloud-password">Cloud password</label>
-          <input id="cloud-password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-          <button className="primary-action align-start" type="submit" disabled={authState === "loading"}>
-            <LogIn size={18} aria-hidden="true" />
-            {authState === "loading" ? "Signing in..." : "Sign in to enable cloud sync"}
+  const handleSignIn = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSignIn(email, password).catch(() => undefined);
+  };
+
+  const handlePasswordUpdate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onUpdatePassword(newPassword).catch(() => undefined);
+  };
+
+  const renderAccountContent = () => {
+    if (authState === "password-recovery") {
+      return (
+        <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
+          <p className="field-help">Set a new password to finish resetting your account.</p>
+          <label htmlFor="account-new-password">New password</label>
+          <input id="account-new-password" type="password" required autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+          <button className="primary-action auth-submit" type="submit">
+            <KeyRound size={18} aria-hidden="true" />
+            Set new password
           </button>
-          {authMessage ? <p className="auth-message" role={authState === "auth-error" ? "alert" : undefined}>{authMessage}</p> : null}
+          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
         </form>
-      ) : null}
-      {isSignedIn && !cloudDataOwnerMatches ? (
-        <div className="auth-form">
-          <p className="field-help">Local records are still owned by this device. Confirm once to associate them with this signed-in cloud account.</p>
-          <button className="primary-action align-start" type="button" onClick={onClaimLocalWorkspace}>
+      );
+    }
+    if (!isSignedIn) {
+      if (isLocalDevelopmentMode) {
+        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
+      }
+      return (
+        <form className="auth-form account-page-form" onSubmit={handleSignIn}>
+          <label htmlFor="account-email">Email</label>
+          <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <div className="auth-password-row">
+            <label htmlFor="account-password">Password</label>
+            <button className="quiet-action auth-forgot-action" type="button" onClick={() => onRequestPasswordReset(email).catch(() => undefined)}>Forgot password?</button>
+          </div>
+          <input id="account-password" type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+            <LogIn size={18} aria-hidden="true" />
+            {authState === "loading" ? "Signing in..." : "Sign in"}
+          </button>
+          <div className="auth-helper-actions">
+            <button className="quiet-action" type="button" onClick={() => onSignUp(email, password).catch(() => undefined)}>Create an account</button>
+          </div>
+          <p className="auth-divider">or continue with</p>
+          <div className="auth-provider-actions">
+            <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
+              <img className="auth-provider-mark" src={googleG} alt="" /> Continue with Google
+            </button>
+            <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
+              <img className="auth-provider-mark" src={facebookF} alt="" /> Continue with Facebook
+            </button>
+          </div>
+          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+        </form>
+      );
+    }
+    if (!cloudDataOwnerMatches) {
+      return (
+        <div className="auth-form account-page-form">
+          <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
+          <dl className="handoff-list" aria-label="Local data handoff summary">
+            <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
+            <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
+            <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
+            <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
+            <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
+          </dl>
+          <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
             <Cloud size={18} aria-hidden="true" />
-            Use this cloud account for local data
+            Confirm cloud handoff
+          </button>
+          <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+            <LogOut size={18} aria-hidden="true" />
+            Sign out
           </button>
         </div>
-      ) : null}
-      {isSignedIn ? (
-        <button className="secondary-action align-start" type="button" onClick={() => { onSignOut().catch(() => undefined); }}>
+      );
+    }
+    return (
+      <div className="auth-form account-page-form">
+        <p className="field-help">Cloud sync is enabled for this workspace.</p>
+        <output className={`account-storage-status ${storageStatus.tone}`} aria-live="polite">
+          <strong>{storageStatus.label}</strong>
+          <span>{storageStatus.detail}</span>
+        </output>
+        <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
           <LogOut size={18} aria-hidden="true" />
           Sign out
         </button>
-      ) : null}
-    </Panel>
+      </div>
+    );
+  };
+
+  return (
+    <div className="account-page">
+      <Panel title="Account settings" eyebrow="User account">
+        {renderAccountContent()}
+      </Panel>
+    </div>
   );
 }
 
@@ -4336,6 +4555,16 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
         Clean exports include confirmed ledger records only. Attachments stay as metadata
         references, not image bytes, and CSV/JSON use the same stable field set.
       </p>
+      <section className="portability-section" aria-labelledby="ledger-export-heading">
+        <h3 id="ledger-export-heading">Export ledger</h3>
+        <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
+        <div className="export-actions">
+          <button className="primary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage("CSV export downloaded. Image bytes were not included."); }}>Export CSV</button>
+          <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage("JSON export downloaded. Image bytes were not included."); }}>Export JSON</button>
+          <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
+        </div>
+        {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
+      </section>
       <section className="portability-section" aria-labelledby="csv-import-heading">
         <h3 id="csv-import-heading">Import a CSV</h3>
         <div className="file-picker">
@@ -4377,16 +4606,6 @@ function ImportExportPanel({ accounts, records, onImportRecord, onMergeImportDra
           ))}
         </section>
       ) : null}
-      <section className="portability-section" aria-labelledby="ledger-export-heading">
-        <h3 id="ledger-export-heading">Export ledger</h3>
-        <p className="panel-copy">Choose a clean format. Image bytes are never included.</p>
-       <div className="export-actions">
-         <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanCsv(records), "mealledger-ledger.csv", "text/csv;charset=utf-8"); setExportMessage("CSV export downloaded. Image bytes were not included."); }}>Export CSV</button>
-         <button className="secondary-action" type="button" onClick={() => { downloadTextFile(serializeCleanJson(records), "mealledger-ledger.json", "application/json;charset=utf-8"); setExportMessage("JSON export downloaded. Image bytes were not included."); }}>Export JSON</button>
-        <button className="secondary-action" type="button" disabled={exporting} onClick={() => { exportZip().catch(() => undefined); }}>{exporting ? `Exporting ZIP ${exportProgress}%` : "Export ZIP"}</button>
-      </div>
-      {exportMessage ? <p className="panel-copy" aria-live="polite">{exportMessage}</p> : null}
-      </section>
     </Panel>
   );
 }

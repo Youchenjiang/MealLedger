@@ -1,10 +1,18 @@
 import { describe, expect, test, vi } from "vitest";
-import { signInWithPassword } from "./authActions";
+import { requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, updatePassword } from "./authActions";
+
+function passwordClient(signInWithPasswordMock = vi.fn(), signUpMock = vi.fn()) {
+  return { auth: { signInWithPassword: signInWithPasswordMock, signUp: signUpMock } };
+}
+
+function recoveryClient(resetMock = vi.fn(), updateMock = vi.fn()) {
+  return { auth: { resetPasswordForEmail: resetMock, updateUser: updateMock } };
+}
 
 describe("password auth action", () => {
   test("rejects an empty email before calling Supabase", async () => {
     const signInWithPasswordMock = vi.fn();
-    const result = await signInWithPassword({ auth: { signInWithPassword: signInWithPasswordMock } }, "  ", "password");
+    const result = await signInWithPassword(passwordClient(signInWithPasswordMock), "  ", "password");
 
     expect(result).toEqual({ ok: false, message: "Email is required." });
     expect(signInWithPasswordMock).not.toHaveBeenCalled();
@@ -12,17 +20,18 @@ describe("password auth action", () => {
 
   test("rejects an empty password before calling Supabase", async () => {
     const signInWithPasswordMock = vi.fn();
-    const result = await signInWithPassword({ auth: { signInWithPassword: signInWithPasswordMock } }, "user@example.com", "  ");
+    const result = await signInWithPassword(passwordClient(signInWithPasswordMock), "user@example.com", "  ");
 
     expect(result).toEqual({ ok: false, message: "Password is required." });
     expect(signInWithPasswordMock).not.toHaveBeenCalled();
   });
 
   test("sends normalized credentials", async () => {
-    const signInWithPasswordMock = vi.fn().mockResolvedValue({ data: { session: {} }, error: null });
-    const result = await signInWithPassword({ auth: { signInWithPassword: signInWithPasswordMock } }, " user@example.com ", "secret");
+    const session = { user: { id: "user-1" } };
+    const signInWithPasswordMock = vi.fn().mockResolvedValue({ data: { session }, error: null });
+    const result = await signInWithPassword(passwordClient(signInWithPasswordMock), " user@example.com ", "secret");
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, session });
     expect(signInWithPasswordMock).toHaveBeenCalledWith({
       email: "user@example.com",
       password: "secret",
@@ -32,15 +41,88 @@ describe("password auth action", () => {
   test("returns the provider error without claiming success", async () => {
     const signInWithPasswordMock = vi.fn().mockResolvedValue({ data: null, error: new Error("invalid login") });
 
-    await expect(signInWithPassword({ auth: { signInWithPassword: signInWithPasswordMock } }, "user@example.com", "secret")).resolves.toEqual({ ok: false, message: "invalid login" });
+    await expect(signInWithPassword(passwordClient(signInWithPasswordMock), "user@example.com", "secret")).resolves.toEqual({ ok: false, message: "invalid login" });
   });
 
   test("rejects a successful provider response without a session", async () => {
     const signInWithPasswordMock = vi.fn().mockResolvedValue({ data: {}, error: null });
 
-    await expect(signInWithPassword({ auth: { signInWithPassword: signInWithPasswordMock } }, "user@example.com", "secret")).resolves.toEqual({
+    await expect(signInWithPassword(passwordClient(signInWithPasswordMock), "user@example.com", "secret")).resolves.toEqual({
       ok: false,
       message: "Authentication did not return a workspace session.",
     });
+  });
+
+  test("creates an account with normalized credentials", async () => {
+    const session = { user: { id: "new-user" } };
+    const signUpMock = vi.fn().mockResolvedValue({ data: { session }, error: null });
+    const result = await signUpWithPassword(passwordClient(vi.fn(), signUpMock), " new@example.com ", "secret");
+
+    expect(result).toEqual({ ok: true, session });
+    expect(signUpMock).toHaveBeenCalledWith({ email: "new@example.com", password: "secret" });
+  });
+
+  test("does not claim registration when Supabase returns no session", async () => {
+    const signUpMock = vi.fn().mockResolvedValue({ data: {}, error: null });
+
+    await expect(signUpWithPassword(passwordClient(vi.fn(), signUpMock), "new@example.com", "secret")).resolves.toEqual({
+      ok: false,
+      message: "Account created. Verify your email, then sign in to enable cloud sync.",
+    });
+  });
+
+  test("sends password reset to the normalized email", async () => {
+    const resetMock = vi.fn().mockResolvedValue({ error: null });
+
+    await expect(requestPasswordReset(recoveryClient(resetMock), " user@example.com ", "https://app.test/settings")).resolves.toEqual({
+      ok: true,
+      message: "Password reset link sent. Check your email.",
+    });
+    expect(resetMock).toHaveBeenCalledWith("user@example.com", { redirectTo: "https://app.test/settings" });
+  });
+
+  test("does not request a reset without an email", async () => {
+    const resetMock = vi.fn();
+
+    await expect(requestPasswordReset(recoveryClient(resetMock), " ", "https://app.test/settings")).resolves.toEqual({ ok: false, message: "Email is required." });
+    expect(resetMock).not.toHaveBeenCalled();
+  });
+
+  test("updates a recovery-session password", async () => {
+    const updateMock = vi.fn().mockResolvedValue({ error: null });
+
+    await expect(updatePassword(recoveryClient(vi.fn(), updateMock), "new-secret")).resolves.toEqual({
+      ok: true,
+      message: "Password updated. You can continue to cloud setup.",
+    });
+    expect(updateMock).toHaveBeenCalledWith({ password: "new-secret" });
+  });
+
+  test("starts a configured social sign-in redirect", async () => {
+    const signInWithOAuthMock = vi.fn().mockResolvedValue({ error: null });
+
+    await expect(signInWithOAuth({ auth: { signInWithOAuth: signInWithOAuthMock } }, "google", "https://app.test/settings")).resolves.toEqual({
+      ok: true,
+      message: "Opening google sign-in...",
+    });
+    expect(signInWithOAuthMock).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: "https://app.test/settings" } });
+  });
+
+  test("restores a social callback session from the URL fragment", async () => {
+    const session = { user: { id: "oauth-user" } };
+    const setSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+    await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/settings#access_token=access&refresh_token=refresh")).resolves.toEqual({
+      handled: true,
+      result: { ok: true, session },
+    });
+    expect(setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+  });
+
+  test("ignores a normal settings URL", async () => {
+    const setSession = vi.fn();
+
+    await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/settings")).resolves.toEqual({ handled: false });
+    expect(setSession).not.toHaveBeenCalled();
   });
 });

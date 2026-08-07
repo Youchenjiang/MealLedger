@@ -60,6 +60,7 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Auth design](specs/auth/design.md)
 - [Auth tasks](specs/auth/tasks.md)
 - [Auth test plan](specs/auth/test-plan.md)
+- [Auth provider setup](specs/auth/provider-setup.md)
 - [Capture media requirements](specs/capture-media/requirements.md)
 - [Capture media design](specs/capture-media/design.md)
 - [Capture media tasks](specs/capture-media/tasks.md)

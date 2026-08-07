@@ -32,14 +32,21 @@ use is unavailable.
 The UI depends on provider-neutral operations:
 
 - `signIn(email, password)`
+- `signUp(email, password)`
+- `requestPasswordReset(email)`
+- `signInWithOAuth(provider)`
 - `getSession()`
 - `signOut()`
 - `getVerificationState()`
 
-The V1 provider adapter implements email/password sign-in. Magic Link is not a
-V1 routine. Email verification and password reset are separate flows; routine
-sign-in must not require opening an email every time. Google OAuth remains a
-later adapter option.
+The V1 provider adapter implements email/password sign-in and sign-up,
+password-reset email, Google OAuth, and Facebook OAuth. Routine sign-in must
+not require opening an email. Magic Link is not a V1 routine. LINE Login is a
+later custom OAuth/OIDC provider, so it has no V1 UI or configuration path.
+
+OAuth and password-reset callback screens validate the Supabase session or
+recovery token, then return to Settings for the same explicit local-data
+handoff review.
 
 ## Local Data Handoff
 

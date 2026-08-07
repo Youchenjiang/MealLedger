@@ -26,6 +26,7 @@ For implementation work, start from the relevant feature spec under `docs/specs/
 - [Long-term roadmap](docs/product/roadmap.md)
 - [Development workflow](docs/engineering/development-workflow.md)
 - [Backend architecture](docs/engineering/backend-architecture.md)
+- [Auth provider setup](docs/specs/auth/provider-setup.md)
 - [Supabase schema](supabase/schema.sql)
 - [R2 upload Edge Function](supabase/functions/create-r2-upload-url/index.ts)
 
