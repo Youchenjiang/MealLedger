@@ -5,7 +5,6 @@ export type AppRoute =
   | "ledger"
   | "capture"
   | "settings"
-  | "account"
   | "not-found";
 
 export type AppLocation = {

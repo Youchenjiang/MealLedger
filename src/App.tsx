@@ -81,7 +81,6 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["capture"], route: "capture" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
-  { segments: ["account"], route: "account" },
 ];
 
 function navItemFor(route: AppRoute): NavItem {
@@ -1258,7 +1257,7 @@ function AuthenticatedApp() {
       <section className="workspace">
         <WorkspaceHeader
           route={route}
-          statusItems={route !== "settings" && route !== "account" ? shellStatusItems(statusItems) : []}
+          statusItems={route !== "settings" ? shellStatusItems(statusItems) : []}
         />
         {renderRoute({
           route,
@@ -1655,23 +1654,6 @@ function renderRoute({
           mediaPreviewUrls={mediaPreviewUrls}
           onQueueUploads={onQueueUploads}
           onClearUploads={onClearUploads}
-        />
-      );
-    case "account":
-      return (
-        <AccountPage
-          authState={authState}
-          authMessage={authMessage}
-          cloudDataOwnerMatches={cloudDataOwnerMatches}
-          handoffCounts={handoffCounts}
-          storageStatus={storageStatus}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-          onRequestPasswordReset={onRequestPasswordReset}
-          onUpdatePassword={onUpdatePassword}
-          onSignInWithOAuth={onSignInWithOAuth}
-          onClaimLocalWorkspace={onClaimLocalWorkspace}
-          onSignOut={onSignOut}
         />
       );
     case "settings":
@@ -4689,8 +4671,6 @@ function routeTitle(route: AppRoute) {
       return "Capture";
     case "settings":
       return "Settings";
-    case "account":
-      return "Account";
     default:
       return "Unknown route";
   }
