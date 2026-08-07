@@ -12,15 +12,20 @@ This sequence turns the current specs into a practical implementation order. It 
 
 ## Sequence Overview
 
-1. App shell.
-2. Schema foundation.
-3. Default taxonomy and onboarding.
-4. Manual ledger.
-5. Capture media.
-6. Import/export.
-7. Hardening and release readiness.
-8. Cloud persistence.
-9. Invoice import spike.
+1. App shell — Complete.
+2. Schema foundation — Complete.
+3. Default taxonomy and onboarding — Complete (optional import entry deferred).
+4. Manual ledger — Complete (cloud retry and conflict-resolution boundaries deferred).
+5. Capture media — Complete (attachment and batch-review flows deferred).
+6. Import/export — Complete.
+7. Hardening and release readiness — Complete.
+8. Cloud persistence — Complete (provider sync, R2 cleanup, multi-device merge, and native offline deferred).
+9. Auth — Complete.
+10. Invoice import spike — Deferred until its decision gates pass.
+
+All implementation tracks are merged into `main`. The only remaining sequence
+gate is the invoice import spike; deferred V2 items are listed at the end of
+this document.
 
 ## 1. App Shell
 
@@ -231,6 +236,38 @@ Exit criteria:
   outside Supabase and clean ledger exports.
 - R2 object deletion/cleanup, provider invoice sync, bank sync, and multi-device
   merge remain outside this spec.
+
+## 9. Auth
+
+Spec:
+
+- [Auth](../specs/auth/requirements.md)
+
+Status:
+
+- Complete. Merged as pull request #8.
+
+Goal:
+
+- Add account sign-in for cloud persistence without gating the local-first
+  workspace.
+
+Deliverables:
+
+- Provider-neutral auth adapter for email/password, password reset, Google,
+  and Facebook OAuth.
+- Settings > Account surface with session expiry, sign-out, and auth-error
+  handling.
+- Explicit local-data handoff review before cloud ownership is claimed.
+- Password-recovery flow that sets a new password from a recovery session.
+- Provider setup guide and ADR 0004.
+
+Exit criteria:
+
+- Local workspace remains the default entry with no sign-in gate.
+- Cloud sync stays blocked until the handoff is accepted.
+- Provider decision recorded; LINE Login and Magic Link deferred.
+- Unit, coverage, E2E, remote persistence, and build gates pass.
 
 ## Deferred Until V2 Or Spike
 
