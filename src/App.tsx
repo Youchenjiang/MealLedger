@@ -546,7 +546,7 @@ function PrimaryNav({ items, route, reviewCount, navigate, className = "nav-list
   );
 }
 
-type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon };
+type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon; hideInShell?: boolean };
 type HandoffCounts = { accounts: number; records: number; drafts: number; meals: number; media: number };
 type AccountPageProps = Readonly<{
   authState: AuthState;
@@ -569,11 +569,11 @@ function disabledSyncStatus(online: boolean, authState: AuthState, localWorkspac
   }
 
   if (localWorkspace || authState === "signed-out") {
-    return { label: "Local-only", detail: "This workspace keeps changes on this device until an account is verified.", icon: CloudOff, tone: "neutral" };
+    return { label: "Local-only", detail: "This workspace keeps changes on this device until an account is verified.", icon: CloudOff, tone: "neutral", hideInShell: true };
   }
 
   if (authState === "auth-error") {
-    return { label: "Local-only", detail: "Cloud authentication is unavailable. Changes remain on this device.", icon: CloudOff, tone: "warn" };
+    return { label: "Local-only", detail: "Cloud authentication is unavailable. Changes remain on this device.", icon: CloudOff, tone: "warn", hideInShell: true };
   }
 
   return { label: "Checking cloud connection", detail: "The workspace is checking whether cloud sync is available.", icon: Wifi, tone: "neutral" };
@@ -610,7 +610,7 @@ function enabledSyncStatus({
   if (unavailableUploadCount > 0) {
     return { label: "Media needs reselect", detail: `${countLabel(unavailableUploadCount, "image")} has metadata only; select the original file again to upload its bytes.`, icon: CloudOff, tone: "warn" };
   }
-  return { label: "Cloud sync ready", detail: "Cloud records and media have no pending writes.", icon: Wifi, tone: "neutral" };
+  return { label: "Cloud sync ready", detail: "Cloud records and media have no pending writes.", icon: Wifi, tone: "neutral", hideInShell: true };
 }
 
 function syncStatusItem({
@@ -685,6 +685,7 @@ function draftReviewStatus(draftCount: number): StatusItem {
     detail: draftCount > 0 ? "Continue incomplete drafts in Capture, or confirm a complete draft here." : "Nothing is waiting for review.",
     icon: draftCount > 0 ? AlertCircle : CheckCircle2,
     tone: draftCount > 0 ? "warn" : "good",
+    hideInShell: true,
   };
 }
 
@@ -694,9 +695,9 @@ function statusWhen(condition: boolean, item: StatusItem): StatusItem[] {
 
 function recordStorageStatus(recordCount: number, cloudSyncEnabled: boolean): StatusItem {
   if (cloudSyncEnabled) {
-    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good" };
+    return { label: `${countLabel(recordCount, "record")} synced`, detail: "Confirmed ledger records are stored in the cloud workspace.", icon: Cloud, tone: "good", hideInShell: true };
   }
-  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" };
+  return { label: `${countLabel(recordCount, "record")} local-only`, detail: "Official records stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn", hideInShell: true };
 }
 
 function buildStatusItems({
@@ -749,7 +750,7 @@ function buildStatusItems({
     syncItem,
     draftReviewStatus(draftCount),
     ...statusWhen(persistenceWarning, { label: "Local storage unavailable", detail: "Changes may be lost if this page is closed. Export or keep this page open until storage is restored.", icon: AlertCircle, tone: "warn" }),
-    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn" }),
+    ...statusWhen(draftCount > 0, { label: "Local-only data", detail: cloudSyncEnabled ? "Drafts remain local until you confirm them as official ledger records." : "These drafts stay on this device until cloud sync is enabled.", icon: CloudOff, tone: "warn", hideInShell: true }),
     ...statusWhen(uploadCount > 0, { label: `${countLabel(uploadCount, "local image")}`, detail: "The image bytes are saved on this device; cloud image backup is not enabled in this spec.", icon: CloudOff, tone: "warn" }),
     ...statusWhen(uploadErrorCount > 0, { label: `${countLabel(uploadErrorCount, "image")} upload failed`, detail: firstUploadError ? `${firstUploadError}. Select the original file again to retry.` : "Select the original file again to retry.", icon: CloudOff, tone: "danger" }),
     ...statusWhen(unavailableUploadCount > 0, { label: `${countLabel(unavailableUploadCount, "image")} needs reselect`, detail: "Only metadata remains on this device; select the original file again to back up its bytes.", icon: CloudOff, tone: "warn" }),
@@ -758,14 +759,7 @@ function buildStatusItems({
 }
 
 function shellStatusItems(items: StatusItem[]): StatusItem[] {
-  return items.filter((item) => (
-    item.label !== "Local-only"
-      && item.label !== "Local-only data"
-      && !item.label.toLowerCase().includes("draft")
-      && !item.label.endsWith("synced")
-      && !item.label.endsWith("local-only")
-      && item.label !== "Cloud sync ready"
-  ));
+  return items.filter((item) => !item.hideInShell);
 }
 
 function StatusStrip({ items, compact = false }: Readonly<{ items: StatusItem[]; compact?: boolean }>) {
