@@ -45,3 +45,14 @@ input.
 - Receipt photos are used for the AI call only; image bytes stay outside clean
   ledger exports.
 - Provider API keys are read from environment variables, never committed.
+
+## Production Constraints (Known)
+
+- The V1 client calls the provider directly from the browser. Keys are bundled
+  with the app at build time, so a deployed build exposes the key to anyone who
+  can read the bundle.
+- OpenAI does not permit browser CORS; the OpenAI provider path only works when
+  the call is proxied server-side. Gemini accepts browser calls.
+- Before production rollout, route AI calls through a Supabase Edge Function
+  (same pattern as `create-r2-upload-url`) so the key stays server-side and the
+  OpenAI path works in the browser.
