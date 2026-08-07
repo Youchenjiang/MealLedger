@@ -538,7 +538,12 @@ function PrimaryNav({ items, route, reviewCount, navigate, className = "nav-list
           >
             <Icon size={18} aria-hidden="true" />
             <span>{item.label}</span>
-            {item.route === "ledger" && reviewCount > 0 ? <span className="nav-badge" aria-hidden="true">{reviewCount}</span> : null}
+            {item.route === "ledger" && reviewCount > 0 ? (
+              <>
+                <span className="nav-badge" aria-hidden="true">{reviewCount}</span>
+                <span className="visually-hidden">, {reviewCount} item{reviewCount === 1 ? "" : "s"} to review</span>
+              </>
+            ) : null}
           </button>
         );
       })}

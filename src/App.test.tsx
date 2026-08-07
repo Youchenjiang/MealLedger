@@ -37,7 +37,7 @@ async function addCaptureAccount(user: ReturnType<typeof userEvent.setup>, name:
 }
 
 async function addAccount(user: ReturnType<typeof userEvent.setup>, name: string, currency = "TWD") {
-  await user.click(screen.getByRole("button", { name: "Ledger" }));
+  await user.click(screen.getByRole("button", { name: /^Ledger/ }));
   await user.click(screen.getByRole("tab", { name: "Accounts" }));
   await user.clear(screen.getByLabelText("Account name"));
   await user.selectOptions(screen.getByLabelText("Currency"), currency);
@@ -75,7 +75,7 @@ describe("App shell draft flow", () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     await user.click(screen.getByRole("tab", { name: "Accounts" }));
     await user.click(screen.getByRole("button", { name: "Open first-account setup" }));
     expect(screen.getByRole("heading", { name: "Set up your first account" })).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe("App shell draft flow", () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     await user.click(screen.getByRole("tab", { name: "Accounts" }));
     await user.click(screen.getByRole("button", { name: "Open first-account setup" }));
     await user.type(screen.getByLabelText("Account name"), "Bank account");
@@ -362,7 +362,7 @@ describe("App shell draft flow", () => {
 
     await user.click(await screen.findByRole("button", { name: "Confirm import row 2" }));
     expect(screen.getByText("Imported row 2 into the local ledger.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
 
     expect(screen.getByText("全聯")).toBeInTheDocument();
     expect(screen.getByText("TWD 417")).toBeInTheDocument();
@@ -404,7 +404,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Status: kept-separate")).toBeInTheDocument();
     expect(screen.getByText("Status: linked")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     expect(screen.getAllByText("全聯")).toHaveLength(2);
   });
 
@@ -422,9 +422,9 @@ describe("App shell draft flow", () => {
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
     await user.click(await screen.findByRole("button", { name: "Merge to draft row 2" }));
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     expect(screen.getByText("1 local draft")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ledger" }).querySelector(".nav-badge")).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: /^Ledger/ }).querySelector(".nav-badge")).toHaveTextContent("1");
     await user.click(screen.getByRole("button", { name: "Confirm to ledger" }));
     expect(screen.getByText("Draft confirmed in the local ledger.")).toBeInTheDocument();
     expect(screen.queryByText("1 local draft")).not.toBeInTheDocument();
@@ -452,7 +452,7 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("Entry cancelled.")).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("mealledger.app-shell.drafts") ?? "[]")).toHaveLength(1);
 
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     expect(screen.getByText("1 local draft")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Continue in Capture" }));
     expect(screen.getByRole("heading", { name: "Capture" })).toBeInTheDocument();
@@ -586,7 +586,7 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: "Start a record" }));
     expect(screen.getByRole("heading", { name: "Capture" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     await user.click(screen.getByRole("button", { name: "Start a record" }));
     expect(screen.getByRole("heading", { name: "Capture" })).toBeInTheDocument();
   });
@@ -997,7 +997,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await openWorkspace(user);
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     await user.click(screen.getByRole("tab", { name: "Accounts" }));
     await user.type(screen.getByLabelText("Account name"), "Savings");
     await user.selectOptions(screen.getByLabelText("Account type"), "bank");
@@ -1064,7 +1064,7 @@ describe("App shell draft flow", () => {
     view.unmount();
     renderWorkspace();
     await openWorkspace(user);
-    await user.click(screen.getByRole("button", { name: "Ledger" }));
+    await user.click(screen.getByRole("button", { name: /^Ledger/ }));
     expect(screen.getByLabelText("Confirmed ledger records")).toHaveTextContent("全聯");
   });
 
