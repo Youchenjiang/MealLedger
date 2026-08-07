@@ -4346,74 +4346,81 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     onSignIn(email, password).catch(() => undefined);
   };
 
+  const renderAccountContent = () => {
+    if (!isSignedIn) {
+      if (isLocalDevelopmentMode) {
+        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
+      }
+      return (
+        <form className="auth-form account-page-form" onSubmit={handleSignIn}>
+          <label htmlFor="account-email">Email</label>
+          <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <div className="auth-password-row">
+            <label htmlFor="account-password">Password</label>
+            <button className="quiet-action auth-forgot-action" type="button" onClick={() => onRequestPasswordReset(email).catch(() => undefined)}>Forgot password?</button>
+          </div>
+          <input id="account-password" type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+            <LogIn size={18} aria-hidden="true" />
+            {authState === "loading" ? "Signing in..." : "Sign in"}
+          </button>
+          <div className="auth-helper-actions">
+            <button className="quiet-action" type="button" onClick={() => onSignUp(email, password).catch(() => undefined)}>Create an account</button>
+          </div>
+          <p className="auth-divider">or continue with</p>
+          <div className="auth-provider-actions">
+            <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
+              <img className="auth-provider-mark" src={googleG} alt="" /> Continue with Google
+            </button>
+            <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
+              <img className="auth-provider-mark" src={facebookF} alt="" /> Continue with Facebook
+            </button>
+          </div>
+          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+        </form>
+      );
+    }
+    if (!cloudDataOwnerMatches) {
+      return (
+        <div className="auth-form account-page-form">
+          <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
+          <dl className="handoff-list" aria-label="Local data handoff summary">
+            <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
+            <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
+            <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
+            <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
+            <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
+          </dl>
+          <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
+            <Cloud size={18} aria-hidden="true" />
+            Confirm cloud handoff
+          </button>
+          <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+            <LogOut size={18} aria-hidden="true" />
+            Sign out
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="auth-form account-page-form">
+        <p className="field-help">Cloud sync is enabled for this workspace.</p>
+        <output className={`account-storage-status ${storageStatus.tone}`} aria-live="polite">
+          <strong>{storageStatus.label}</strong>
+          <span>{storageStatus.detail}</span>
+        </output>
+        <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+          <LogOut size={18} aria-hidden="true" />
+          Sign out
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="account-page">
       <Panel title="Account settings" eyebrow="User account">
-        {!isSignedIn ? (
-          isLocalDevelopmentMode ? (
-            <p className="field-help">Cloud authentication is unavailable in this local preview.</p>
-          ) : (
-            <form className="auth-form account-page-form" onSubmit={handleSignIn}>
-              <label htmlFor="account-email">Email</label>
-              <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-              <div className="auth-password-row">
-                <label htmlFor="account-password">Password</label>
-                <button className="quiet-action auth-forgot-action" type="button" onClick={() => onRequestPasswordReset(email).catch(() => undefined)}>Forgot password?</button>
-              </div>
-              <input id="account-password" type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
-              <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
-                <LogIn size={18} aria-hidden="true" />
-                {authState === "loading" ? "Signing in..." : "Sign in"}
-              </button>
-              <div className="auth-helper-actions">
-                <button className="quiet-action" type="button" onClick={() => onSignUp(email, password).catch(() => undefined)}>Create an account</button>
-              </div>
-              <p className="auth-divider">or continue with</p>
-              <div className="auth-provider-actions">
-                <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
-                  <img className="auth-provider-mark" src={googleG} alt="" />
-                  Continue with Google
-                </button>
-                <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
-                  <img className="auth-provider-mark" src={facebookF} alt="" />
-                  Continue with Facebook
-                </button>
-              </div>
-              {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-            </form>
-          )
-        ) : !cloudDataOwnerMatches ? (
-          <div className="auth-form account-page-form">
-            <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
-            <dl className="handoff-list" aria-label="Local data handoff summary">
-              <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
-              <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
-              <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
-              <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
-              <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
-            </dl>
-            <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
-              <Cloud size={18} aria-hidden="true" />
-              Confirm cloud handoff
-            </button>
-            <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
-              <LogOut size={18} aria-hidden="true" />
-              Sign out
-            </button>
-          </div>
-        ) : (
-          <div className="auth-form account-page-form">
-            <p className="field-help">Cloud sync is enabled for this workspace.</p>
-            <output className={`account-storage-status ${storageStatus.tone}`} aria-live="polite">
-              <strong>{storageStatus.label}</strong>
-              <span>{storageStatus.detail}</span>
-            </output>
-            <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
-              <LogOut size={18} aria-hidden="true" />
-              Sign out
-            </button>
-          </div>
-        )}
+        {renderAccountContent()}
       </Panel>
     </div>
   );
