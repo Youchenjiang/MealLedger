@@ -1938,7 +1938,72 @@ function LedgerPage({
       {section === "accounts" ? (
         <LedgerAccountsPanel accounts={accounts} onAddAccount={onAddAccount} onSaveInitialFunding={onSaveInitialFunding} onReopenOnboarding={onReopenOnboarding} />
       ) : (
-        <>
+        <LedgerRecordsView
+          records={records}
+          drafts={drafts}
+          draftCount={draftCount}
+          draftMessage={draftMessage}
+          editingRecordId={editingRecordId}
+          editingUnresolvedId={editingUnresolvedId}
+          navigate={navigate}
+          onEditDraft={onEditDraft}
+          onConfirmDraft={onConfirmDraft}
+          onDiscardDraft={onDiscardDraft}
+          onUpdateRecord={onUpdateRecord}
+          onConvertUnresolved={onConvertUnresolved}
+          onVoidRecord={onVoidRecord}
+          onBeginEditRecord={setEditingRecordId}
+          onEndEditRecord={() => setEditingRecordId(null)}
+          onBeginUnresolved={setEditingUnresolvedId}
+          onEndUnresolved={() => setEditingUnresolvedId(null)}
+          onReportDraftMessage={setDraftMessage}
+        />
+      )}
+    </div>
+  );
+}
+
+function LedgerRecordsView({
+  records,
+  drafts,
+  draftCount,
+  draftMessage,
+  editingRecordId,
+  editingUnresolvedId,
+  navigate,
+  onEditDraft,
+  onConfirmDraft,
+  onDiscardDraft,
+  onUpdateRecord,
+  onConvertUnresolved,
+  onVoidRecord,
+  onBeginEditRecord,
+  onEndEditRecord,
+  onBeginUnresolved,
+  onEndUnresolved,
+  onReportDraftMessage,
+}: Readonly<{
+  records: LocalLedgerRecord[];
+  drafts: TransactionDraft[];
+  draftCount: number;
+  draftMessage: string;
+  editingRecordId: string | null;
+  editingUnresolvedId: string | null;
+  navigate: (item: NavItem) => void;
+  onEditDraft: (draft: TransactionDraft) => void;
+  onConfirmDraft: (draft: TransactionDraft) => boolean;
+  onDiscardDraft: (id: string) => void;
+  onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
+  onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
+  onVoidRecord: (id: string) => void;
+  onBeginEditRecord: (id: string) => void;
+  onEndEditRecord: () => void;
+  onBeginUnresolved: (id: string) => void;
+  onEndUnresolved: () => void;
+  onReportDraftMessage: (message: string) => void;
+}>) {
+  return (
+    <>
       <section className="content-grid">
         <Panel title="Ledger records" eyebrow="Confirmed records">
           <p className="panel-copy">Manual records are written locally as official ledger records. Cloud status appears in the workspace header.</p>
@@ -1967,14 +2032,14 @@ function LedgerPage({
               record={record}
               isEditing={editingRecordId === record.id}
               isEditingUnresolved={editingUnresolvedId === record.id}
-              onEdit={() => setEditingRecordId(record.id)}
-              onCancelEdit={() => setEditingRecordId(null)}
-              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); setEditingRecordId(null); }}
-              onCompleteDetails={() => setEditingUnresolvedId(record.id)}
-              onCancelDetails={() => setEditingUnresolvedId(null)}
+              onEdit={() => onBeginEditRecord(record.id)}
+              onCancelEdit={onEndEditRecord}
+              onSaveEdit={(patch) => { onUpdateRecord(record.id, patch); onEndEditRecord(); }}
+              onCompleteDetails={() => onBeginUnresolved(record.id)}
+              onCancelDetails={onEndUnresolved}
               onConvertDetails={(fields) => {
                 const converted = onConvertUnresolved(record.id, fields);
-                if (converted) setEditingUnresolvedId(null);
+                if (converted) onEndUnresolved();
                 return converted;
               }}
               onUpdate={(patch) => onUpdateRecord(record.id, patch)}
@@ -1993,44 +2058,61 @@ function LedgerPage({
             <span>{draftCount} local draft{draftCount === 1 ? "" : "s"}</span>
           </div>
           {drafts.map((draft) => (
-            <article className="draft-card" key={draft.id}>
-              <div>
-                <strong>{draftDisplayName(draft)}</strong>
-                <span>
-                  {draft.date} · {draft.account}
-                  {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
-                </span>
-              </div>
-              <div className="draft-amount">
-                <strong>
-                  {draft.currency} {draft.amount}
-                </strong>
-                <span>{draft.kind}</span>
-              </div>
-              <div className="record-actions">
-                <button className="secondary-action" type="button" onClick={() => onEditDraft(draft)}>
-                  Continue in Capture
-                </button>
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={() => setDraftMessage(onConfirmDraft(draft) ? "Draft confirmed in the local ledger." : "This draft is incomplete. Continue in Capture to fill the required fields.")}
-                >
-                  Confirm to ledger
-                </button>
-                <button className="text-action danger-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
-                  Discard
-                </button>
-              </div>
-            </article>
+            <LedgerDraftCard
+              key={draft.id}
+              draft={draft}
+              onEditDraft={onEditDraft}
+              onConfirmDraft={onConfirmDraft}
+              onDiscardDraft={onDiscardDraft}
+              onReportDraftMessage={onReportDraftMessage}
+            />
           ))}
         </section>
       ) : null}
-        {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
+      {draftMessage ? <p className="inline-message" aria-live="polite">{draftMessage}</p> : null}
       {records.length === 0 ? <p className="table-empty">No confirmed ledger records yet.</p> : null}
-        </>
-      )}
-    </div>
+    </>
+  );
+}
+
+function LedgerDraftCard({ draft, onEditDraft, onConfirmDraft, onDiscardDraft, onReportDraftMessage }: Readonly<{
+  draft: TransactionDraft;
+  onEditDraft: (draft: TransactionDraft) => void;
+  onConfirmDraft: (draft: TransactionDraft) => boolean;
+  onDiscardDraft: (id: string) => void;
+  onReportDraftMessage: (message: string) => void;
+}>) {
+  return (
+    <article className="draft-card">
+      <div>
+        <strong>{draftDisplayName(draft)}</strong>
+        <span>
+          {draft.date} · {draft.account}
+          {draft.kind === "transfer" ? ` · to ${draft.transferAccount}` : ` · ${draft.category}`}
+        </span>
+      </div>
+      <div className="draft-amount">
+        <strong>
+          {draft.currency} {draft.amount}
+        </strong>
+        <span>{draft.kind}</span>
+      </div>
+      <div className="record-actions">
+        <button className="secondary-action" type="button" onClick={() => onEditDraft(draft)}>
+          Continue in Capture
+        </button>
+        <button
+          className="primary-action"
+          type="button"
+          onClick={() => onReportDraftMessage(onConfirmDraft(draft) ? "Draft confirmed in the local ledger." : "This draft is incomplete. Continue in Capture to fill the required fields.")}
+        >
+          Confirm to ledger
+        </button>
+        <button className="text-action danger-action" type="button" onClick={() => onDiscardDraft(draft.id)}>
+          Discard
+        </button>
+      </div>
+    </article>
   );
 }
 
