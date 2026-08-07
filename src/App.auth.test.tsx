@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -68,7 +68,7 @@ describe("app auth boundary", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(authMock.signInWithPassword).toHaveBeenCalledWith({ email: "user@example.com", password: "secret" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
     expect(screen.getByLabelText("Local data handoff summary")).toBeInTheDocument();
   });
 
@@ -85,6 +85,6 @@ describe("app auth boundary", () => {
     expect(screen.getByLabelText("Local data handoff summary")).toHaveTextContent("Accounts0Records0Drafts0Meals0Media0");
 
     await user.click(screen.getByRole("button", { name: "Confirm cloud handoff" }));
-    await waitFor(() => expect(screen.getByText("Cloud sync is enabled for this workspace.")).toBeInTheDocument());
+    expect(await screen.findByText("Cloud sync is enabled for this workspace.")).toBeInTheDocument();
   });
 });
