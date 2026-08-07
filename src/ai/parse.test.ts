@@ -1,0 +1,99 @@
+import { describe, expect, test } from "vitest";
+import { parseDraftSuggestions } from "./parse";
+
+const accounts = [
+  { name: "Daily wallet", currency: "TWD" },
+  { name: "Bank", currency: "TWD" },
+];
+const categories = ["飲食", "午餐", "交通", "租賃", "薪資", "日用"];
+const today = "2026-08-08";
+
+describe("parseDraftSuggestions", () => {
+  test("parses a valid expense draft and normalizes the date", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", counterparty: "麵店", itemName: "牛肉麵", amount: 480, currency: "TWD" }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.issues).toEqual([]);
+    expect(suggestion.draft?.kind).toBe("expense");
+    expect(suggestion.draft?.date).toBe("2026-07-25");
+    expect(suggestion.draft?.amount).toBe("480");
+    expect(suggestion.draft?.currency).toBe("TWD");
+    expect(suggestion.draft?.category).toBe("午餐");
+    expect(suggestion.draft?.counterparty).toBe("麵店");
+    expect(suggestion.draft?.itemName).toBe("牛肉麵");
+  });
+
+  test("accepts slashed dates and defaults a missing date to today", () => {
+    const [withYear] = parseDraftSuggestions({ items: [{ account: "Bank", category: "薪資", amount: 50000, date: "2026/8/1" }] }, accounts, categories, today);
+    expect(withYear.draft?.date).toBe("2026-08-01");
+
+    const [noDate] = parseDraftSuggestions({ items: [{ account: "Bank", category: "薪資", amount: 50000 }] }, accounts, categories, today);
+    expect(noDate.draft?.date).toBe(today);
+  });
+
+  test("parses a same-currency transfer", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "transfer", account: "Bank", transferAccount: "Daily wallet", amount: 1000 }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.draft?.kind).toBe("transfer");
+    expect(suggestion.draft?.transferAccount).toBe("Daily wallet");
+    expect(suggestion.draft?.amount).toBe("1000");
+  });
+
+  test("rejects an unknown account with a readable issue", () => {
+    const [suggestion] = parseDraftSuggestions({ items: [{ account: "不存在的帳戶", amount: 100 }] }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.draft).toBeNull();
+    expect(suggestion.issues.join(" ")).toContain("不存在的帳戶");
+  });
+
+  test("rejects an unknown category", () => {
+    const [suggestion] = parseDraftSuggestions({ items: [{ account: "Bank", category: "星巴克", amount: 180 }] }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("類別");
+  });
+
+  test("rejects an unparseable amount", () => {
+    const [suggestion] = parseDraftSuggestions({ items: [{ account: "Bank", amount: "abc" }] }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("金額");
+  });
+
+  test("rejects unsupported kinds", () => {
+    const [suggestion] = parseDraftSuggestions({ items: [{ kind: "refund", account: "Bank", amount: 100 }] }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("不支援的類型");
+  });
+
+  test("rejects a transfer whose target account is missing", () => {
+    const [suggestion] = parseDraftSuggestions({ items: [{ kind: "transfer", account: "Bank", transferAccount: "消失的帳戶", amount: 100 }] }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("轉帳目標帳戶");
+  });
+
+  test("handles mixed items independently", () => {
+    const suggestions = parseDraftSuggestions({
+      items: [
+        { account: "Bank", category: "日用", amount: 100 },
+        { account: "未知帳戶", amount: 200 },
+      ],
+    }, accounts, categories, today);
+
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions[0].ok).toBe(true);
+    expect(suggestions[1].ok).toBe(false);
+  });
+
+  test("ignores non-array payloads", () => {
+    expect(parseDraftSuggestions({ foo: 1 }, accounts, categories, today)).toEqual([]);
+  });
+});
