@@ -8,6 +8,7 @@ afterEach(() => {
 
 describe("requestAiJson", () => {
   test("returns a setup message when no key is configured", async () => {
+    vi.stubEnv("AI_API_KEY", "");
     const result = await requestAiJson({ system: "s", user: "u" });
 
     expect(result.ok).toBe(false);
@@ -48,6 +49,38 @@ describe("requestAiJson", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     expect(body.messages[1].content[0].type).toBe("text");
     expect(body.messages[1].content[1]).toMatchObject({ type: "image_url", image_url: { url: "data:image/jpeg;base64,QUJD" } });
+  });
+
+  test("uses a custom base URL when AI_BASE_URL is set", async () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("AI_BASE_URL", "https://api.tokenrouter.com/v1");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await requestAiJson({ system: "sys", user: "usr" });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.tokenrouter.com/v1/chat/completions");
+  });
+
+  test("normalizes a trailing slash on the custom base URL", async () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("AI_BASE_URL", "https://api.tokenrouter.com/v1/");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await requestAiJson({ system: "sys", user: "usr" });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.tokenrouter.com/v1/chat/completions");
   });
 
   test("calls the Gemini generateContent shape with an inline image", async () => {

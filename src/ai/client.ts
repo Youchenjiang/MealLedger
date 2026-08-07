@@ -97,9 +97,7 @@ export async function requestAiJson(request: AiRequest): Promise<AiResult> {
     return { ok: false, message: "AI 補帳尚未設定。請在 .env 設定 AI_API_KEY 與 AI_PROVIDER。" };
   }
   try {
-    const baseUrl = config.provider === "gemini"
-      ? "https://generativelanguage.googleapis.com/v1beta"
-      : "https://api.openai.com/v1";
+    const { baseUrl } = config;
     const data = config.provider === "gemini"
       ? await requestGemini(baseUrl, config.apiKey, config.model, request)
       : await requestOpenAi(baseUrl, config.apiKey, config.model, request);
