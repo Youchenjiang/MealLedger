@@ -160,7 +160,7 @@ a {
 }
 
 .auth-provider-action:disabled {
-  color: #857f74;
+  color: #6d675b;
   border-color: #e0dbd2;
   background: #f1eee8;
   cursor: not-allowed;
@@ -576,17 +576,6 @@ a {
 .settings-list dt,
 .settings-list dd {
   margin: 0;
-}
-
-.account-storage-status {
-  display: grid;
-  gap: 2px;
-}
-
-.account-storage-status span {
-  color: #514c45;
-  font-size: 14px;
-  line-height: 1.4;
 }
 
 .brand-name {
