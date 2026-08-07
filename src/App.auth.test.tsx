@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -86,5 +86,28 @@ describe("app auth boundary", () => {
 
     await user.click(screen.getByRole("button", { name: "Confirm cloud handoff" }));
     expect(await screen.findByText("Cloud sync is enabled for this workspace.")).toBeInTheDocument();
+  });
+
+  test("sets a new password from a recovery session", async () => {
+    const user = userEvent.setup();
+    let authListener: (_event: string, session: unknown) => void = () => undefined;
+    const authMock = createAuthMock();
+    authMock.updateUser = vi.fn().mockResolvedValue({ error: null });
+    authMock.onAuthStateChange.mockImplementation((listener) => {
+      authListener = listener;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    await renderRemoteApp(authMock);
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("tab", { name: "Account" }));
+    act(() => authListener("PASSWORD_RECOVERY", { user: { id: "remote-user" } }));
+
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("New password"), "new-secret");
+    await user.click(screen.getByRole("button", { name: "Set new password" }));
+
+    expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
+    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
   });
 });

@@ -9,6 +9,7 @@ import {
   CloudOff,
   Home,
   ImagePlus,
+  KeyRound,
   LogIn,
   LogOut,
   Plus,
@@ -4336,17 +4337,37 @@ function SettingsPage({
   );
 }
 
-function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, onSignIn, onSignUp, onRequestPasswordReset, onSignInWithOAuth, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
+function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const handleSignIn = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSignIn(email, password).catch(() => undefined);
   };
 
+  const handlePasswordUpdate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onUpdatePassword(newPassword).catch(() => undefined);
+  };
+
   const renderAccountContent = () => {
+    if (authState === "password-recovery") {
+      return (
+        <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
+          <p className="field-help">Set a new password to finish resetting your account.</p>
+          <label htmlFor="account-new-password">New password</label>
+          <input id="account-new-password" type="password" required autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+          <button className="primary-action auth-submit" type="submit">
+            <KeyRound size={18} aria-hidden="true" />
+            Set new password
+          </button>
+          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+        </form>
+      );
+    }
     if (!isSignedIn) {
       if (isLocalDevelopmentMode) {
         return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
