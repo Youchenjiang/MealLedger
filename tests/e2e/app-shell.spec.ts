@@ -178,7 +178,7 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await openWorkspace(page);
   await page.getByRole("button", { name: "Capture" }).click();
   await expect(page.getByRole("heading", { name: "Capture", exact: true })).toBeVisible();
-  await expect(page.locator(".capture-intent-button")).toHaveCount(5);
+  await expect(page.locator(".capture-intent-button")).toHaveCount(6);
   await expect(page.getByRole("heading", { name: "What are you saving?" })).toBeVisible();
   await page.getByRole("button", { name: "Ledger", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();

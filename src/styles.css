@@ -2365,3 +2365,47 @@ button.action-card.unavailable {
     grid-template-columns: 1fr;
   }
 }
+
+.ai-ledger-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.ai-ledger-form {
+  display: grid;
+  gap: 10px;
+  max-width: 560px;
+}
+
+.ai-ledger-input {
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 12px;
+  border: 1px solid #d7d0c4;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #34302b;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ai-ledger-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-suggestions {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-issues {
+  margin: 0;
+  padding-left: 18px;
+  color: #8a2f2f;
+  font-size: 13px;
+  line-height: 1.5;
+}
