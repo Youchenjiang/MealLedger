@@ -155,7 +155,11 @@ export function parseDraftSuggestions(
     }
 
     const amount = parseAmount(input.amount);
-    if (!amount) {
+    const transferAmount = parseAmount(input.transferAmount);
+    // Transfers may omit the redundant top-level amount and only provide
+    // transferAmount, which buildForm already prefers when building the draft.
+    const effectiveAmount = kind === "transfer" && !amount ? transferAmount : amount;
+    if (!effectiveAmount) {
       issues.push("金額無法辨識。");
     }
 
@@ -163,7 +167,7 @@ export function parseDraftSuggestions(
       issues.push(`轉帳目標帳戶「${asText(input.transferAccount) || "(空白)"}」不存在。`);
     }
 
-    if (!kind || !account || !amount) {
+    if (!kind || !account || !effectiveAmount) {
       return { input, draft: null, ok: false, issues };
     }
 

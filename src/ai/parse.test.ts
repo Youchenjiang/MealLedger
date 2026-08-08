@@ -73,6 +73,27 @@ describe("parseDraftSuggestions", () => {
     expect(suggestion.issues.join(" ")).toContain("不支援的類型");
   });
 
+  test("accepts a transfer that provides transferAmount without amount", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "transfer", account: "Bank", transferAccount: "Daily wallet", transferAmount: 2000 }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.issues).toEqual([]);
+    expect(suggestion.draft?.kind).toBe("transfer");
+    expect(suggestion.draft?.transferAccount).toBe("Daily wallet");
+    expect(suggestion.draft?.amount).toBe("2000");
+  });
+
+  test("rejects a transfer with no amount at all", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "transfer", account: "Bank", transferAccount: "Daily wallet" }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("金額");
+  });
+
   test("rejects a transfer whose target account is missing", () => {
     const [suggestion] = parseDraftSuggestions({ items: [{ kind: "transfer", account: "Bank", transferAccount: "消失的帳戶", amount: 100 }] }, accounts, categories, today);
 
