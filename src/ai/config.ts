@@ -4,6 +4,7 @@ export type AiConfig = {
   provider: AiProvider;
   apiKey: string;
   model: string;
+  visionModel?: string;
   baseUrl: string;
 };
 
@@ -23,9 +24,10 @@ export function readAiConfig(): AiConfig | null {
   const provider: AiProvider = providerRaw === "gemini" ? "gemini" : "openai";
   const model = (env.AI_MODEL as string | undefined)?.trim()
     || (provider === "gemini" ? "gemini-2.0-flash" : "gpt-4o-mini");
+  const visionModel = (env.AI_VISION_MODEL as string | undefined)?.trim() || undefined;
   const baseUrl = (env.AI_BASE_URL as string | undefined)?.trim().replace(/\/+$/, "")
     || DEFAULT_BASE_URLS[provider];
-  return { provider, apiKey, model, baseUrl };
+  return { provider, apiKey, model, visionModel, baseUrl };
 }
 
 export function isAiConfigured(): boolean {

@@ -51,6 +51,39 @@ describe("requestAiJson", () => {
     expect(body.messages[1].content[1]).toMatchObject({ type: "image_url", image_url: { url: "data:image/jpeg;base64,QUJD" } });
   });
 
+  test("routes image requests to AI_VISION_MODEL and text to AI_MODEL", async () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("AI_MODEL", "fast-model");
+    vi.stubEnv("AI_VISION_MODEL", "vision-model");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestAiJson({ system: "s", user: "u" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).model).toBe("fast-model");
+
+    await requestAiJson({ system: "s", user: "u", imageDataUrl: "data:image/jpeg;base64,QUJD" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).model).toBe("vision-model");
+  });
+
+  test("falls back to AI_MODEL for images when AI_VISION_MODEL is unset", async () => {
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("AI_MODEL", "fast-model");
+    vi.stubEnv("AI_VISION_MODEL", "");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestAiJson({ system: "s", user: "u", imageDataUrl: "data:image/jpeg;base64,QUJD" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).model).toBe("fast-model");
+  });
+
   test("uses a custom base URL when AI_BASE_URL is set", async () => {
     vi.stubEnv("AI_API_KEY", "test-key");
     vi.stubEnv("AI_PROVIDER", "openai");

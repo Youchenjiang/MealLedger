@@ -98,9 +98,12 @@ export async function requestAiJson(request: AiRequest): Promise<AiResult> {
   }
   try {
     const { baseUrl } = config;
+    // Vision requests (receipt/invoice photos) use a dedicated vision-capable
+    // model when configured; text parsing keeps the fast default model.
+    const model = request.imageDataUrl ? config.visionModel ?? config.model : config.model;
     const data = config.provider === "gemini"
-      ? await requestGemini(baseUrl, config.apiKey, config.model, request)
-      : await requestOpenAi(baseUrl, config.apiKey, config.model, request);
+      ? await requestGemini(baseUrl, config.apiKey, model, request)
+      : await requestOpenAi(baseUrl, config.apiKey, model, request);
     return { ok: true, data };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "AI 請求失敗,請稍後再試。" };
