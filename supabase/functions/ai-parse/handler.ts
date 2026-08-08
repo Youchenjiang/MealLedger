@@ -45,6 +45,36 @@ function isAiParseRequest(value: unknown): value is AiParseRequest {
   return typeof value === "object" && value !== null;
 }
 
+// Reads the whole request body while enforcing the byte limit, so oversized
+// payloads are rejected even when the content-length header is missing or
+// lies. Returns null when the body exceeds maxBytes.
+async function readBodyWithLimit(request: Request, maxBytes: number): Promise<string | null> {
+  const reader = request.body?.getReader();
+  if (!reader) {
+    const text = await request.text().catch(() => "");
+    return text.length > maxBytes ? null : text;
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+}
+
 export async function handleAiParseRequest(request: Request, deps: AiParseDeps): Promise<Response> {
   const { env, getUser, fetchImpl } = deps;
 
@@ -70,7 +100,16 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
     return json({ error: "invalid_user" }, 401, env.allowedOrigin);
   }
 
-  const body = await request.json().catch(() => null);
+  const rawBody = await readBodyWithLimit(request, env.maxBodyBytes);
+  if (rawBody === null) {
+    return json({ error: "request_too_large" }, 413, env.allowedOrigin);
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    body = null;
+  }
   if (!isAiParseRequest(body)) {
     return json({ error: "invalid_body" }, 400, env.allowedOrigin);
   }

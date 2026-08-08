@@ -38,12 +38,14 @@ function makeDeps(overrides: {
   Object.assign(env, overrides.env);
   return {
     env,
-    getUser: overrides.getUser ?? (async () => ({ data: { user: { id: "user-1" } }, error: null })),
-    fetchImpl: overrides.fetchImpl ?? (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: OK_CONTENT } }] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })),
+    getUser: overrides.getUser ?? (() => Promise.resolve({ data: { user: { id: "user-1" } }, error: null })),
+    fetchImpl: overrides.fetchImpl ?? (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: OK_CONTENT } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )),
   };
 }
 
@@ -62,12 +64,14 @@ async function jsonBody(response: Response): Promise<unknown> {
 function fetchCapture(): { calls: Array<{ url: string; init: RequestInit }>; deps: AiParseDeps } {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const deps = makeDeps({
-    fetchImpl: async (input, init) => {
+    fetchImpl: (input, init) => {
       calls.push({ url: String(input), init: init ?? {} });
-      return new Response(JSON.stringify({ choices: [{ message: { content: OK_CONTENT } }] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: OK_CONTENT } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     },
   });
   return { calls, deps };
@@ -84,7 +88,7 @@ Deno.test("rejects requests without an authorization header", async () => {
 
 Deno.test("rejects requests whose bearer token does not resolve to a user", async () => {
   const deps = makeDeps({
-    getUser: async () => ({ data: null, error: new Error("bad token") }),
+    getUser: () => Promise.resolve({ data: null, error: new Error("bad token") }),
   });
   const response = await handleAiParseRequest(
     post({ system: "s", user: "u" }, { authorization: "Bearer invalid" }),
@@ -99,9 +103,9 @@ Deno.test("rejects requests whose bearer token does not resolve to a user", asyn
 Deno.test("passes the bare token to getUser and accepts a valid session", async () => {
   const tokens: string[] = [];
   const deps = makeDeps({
-    getUser: async (token) => {
+    getUser: (token) => {
       tokens.push(token);
-      return { data: { user: { id: "user-1" } }, error: null };
+      return Promise.resolve({ data: { user: { id: "user-1" } }, error: null });
     },
   });
   const response = await handleAiParseRequest(
@@ -211,7 +215,7 @@ Deno.test("returns the parsed provider JSON as data", async () => {
 
 Deno.test("surfaces a provider HTTP failure as a 502 with detail", async () => {
   const deps = makeDeps({
-    fetchImpl: async () => new Response("upstream exploded", { status: 500 }),
+    fetchImpl: () => Promise.resolve(new Response("upstream exploded", { status: 500 })),
   });
   const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
 
@@ -223,8 +227,8 @@ Deno.test("surfaces a provider HTTP failure as a 502 with detail", async () => {
 
 Deno.test("returns ai_empty_response when the provider sends no content", async () => {
   const deps = makeDeps({
-    fetchImpl: async () =>
-      new Response(JSON.stringify({ choices: [{ message: {} }] }), { status: 200 }),
+    fetchImpl: () =>
+      Promise.resolve(new Response(JSON.stringify({ choices: [{ message: {} }] }), { status: 200 })),
   });
   const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
 
@@ -235,8 +239,10 @@ Deno.test("returns ai_empty_response when the provider sends no content", async 
 
 Deno.test("surfaces malformed provider JSON as a 502", async () => {
   const deps = makeDeps({
-    fetchImpl: async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: "not-json" } }] }), { status: 200 }),
+    fetchImpl: () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: "not-json" } }] }), { status: 200 }),
+      ),
   });
   const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
 
@@ -247,9 +253,7 @@ Deno.test("surfaces malformed provider JSON as a 502", async () => {
 
 Deno.test("surfaces a throwing provider fetch as a 502", async () => {
   const deps = makeDeps({
-    fetchImpl: async () => {
-      throw new Error("socket hang up");
-    },
+    fetchImpl: () => Promise.reject(new Error("socket hang up")),
   });
   const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
 
@@ -276,12 +280,24 @@ Deno.test("rejects non-POST methods", async () => {
   assertEq(body.error, "method_not_allowed");
 });
 
-Deno.test("rejects oversized request bodies", async () => {
+Deno.test("rejects oversized request bodies via the content-length header", async () => {
   const deps = makeDeps({ env: { maxBodyBytes: 100 } });
   // In-process Request objects do not derive content-length automatically,
   // so the header is set explicitly to simulate a real HTTP request.
   const response = await handleAiParseRequest(
     post("x".repeat(200), { authorization: "Bearer t", "content-length": "200" }),
+    deps,
+  );
+
+  assertEq(response.status, 413);
+  const body = await jsonBody(response) as { error?: string };
+  assertEq(body.error, "request_too_large");
+});
+
+Deno.test("rejects oversized bodies even without a content-length header", async () => {
+  const deps = makeDeps({ env: { maxBodyBytes: 100 } });
+  const response = await handleAiParseRequest(
+    post("x".repeat(200), { authorization: "Bearer t" }),
     deps,
   );
 
