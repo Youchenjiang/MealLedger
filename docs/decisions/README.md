@@ -23,4 +23,5 @@ Use specs for feature behavior. Use ADRs for why the project chose one direction
 - [0002: PWA-first V1 delivery](0002-pwa-first-v1-delivery.md)
 - [0003: Draft-first AI and import suggestions](0003-draft-first-ai-and-import-suggestions.md)
 - [0004: Auth provider strategy](0004-auth-provider-strategy.md)
+- [0005: All ledger record writes go through one atomic RPC boundary](0005-ledger-writes-atomic-rpc-boundary.md)
 - [Template](template.md)

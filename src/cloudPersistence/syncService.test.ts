@@ -62,6 +62,12 @@ function persistenceClient(failTable?: string): CloudPersistenceClient & { calls
   const calls: string[] = [];
   return {
     calls,
+    rpc: vi.fn(() => {
+      calls.push("persist_ledger_record_bundle_resolved");
+      return Promise.resolve(failTable === "ledger_records"
+        ? { data: null, error: { message: `${failTable} failed`, code: "network" } }
+        : { data: { replayed: false }, error: null });
+    }),
     from(table: string) {
       return {
         select() {
@@ -268,9 +274,11 @@ describe("cloud sync service", () => {
       amount: "5",
       linkedRecordId: "transfer-1",
     };
+    const rpcArgs: Record<string, unknown>[] = [];
     const client = persistenceClient();
-    client.rpc = (name) => {
-      client.calls.push(name);
+    client.rpc = (_name: string, args: Record<string, unknown>) => {
+      client.calls.push("persist_ledger_record_bundle_resolved");
+      rpcArgs.push(args);
       return Promise.resolve({ data: { replayed: false }, error: null });
     };
     const transferFirstQueue = enqueueRecordSync([], transfer, "2026-07-13T00:00:00.000Z");
@@ -282,8 +290,12 @@ describe("cloud sync service", () => {
       queue,
     }));
 
-    expect(client.calls.indexOf("ledger_records")).toBeLessThan(client.calls.indexOf("persist_ledger_record_bundle_resolved"));
     expect(result.records.every((record) => record.status === "synced")).toBe(true);
+    expect(rpcArgs).toHaveLength(2);
+    expect(rpcArgs[0].p_ledger_record).toMatchObject({ kind: "expense" });
+    expect(rpcArgs[0].p_transfer_details).toEqual({});
+    expect(rpcArgs[1].p_ledger_record).toMatchObject({ kind: "transfer" });
+    expect(rpcArgs[1].p_transfer_details).toMatchObject({ destination_account_id: "remote-accounts-1" });
   });
 
   test("resyncs an edited record with a version-scoped idempotency key", async () => {
