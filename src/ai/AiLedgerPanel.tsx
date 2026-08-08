@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ImagePlus, Loader2, Mic, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus, Mic, Sparkles } from "lucide-react";
 import type { TransactionDraft } from "../appShell/drafts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
@@ -9,7 +9,7 @@ import { parseDraftSuggestions, type AiDraftSuggestion } from "./parse";
 type SpeechRecognitionLike = {
   lang: string;
   interimResults: boolean;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((event: { results: ReadonlyArray<ReadonlyArray<{ transcript: string }>> }) => void) | null;
   onend: (() => void) | null;
   onerror: (() => void) | null;
   start: () => void;
@@ -51,6 +51,15 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
 
   const configured = isAiConfigured();
 
+  // Stop any in-flight speech session when the panel unmounts so the
+  // recognition instance and its callbacks do not outlive the component.
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
+    };
+  }, []);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
@@ -61,14 +70,17 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
     }
     setLoading(true);
     try {
-      const system = buildLedgerSystemPrompt({ accounts, categories, today: new Date().toISOString().slice(0, 10) });
+      // Compute once per submit so the system prompt and the parsed drafts
+      // always agree on the reference date, even across midnight.
+      const today = new Date().toISOString().slice(0, 10);
+      const system = buildLedgerSystemPrompt({ accounts, categories, today });
       const user = buildUserPrompt(inputText, selectedImage?.dataUrl);
       const result = await requestAiJson({ system, user, imageDataUrl: selectedImage?.dataUrl });
       if (!result.ok) {
         setError(result.message);
         return;
       }
-      const parsed = parseDraftSuggestions(result.data, accounts, categories, new Date().toISOString().slice(0, 10));
+      const parsed = parseDraftSuggestions(result.data, accounts, categories, today);
       setSuggestions(parsed);
       if (parsed.length === 0) {
         setError("AI 沒有辨識出任何交易,請換一種描述試試。");
@@ -86,8 +98,9 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
     reader.onload = () => {
       const dataUrl = String(reader.result);
       // Downscale large photos so the request stays within the edge-function
-      // body limit (base64 inflates ~33%).
-      void downscaleImage(dataUrl, 1600, 0.82).then((scaled) => {
+      // body limit (base64 inflates ~33%). downscaleImage never rejects, so
+      // the follow-up cannot fail silently.
+      downscaleImage(dataUrl, 1600, 0.82).then((scaled) => {
         setSelectedImage({ name: file.name, dataUrl: scaled });
       });
     };
@@ -109,8 +122,8 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
     recognition.interimResults = false;
     recognition.onresult = (event) => {
       let transcript = "";
-      for (let index = 0; index < event.results.length; index += 1) {
-        transcript += event.results[index][0].transcript;
+      for (const result of event.results) {
+        transcript += result[0].transcript;
       }
       setInputText((current) => `${current}${current ? " " : ""}${transcript}`.trim());
     };
@@ -204,8 +217,8 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
             </div>
             <span>{suggestions.length} 筆</span>
           </div>
-          {suggestions.map((suggestion, index) => (
-            <article className="draft-card" key={index}>
+          {suggestions.map((suggestion) => (
+            <article className="draft-card" key={suggestionKey(suggestion)}>
               <div>
                 <strong>
                   {kindLabel[suggestion.input.kind as string] ?? "支出"} · {suggestion.draft ? `${suggestion.draft.currency} ${suggestion.draft.amount}` : "無法辨識"}
@@ -214,8 +227,8 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
                   {suggestion.draft ? `${suggestion.draft.date} · ${suggestion.draft.account}` : (asShortText(suggestion.input) || "無法辨識的項目")}
                   {suggestion.draft && suggestion.draft.category ? ` · ${suggestion.draft.category}` : ""}
                 </span>
-                {suggestion.draft && suggestion.draft.counterparty && suggestion.draft.counterparty !== "Merchant unavailable" ? (
-                  <span>對象:{suggestion.draft.counterparty}{suggestion.draft.itemName && suggestion.draft.itemName !== "Item unavailable" ? ` · ${suggestion.draft.itemName}` : ""}</span>
+                {suggestion.draft?.counterparty && suggestion.draft.counterparty !== "Merchant unavailable" ? (
+                  <span>對象:{suggestion.draft.counterparty}{suggestion.draft?.itemName && suggestion.draft.itemName !== "Item unavailable" ? ` · ${suggestion.draft.itemName}` : ""}</span>
                 ) : null}
               </div>
               {suggestion.ok && suggestion.draft ? (
@@ -265,4 +278,13 @@ async function downscaleImage(dataUrl: string, maxDimension: number, quality: nu
 function asShortText(input: AiDraftSuggestion["input"]): string {
   const parts = [input.counterparty, input.itemName, input.amount].map((value) => typeof value === "string" ? value.trim() : value).filter(Boolean);
   return parts.join(" ");
+}
+
+// Stable React key for a suggestion card: prefers resolved draft fields, and
+// falls back to the raw AI input for suggestions that failed to parse.
+function suggestionKey(suggestion: AiDraftSuggestion): string {
+  if (suggestion.draft) {
+    return [suggestion.draft.date, suggestion.draft.account, suggestion.draft.kind, suggestion.draft.amount, suggestion.draft.counterparty, suggestion.draft.itemName].join("|");
+  }
+  return JSON.stringify(suggestion.input);
 }
