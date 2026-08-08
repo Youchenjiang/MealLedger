@@ -1,29 +1,11 @@
 <type>(<scope>): <description>
 
-Why:
+1. Why this change is needed.
 
-- 
+2. What changed and how.
 
-What changed:
+3. How it was verified.
 
-- 
-
-Verification:
-
-- 
-
-# Format:
-#   <type>(<scope>): <description>
-#
-# Allowed types:
-#   feat, fix, refactor, docs, test, chore, style, perf, security
-#
-# Preferred scopes:
-#   app, ledger, meal, media, r2, supabase, ai, auth, docs, ci, deps
-#
-# Rules:
-#   - English only
-#   - Subject under 50 characters
-#   - Lowercase after the colon
-#   - No period at the end
-#   - One logical change per commit
+# Format: <type>(<scope>): <description>
+# All rules (types, scopes, length, body): docs/engineering/commit-policy.md
+# Enforced identically by the local commit-msg hook and CI.

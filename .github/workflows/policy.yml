@@ -9,98 +9,46 @@ permissions:
   pull-requests: read
 
 jobs:
-  conventional-policy:
-    name: PR and commit policy
+  commit-policy:
+    name: Commit and PR policy
     runs-on: ubuntu-latest
     steps:
-      - name: Validate PR title and commit subjects
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Prove the policy code itself is sane before using it as the gate.
+      - name: Policy self-test
+        run: node scripts/commit-policy.mjs self-test
+
+      # Every relative doc link must resolve, and the commit/testing policy
+      # rule values must live only in their canonical files (no embedded
+      # copies that can drift). Same script as `npm run test:docs` locally.
+      - name: Docs link and single-source checks
+        run: node scripts/check-docs.mjs
+
+      - name: Validate PR title and commit messages
         uses: actions/github-script@v8
         with:
           script: |
-            const allowedTypes = [
-              "feat",
-              "fix",
-              "refactor",
-              "docs",
-              "test",
-              "chore",
-              "style",
-              "perf",
-              "security",
-            ];
-            const allowedScopes = [
-              "app",
-              "ledger",
-              "meal",
-              "media",
-              "r2",
-              "supabase",
-              "ai",
-              "auth",
-              "docs",
-              "ci",
-              "deps",
-              "product",
-              "accounting",
-              "taxonomy",
-              "imports",
-              "security",
-              "sync",
-              "flows",
-              "v1",
-              "data",
-              "ops",
-              "test",
-              "privacy",
-              "quality",
-              "workflow",
-              "spec",
-              "decisions",
-              "account",
-              "capture",
-              "cloud",
-              "e2e",
-              "export",
-              "import",
-              "invoice",
-              "meals",
-              "onboarding",
-              "schema",
-              "settings",
-              "ui",
-            ];
-            const typePattern = allowedTypes.join("|");
-            const scopePattern = allowedScopes.join("|");
-            const pattern = new RegExp(
-              `^(${typePattern})\\((${scopePattern})\\): [a-z0-9].*$`,
-            );
+            // The rules live in exactly one file: scripts/commit-policy.mjs.
+            // The local hook (scripts/hooks/commit-msg) and this CI job both
+            // execute that file, so local and CI enforcement are identical by
+            // construction. See docs/engineering/commit-policy.md.
+            const { execFileSync } = require("node:child_process");
 
-            function validateSubject(subject, label) {
-              subject = subject.trim();
-              const errors = [];
-              if (!pattern.test(subject)) {
-                errors.push(
-                  `${label} must match <type>(<scope>): <description> with an allowed type/scope.`,
-                );
-              }
-              if (subject.endsWith(".")) {
-                errors.push(`${label} must not end with a period.`);
-              }
-              if (subject.length > 72) {
-                errors.push(`${label} must be 72 characters or less.`);
-              }
-              const description = subject.replace(
-                new RegExp(`^(${typePattern})\\((${scopePattern})\\):\\s+`),
-                "",
-              );
-              if (/^(update|misc|stuff|changes|fix bug|bug fix)$/i.test(description)) {
-                errors.push(`${label} description is too vague.`);
-              }
-              return errors;
-            }
+            const runPolicy = (args, input) =>
+              execFileSync("node", ["scripts/commit-policy.mjs", ...args], {
+                input,
+                encoding: "utf8",
+              });
 
             const failures = [];
-            failures.push(...validateSubject(context.payload.pull_request.title, "PR title"));
+
+            try {
+              runPolicy(["subject", context.payload.pull_request.title]);
+            } catch (e) {
+              failures.push(`PR title failed policy:\n${(e.stderr || "").trim()}`);
+            }
 
             const commits = await github.paginate(github.rest.pulls.listCommits, {
               owner: context.repo.owner,
@@ -110,9 +58,12 @@ jobs:
             });
 
             for (const commit of commits) {
-              const subject = commit.commit.message.split("\n")[0];
-              for (const error of validateSubject(subject, `Commit ${commit.sha.slice(0, 7)}`)) {
-                failures.push(`${error}\n  subject: ${subject}`);
+              try {
+                runPolicy(["message"], commit.commit.message);
+              } catch (e) {
+                failures.push(
+                  `Commit ${commit.sha.slice(0, 7)} failed policy:\n${(e.stderr || "").trim()}`,
+                );
               }
             }
 
