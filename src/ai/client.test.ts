@@ -23,7 +23,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ data: { items: [] } }),
+        json: () => ({ data: { items: [] } }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -41,7 +41,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ data: { items: [] } }),
+        json: () => ({ data: { items: [] } }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -64,7 +64,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_BASE_URL", "https://api.tokenrouter.com/v1/");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ data: { items: [] } }),
+        json: () => ({ data: { items: [] } }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -87,7 +87,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ error: "ai_empty_response" }),
+        json: () => ({ error: "ai_empty_response" }),
       }));
 
       const result = await requestAiJson({ system: "s", user: "u" });
@@ -104,7 +104,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+        json: () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -124,7 +124,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+        json: () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -144,7 +144,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+        json: () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -163,7 +163,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+        json: () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -178,7 +178,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+        json: () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -195,7 +195,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
+        json: () => ({ choices: [{ message: { content: '{"items":[]}' } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -211,7 +211,7 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ candidates: [{ content: { parts: [{ text: '{"items":[]}' }] } }] }),
+        json: () => ({ candidates: [{ content: { parts: [{ text: '{"items":[]}' }] } }] }),
       });
       vi.stubGlobal("fetch", fetchMock);
 
@@ -241,12 +241,37 @@ describe("requestAiJson", () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: "not-json" } }] }),
+        json: () => ({ choices: [{ message: { content: "not-json" } }] }),
       }));
 
       const result = await requestAiJson({ system: "s", user: "u" });
 
       expect(result.ok).toBe(false);
+    });
+
+    test("aborts a hanging direct provider request after the timeout", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.stubEnv("AI_API_KEY", "test-key");
+        vi.stubEnv("AI_PROVIDER", "openai");
+        vi.stubEnv("AI_EDGE_FUNCTION_URL", "");
+        let capturedSignal: AbortSignal | undefined;
+        vi.stubGlobal("fetch", vi.fn((_input: unknown, init?: RequestInit) => {
+          capturedSignal = init?.signal ?? undefined;
+          return new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new Error("Aborted")));
+          });
+        }));
+
+        const pending = requestAiJson({ system: "s", user: "u" });
+        await vi.advanceTimersByTimeAsync(90_000);
+
+        expect(capturedSignal?.aborted).toBe(true);
+        const result = await pending;
+        expect(result.ok).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

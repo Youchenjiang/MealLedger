@@ -15,35 +15,40 @@ async function currentAccessToken(): Promise<string> {
   return data.session?.access_token ?? "";
 }
 
-async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequest): Promise<unknown> {
-  const token = await currentAccessToken();
+const REQUEST_TIMEOUT_MS = 90_000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90_000);
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(edgeFunctionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        system: request.system,
-        user: request.user,
-        imageDataUrl: request.imageDataUrl ?? undefined,
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new Error(`AI request failed (${response.status}).`);
-    }
-    const payload = (await response.json()) as { data?: unknown; error?: string };
-    if (payload.error) {
-      throw new Error(payload.error);
-    }
-    return payload.data;
+    return await fetch(input, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequest): Promise<unknown> {
+  const token = await currentAccessToken();
+  const response = await fetchWithTimeout(edgeFunctionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      system: request.system,
+      user: request.user,
+      imageDataUrl: request.imageDataUrl ?? undefined,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`AI request failed (${response.status}).`);
+  }
+  const payload = (await response.json()) as { data?: unknown; error?: string };
+  if (payload.error) {
+    throw new Error(payload.error);
+  }
+  return payload.data;
 }
 
 function extractImage(imageDataUrl: string): { mimeType: string; base64: string } {
@@ -77,7 +82,7 @@ async function requestOpenAi(baseUrl: string, apiKey: string, model: string, req
         : request.user,
     },
   ];
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -106,7 +111,7 @@ async function requestGemini(baseUrl: string, apiKey: string, model: string, req
     const image = extractImage(request.imageDataUrl);
     parts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } });
   }
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
