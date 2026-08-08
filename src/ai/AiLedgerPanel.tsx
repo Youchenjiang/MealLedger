@@ -225,7 +225,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
                 </strong>
                 <span>
                   {suggestion.draft ? `${suggestion.draft.date} · ${suggestion.draft.account}` : (asShortText(suggestion.input) || "無法辨識的項目")}
-                  {suggestion.draft && suggestion.draft.category ? ` · ${suggestion.draft.category}` : ""}
+                  {suggestion.draft?.category ? ` · ${suggestion.draft.category}` : ""}
                 </span>
                 {suggestion.draft?.counterparty && suggestion.draft.counterparty !== "Merchant unavailable" ? (
                   <span>對象:{suggestion.draft.counterparty}{suggestion.draft?.itemName && suggestion.draft.itemName !== "Item unavailable" ? ` · ${suggestion.draft.itemName}` : ""}</span>
