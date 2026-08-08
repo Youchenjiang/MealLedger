@@ -143,6 +143,23 @@ describe("cloud row mappers", () => {
     }
   });
 
+  test("attaches account_name only on transfer rows", () => {
+    const expense = mapLedgerRecord(record(), "user-1", references);
+    const transfer = mapLedgerRecord(record({
+      kind: "transfer",
+      category: "",
+      counterparty: "",
+      transferAccountId: "account-local-2",
+      destinationAmount: "100",
+      destinationCurrency: "TWD",
+    }), "user-1", references);
+
+    expect(expense).toMatchObject({ ok: true });
+    expect(transfer).toMatchObject({ ok: true });
+    if (expense.ok) expect(expense.value.ledgerRecord).not.toHaveProperty("account_name");
+    if (transfer.ok) expect(transfer.value.ledgerRecord).toHaveProperty("account_name", "Cash");
+  });
+
   test("rejects a stale source account reference instead of sending it to cloud", () => {
     const result = mapLedgerRecord(record({
       accountId: "11111111-1111-4111-8111-111111111111",

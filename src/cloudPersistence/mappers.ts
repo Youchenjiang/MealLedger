@@ -521,7 +521,9 @@ export function mapLedgerRecord(
     eventId: eventId.value,
     recordId: recordId.value,
   });
-  ledgerRecord.account_name = record.accountName;
+  if (record.kind === "transfer") {
+    ledgerRecord.account_name = record.accountName;
+  }
 
   const bundle: CloudRecordBundle = {
     ledgerRecord,
