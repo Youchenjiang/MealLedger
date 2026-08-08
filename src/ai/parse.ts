@@ -26,7 +26,9 @@ export type AiDraftSuggestion = {
 export type AiLedgerAccounts = Array<{ name: string; currency: string }>;
 
 function asText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  return "";
 }
 
 function normalizeKind(value: unknown): AiDraftKind | null {
@@ -134,11 +136,14 @@ export function parseDraftSuggestions(
   categories: string[],
   today: string,
 ): AiDraftSuggestion[] {
-  const items = Array.isArray(payload)
-    ? payload
-    : Array.isArray((payload as { items?: unknown })?.items)
-      ? (payload as { items: unknown[] }).items
-      : [];
+  let items: unknown[];
+  if (Array.isArray(payload)) {
+    items = payload;
+  } else if (Array.isArray((payload as { items?: unknown })?.items)) {
+    items = (payload as { items: unknown[] }).items;
+  } else {
+    items = [];
+  }
 
   return items.map((item): AiDraftSuggestion => {
     const input = (item && typeof item === "object" ? item : {}) as AiSuggestionInput;
