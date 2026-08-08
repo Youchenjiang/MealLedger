@@ -21,6 +21,8 @@ Use this index as the starting point for review. The documentation is grouped by
 
 - [Setup notes](engineering/setup.md)
 - [Development workflow](engineering/development-workflow.md)
+- [Commit and PR policy](engineering/commit-policy.md)
+- [Testing policy](engineering/testing-policy.md)
 - [Spec-driven workflow](engineering/spec-driven-workflow.md)
 - [PR review checklist](engineering/pr-review-checklist.md)
 - [V1 implementation sequence](engineering/implementation-sequence.md)

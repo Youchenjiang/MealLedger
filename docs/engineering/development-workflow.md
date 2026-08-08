@@ -32,11 +32,16 @@ npm run dev
 npm run build
 ```
 
-Default local app URL:
+Ports are pinned in `package.json` scripts (single source of truth):
 
-```text
-http://127.0.0.1:5173/
-```
+| Script | URL |
+| --- | --- |
+| `npm run dev` | `http://127.0.0.1:4173/` |
+| `npm run dev:5200` (auth review server) | `http://127.0.0.1:5200/` |
+| `npm run dev:e2e` (Playwright server) | `http://127.0.0.1:4174/` |
+| `npm run preview` | `http://127.0.0.1:4173/` |
+
+Default local app URL: `http://127.0.0.1:4173/`.
 
 ## Frontend PR Verification
 
@@ -49,7 +54,7 @@ Every frontend PR must include:
 
 Smoke test checklist:
 
-- App loads at `http://127.0.0.1:5173/`.
+- App loads at `http://127.0.0.1:4173/`.
 - Main navigation is visible.
 - Primary workflow entry point is visible.
 - Layout has no obvious overlapping text at desktop and mobile widths.
@@ -57,16 +62,10 @@ Smoke test checklist:
 
 ## Risk-Driven Testing
 
-Use stricter tests where mistakes can corrupt money, privacy, or imports.
-
-| Area | Testing expectation |
-| --- | --- |
-| Ledger amounts and transfers | Acceptance cases before implementation |
-| Exports | Automated shape/content checks |
-| RLS and auth | Policy tests or SQL verification |
-| Invoice import | Fixture-based tests for duplicates and drafts |
-| AI/OCR | Schema validation and confirmation-flow tests |
-| UI shell | Build plus browser smoke test |
+Use stricter tests where mistakes can corrupt money, privacy, or imports. The
+required evidence per change area is defined in exactly one place — the
+[Testing Policy](testing-policy.md). Keep the mapping out of this file so the
+rules cannot drift.
 
 ## Generated Artifacts
 

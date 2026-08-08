@@ -92,15 +92,9 @@ Apply to frontend PRs.
 
 ## Test Expectations By Risk
 
-| Risk area | Expected evidence |
-| --- | --- |
-| Ledger math | Acceptance tests or explicit manual cases |
-| Schema/RLS | SQL verification, policy tests, or migration review |
-| Import/export | Fixture-based tests or generated-file inspection |
-| Media/privacy | Ownership, retention, and export exclusion checks |
-| UI shell | Build plus browser smoke test |
-| Docs-only | Link check or reviewer walkthrough |
-
+The required verification evidence per risk area is defined in exactly one
+place — the [Testing Policy](testing-policy.md). This checklist does not
+restate the mapping so the two cannot drift.
 ## When To Block A PR
 
 Block merge when:
