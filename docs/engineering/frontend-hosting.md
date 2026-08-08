@@ -18,9 +18,11 @@ and costs zero billable invocations; SPA fallback is handled by
 Alternatives, kept in mind:
 
 - **Cloudflare Pages** — equally capable; the repo was previously wired for
-  Pages via `public/_redirects`. The `_redirects` file is kept because Workers
-  static assets honor the same format, but the active SPA fallback is the
-  Wrangler `single-page-application` mode.
+  Pages via `public/_redirects`, but that file was removed: Workers static
+  assets reject its catch-all `/* /index.html 200` rule (infinite-loop error,
+  code 100324), which failed the Git-integration build. SPA fallback is
+  handled solely by `assets.not_found_handling = "single-page-application"`
+  in `wrangler.jsonc`.
 - **Vercel** — equally capable for this app; the only cost is a second account
   and a `vercel.json` rewrites block. Switch is a five-minute change if ever
   wanted.
