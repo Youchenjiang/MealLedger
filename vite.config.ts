@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     globals: true,
-    exclude: [...configDefaults.exclude, "tests/e2e/**"],
+    exclude: [...configDefaults.exclude, "tests/e2e/**", "supabase/functions/**"],
     setupFiles: "./src/test/setup.ts",
     coverage: {
       provider: "v8",
