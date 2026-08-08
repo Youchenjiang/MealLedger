@@ -1,5 +1,6 @@
 export const captureIntents = [
   { id: "manual-ledger", label: "Manual ledger", detail: "Save an expense, income, transfer, refund, or adjustment.", kind: "ledger" },
+  { id: "ai-ledger", label: "AI 補帳", detail: "Voice, text, or receipt photo to prefill a ledger draft for confirmation.", kind: "ledger" },
   { id: "scan-invoice", label: "Scan invoice", detail: "Keep an invoice scan as a reviewable source before ledger confirmation.", kind: "scan" },
   { id: "scan-receipt", label: "Scan receipt", detail: "Keep a receipt scan as a reviewable source before ledger confirmation.", kind: "scan" },
   { id: "record-meal", label: "Record meal", detail: "Record a meal with optional photos and an optional ledger link.", kind: "meal" },

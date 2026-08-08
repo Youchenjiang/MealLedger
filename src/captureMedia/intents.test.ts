@@ -2,9 +2,10 @@ import { describe, expect, test } from "vitest";
 import { captureIntentLabel, captureIntents } from "./intents";
 
 describe("capture intents", () => {
-  test("exposes the five capture entry points", () => {
+  test("exposes the six capture entry points", () => {
     expect(captureIntents.map((item) => item.id)).toEqual([
       "manual-ledger",
+      "ai-ledger",
       "scan-invoice",
       "scan-receipt",
       "record-meal",

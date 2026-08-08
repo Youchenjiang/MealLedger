@@ -15,6 +15,7 @@ import {
   Plus,
   ReceiptText,
   Settings,
+  Sparkles,
   Upload,
   Wifi,
   WifiOff,
@@ -48,6 +49,7 @@ import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient
 import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
 import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
+import { AiLedgerPanel } from "./ai/AiLedgerPanel";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/", icon: Home },
@@ -3319,6 +3321,7 @@ function CapturePage({
 
   const actionIcons = {
     "manual-ledger": Banknote,
+    "ai-ledger": Sparkles,
     "scan-invoice": ReceiptText,
     "scan-receipt": ReceiptText,
     "record-meal": ImagePlus,
@@ -3339,6 +3342,7 @@ function CapturePage({
   const isUnresolvedExpense = form.kind === "unresolved-expense";
   const hasSelectedAccount = accounts.some((account) => account.name === form.account);
   const categoryOptions = (form.kind === "income" ? incomeCategories : expenseCategories).concat(customCategories);
+  const aiCategories = [...new Set([...expenseCategories, ...incomeCategories, ...customCategories])];
   const sourceOptions = useMemo(
     () => [...new Set([...customSources, ...records.filter((record) => record.kind === "income" || record.kind === "fund-addition").map((record) => record.counterparty).filter(Boolean)])],
     [customSources, records],
@@ -3759,6 +3763,12 @@ function CapturePage({
            onSubmit: handleAttachmentSubmit,
            onClearUploads,
          }}
+        aiProps={{
+          accounts,
+          categories: aiCategories,
+          onSaveRecord,
+          onSaveDraft,
+        }}
        />
       {captureIntent === "manual-ledger" ? <SavedRecordPanel recordCount={records.length} navigate={navigate} /> : null}
     </section>
@@ -3771,11 +3781,15 @@ type CaptureIntentPanelProps = {
   mealProps: React.ComponentProps<typeof MealCapturePanel>;
   scanProps: React.ComponentProps<typeof ScanCapturePanel>;
   attachmentProps: React.ComponentProps<typeof AttachmentCapturePanel>;
+  aiProps: React.ComponentProps<typeof AiLedgerPanel>;
 };
 
-function CaptureIntentPanel({ captureIntent, manualLedgerProps, mealProps, scanProps, attachmentProps }: Readonly<CaptureIntentPanelProps>) {
+function CaptureIntentPanel({ captureIntent, manualLedgerProps, mealProps, scanProps, attachmentProps, aiProps }: Readonly<CaptureIntentPanelProps>) {
   if (captureIntent === "manual-ledger") {
     return <ManualLedgerPanel {...manualLedgerProps} />;
+  }
+  if (captureIntent === "ai-ledger") {
+    return <AiLedgerPanel {...aiProps} />;
   }
   if (captureIntent === "record-meal") {
     return <MealCapturePanel {...mealProps} />;

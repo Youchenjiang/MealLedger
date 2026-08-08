@@ -3,10 +3,11 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  envPrefix: ["VITE_", "AI_"],
   test: {
     environment: "happy-dom",
     globals: true,
-    exclude: [...configDefaults.exclude, "tests/e2e/**"],
+    exclude: [...configDefaults.exclude, "tests/e2e/**", "supabase/functions/**"],
     setupFiles: "./src/test/setup.ts",
     coverage: {
       provider: "v8",
