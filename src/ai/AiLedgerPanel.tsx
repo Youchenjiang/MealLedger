@@ -96,11 +96,13 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = String(reader.result);
+      // readAsDataURL always resolves to a string; guard the union type.
+      const result = reader.result;
+      if (typeof result !== "string") return;
       // Downscale large photos so the request stays within the edge-function
       // body limit (base64 inflates ~33%). downscaleImage never rejects, so
       // the follow-up cannot fail silently.
-      downscaleImage(dataUrl, 1600, 0.82).then((scaled) => {
+      downscaleImage(result, 1600, 0.82).then((scaled) => {
         setSelectedImage({ name: file.name, dataUrl: scaled });
       });
     };
@@ -164,9 +166,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
           用說的、打字,或拍發票/收據,AI 會幫你把欄位填好,確認後才寫入正式記錄。
         </p>
         {!configured ? (
-          <p className="inline-message" role="status">
-            尚未設定 AI 金鑰:在 .env 設定 AI_PROVIDER 與 AI_API_KEY 後即可使用。
-          </p>
+          <output className="inline-message">尚未設定 AI 金鑰:在 .env 設定 AI_PROVIDER 與 AI_API_KEY 後即可使用。</output>
         ) : null}
         <label htmlFor="ai-ledger-input">記帳內容</label>
         <textarea
@@ -206,7 +206,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
       </form>
 
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
-      {message ? <p className="inline-message" role="status">{message}</p> : null}
+      {message ? <output className="inline-message">{message}</output> : null}
 
       {suggestions.length > 0 ? (
         <section className="ai-suggestions" aria-label="AI 記帳草稿">
