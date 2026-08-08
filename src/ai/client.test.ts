@@ -84,6 +84,38 @@ describe("requestAiJson", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).model).toBe("fast-model");
   });
 
+  test("routes requests through the edge function proxy when configured", async () => {
+    vi.stubEnv("AI_EDGE_FUNCTION_URL", "https://project.supabase.co/functions/v1/ai-parse");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { items: [] } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await requestAiJson({
+      system: "sys",
+      user: "usr",
+      imageDataUrl: "data:image/png;base64,QUFB",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://project.supabase.co/functions/v1/ai-parse");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.system).toBe("sys");
+    expect(body.user).toBe("usr");
+    expect(body.imageDataUrl).toBe("data:image/png;base64,QUFB");
+  });
+
+  test("surfaces edge function errors", async () => {
+    vi.stubEnv("AI_EDGE_FUNCTION_URL", "https://project.supabase.co/functions/v1/ai-parse");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+
+    const result = await requestAiJson({ system: "s", user: "u" });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("401");
+  });
+
   test("uses a custom base URL when AI_BASE_URL is set", async () => {
     vi.stubEnv("AI_API_KEY", "test-key");
     vi.stubEnv("AI_PROVIDER", "openai");
