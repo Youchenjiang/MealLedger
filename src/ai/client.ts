@@ -64,9 +64,24 @@ function parseJsonResponse(text: string): unknown {
   if (!trimmed) {
     throw new Error("The AI returned an empty response.");
   }
-  // Strip markdown fences if the provider wrapped the JSON.
-  const fenced = /^```(?:json)?\s*([\s\S]*?)```$/.exec(trimmed);
-  return JSON.parse(fenced ? fenced[1] : trimmed);
+  return JSON.parse(stripMarkdownFence(trimmed));
+}
+
+// Removes ```json ... ``` fences when a provider wraps the JSON payload,
+// supporting both multi-line and single-line fences. Returns the input
+// unchanged when it is not fenced.
+function stripMarkdownFence(text: string): string {
+  if (!text.startsWith("```") || !text.endsWith("```")) {
+    return text;
+  }
+  const firstLineEnd = text.indexOf("\n");
+  let start = firstLineEnd + 1;
+  if (firstLineEnd === -1) {
+    // Single-line fence such as ```json {...} ``` or ```json{...}```.
+    const brace = text.indexOf("{");
+    start = brace === -1 ? text.indexOf(" ") + 1 : brace;
+  }
+  return text.slice(start, text.length - 3).trim();
 }
 
 async function requestOpenAi(baseUrl: string, apiKey: string, model: string, request: AiRequest): Promise<unknown> {
