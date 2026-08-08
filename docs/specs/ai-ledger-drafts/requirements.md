@@ -53,6 +53,18 @@ input.
   can read the bundle.
 - OpenAI does not permit browser CORS; the OpenAI provider path only works when
   the call is proxied server-side. Gemini accepts browser calls.
-- Before production rollout, route AI calls through a Supabase Edge Function
-  (same pattern as `create-r2-upload-url`) so the key stays server-side and the
-  OpenAI path works in the browser.
+- Verified live (2026-08): NVIDIA NIM (`integrate.api.nvidia.com`) also rejects
+  browser CORS (`Failed to fetch` in Chromium). Browser direct calls therefore
+  require the edge-function proxy.
+- Production route is the `ai-parse` Supabase Edge Function proxy: the key
+  stays server-side, CORS is handled, the model is server-controlled, bodies
+  are capped at 4 MB, and the caller must present a valid auth token. The
+  client posts to `AI_EDGE_FUNCTION_URL` when set; direct calls remain only as
+  a local-development fallback.
+- Receipt photos are downscaled to 1600 px on the client before sending to
+  keep base64 payloads under the edge-function body limit.
+- Text parsing uses `AI_MODEL`; image requests use `AI_VISION_MODEL` when set.
+  Verified with NVIDIA: `deepseek-ai/deepseek-v4-flash-0731` parses text
+  reliably; `meta/llama-3.2-11b-vision-instruct` splits a sample receipt into
+  line items summing to the 總計 (small-text OCR errors remain, so confirmation
+  matters). The 90b vision model times out on the free tier.
