@@ -3,7 +3,7 @@ import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
 
 describe("buildUserPrompt", () => {
   test("returns the trimmed text when the user typed something", () => {
-    expect(buildUserPrompt("  7/25 吃麵 480  ", undefined)).toBe("7/25 吃麵 480");
+    expect(buildUserPrompt("  7/25 吃麵 480  ")).toBe("7/25 吃麵 480");
   });
 
   test("returns the line-item receipt prompt when only an image is provided", () => {
@@ -14,7 +14,7 @@ describe("buildUserPrompt", () => {
   });
 
   test("returns an empty string with no text and no image", () => {
-    expect(buildUserPrompt("", undefined)).toBe("");
+    expect(buildUserPrompt("")).toBe("");
   });
 });
 
