@@ -11,7 +11,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 // The proxy talks to any OpenAI-compatible chat completions endpoint.
 const AI_API_KEY = requireEnv("AI_API_KEY");
-const AI_BASE_URL = (Deno.env.get("AI_BASE_URL") ?? "https://api.openai.com/v1").replace(/\/+$/, "");
+const AI_BASE_URL = stripTrailingSlashes(Deno.env.get("AI_BASE_URL") ?? "https://api.openai.com/v1");
 const AI_MODEL = Deno.env.get("AI_MODEL") ?? "gpt-4o-mini";
 // The handler falls back to AI_MODEL when the vision model is unset.
 const AI_VISION_MODEL = Deno.env.get("AI_VISION_MODEL") ?? "";
@@ -22,6 +22,12 @@ function requireEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
+}
+
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
 }
 
 const deps: AiParseDeps = {

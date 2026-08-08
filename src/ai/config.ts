@@ -27,9 +27,15 @@ export function readAiConfig(): AiConfig | null {
   const model = (env.AI_MODEL as string | undefined)?.trim()
     || (provider === "gemini" ? "gemini-2.0-flash" : "gpt-4o-mini");
   const visionModel = (env.AI_VISION_MODEL as string | undefined)?.trim() || undefined;
-  const baseUrl = (env.AI_BASE_URL as string | undefined)?.trim().replace(/\/+$/, "")
+  const baseUrl = stripTrailingSlashes((env.AI_BASE_URL as string | undefined)?.trim() ?? "")
     || DEFAULT_BASE_URLS[provider];
   return { provider, apiKey, model, visionModel, baseUrl, edgeFunctionUrl };
+}
+
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
 }
 
 export function isAiConfigured(): boolean {
