@@ -72,7 +72,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
     try {
       // Compute once per submit so the system prompt and the parsed drafts
       // always agree on the reference date, even across midnight.
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       const system = buildLedgerSystemPrompt({ accounts, categories, today });
       const user = buildUserPrompt(inputText, selectedImage?.dataUrl);
       const result = await requestAiJson({ system, user, imageDataUrl: selectedImage?.dataUrl });
@@ -273,6 +273,13 @@ async function downscaleImage(dataUrl: string, maxDimension: number, quality: nu
   } catch {
     return dataUrl;
   }
+}
+
+// Local calendar date (YYYY-MM-DD). toISOString would return the UTC date,
+// which trails the local calendar for timezones east of UTC in the early hours.
+function localToday(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 }
 
 function asShortText(input: AiDraftSuggestion["input"]): string {
