@@ -75,6 +75,52 @@ async function readBodyWithLimit(request: Request, maxBytes: number): Promise<st
   return new TextDecoder().decode(merged);
 }
 
+function buildMessages(system: string, user: string, imageDataUrl: string): Array<{ role: string; content: unknown }> {
+  return [
+    ...(system ? [{ role: "system", content: system }] : []),
+    {
+      role: "user",
+      content: imageDataUrl
+        ? [
+            { type: "text", text: user || DEFAULT_IMAGE_USER_TEXT },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ]
+        : user,
+    },
+  ];
+}
+
+type ProviderResult =
+  | { kind: "ok"; data: unknown }
+  | { kind: "http-error"; status: number; detail: string }
+  | { kind: "empty" }
+  | { kind: "exception"; detail: string };
+
+async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: string, messages: unknown[]): Promise<ProviderResult> {
+  try {
+    const response = await fetchImpl(`${env.aiBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.aiApiKey}`,
+      },
+      body: JSON.stringify({ model, messages, response_format: { type: "json_object" } }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return { kind: "http-error", status: response.status, detail: detail.slice(0, 500) };
+    }
+    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
+      return { kind: "empty" };
+    }
+    return { kind: "ok", data: JSON.parse(content) };
+  } catch (error) {
+    return { kind: "exception", detail: String(error).slice(0, 500) };
+  }
+}
+
 export async function handleAiParseRequest(request: Request, deps: AiParseDeps): Promise<Response> {
   const { env, getUser, fetchImpl } = deps;
 
@@ -125,43 +171,15 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
   // Model is server-controlled: the client can never pick a model, so the
   // shared key cannot be redirected to arbitrary provider models.
   const model = imageDataUrl ? env.aiVisionModel || env.aiModel : env.aiModel;
-  const messages = [
-    ...(system ? [{ role: "system", content: system }] : []),
-    {
-      role: "user",
-      content: imageDataUrl
-        ? [
-            { type: "text", text: user || DEFAULT_IMAGE_USER_TEXT },
-            { type: "image_url", image_url: { url: imageDataUrl } },
-          ]
-        : user,
-    },
-  ];
-
-  try {
-    const response = await fetchImpl(`${env.aiBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.aiApiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return json({ error: `ai_request_failed:${response.status}`, detail: detail.slice(0, 500) }, 502, env.allowedOrigin);
-    }
-    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) {
-      return json({ error: "ai_empty_response" }, 502, env.allowedOrigin);
-    }
-    return json({ data: JSON.parse(content) }, 200, env.allowedOrigin);
-  } catch (error) {
-    return json({ error: "ai_request_failed", detail: String(error).slice(0, 500) }, 502, env.allowedOrigin);
+  const result = await callProvider(fetchImpl, env, model, buildMessages(system, user, imageDataUrl));
+  if (result.kind === "ok") {
+    return json({ data: result.data }, 200, env.allowedOrigin);
   }
+  if (result.kind === "http-error") {
+    return json({ error: `ai_request_failed:${result.status}`, detail: result.detail }, 502, env.allowedOrigin);
+  }
+  if (result.kind === "empty") {
+    return json({ error: "ai_empty_response" }, 502, env.allowedOrigin);
+  }
+  return json({ error: "ai_request_failed", detail: result.detail }, 502, env.allowedOrigin);
 }
