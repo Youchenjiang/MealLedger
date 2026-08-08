@@ -1,0 +1,4 @@
+# Cloudflare Pages SPA fallback: serve index.html for every route so
+# deep links (/ledger, /capture, /settings, ...) work on refresh.
+# The app routes with the History API (see src/App.tsx navigate()).
+/* /index.html 200

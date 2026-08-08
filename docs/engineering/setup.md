@@ -41,7 +41,8 @@ release path:
 supabase functions deploy create-r2-upload-url
 ```
 
-6. Set secrets:
+6. Set secrets. The variable list is defined in exactly one place —
+   `.env.example` ([TEMPLATE] section) — set the same names on the project:
 
 ```powershell
 supabase secrets set SUPABASE_URL="https://your-project.supabase.co"
