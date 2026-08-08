@@ -96,6 +96,19 @@ type ProviderResult =
   | { kind: "empty" }
   | { kind: "exception"; detail: string };
 
+function providerResultResponse(result: ProviderResult, allowedOrigin: string): Response {
+  if (result.kind === "ok") {
+    return json({ data: result.data }, 200, allowedOrigin);
+  }
+  if (result.kind === "http-error") {
+    return json({ error: `ai_request_failed:${result.status}`, detail: result.detail }, 502, allowedOrigin);
+  }
+  if (result.kind === "empty") {
+    return json({ error: "ai_empty_response" }, 502, allowedOrigin);
+  }
+  return json({ error: "ai_request_failed", detail: result.detail }, 502, allowedOrigin);
+}
+
 async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: string, messages: unknown[]): Promise<ProviderResult> {
   try {
     const response = await fetchImpl(`${env.aiBaseUrl}/chat/completions`, {
@@ -172,14 +185,5 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
   // shared key cannot be redirected to arbitrary provider models.
   const model = imageDataUrl ? env.aiVisionModel || env.aiModel : env.aiModel;
   const result = await callProvider(fetchImpl, env, model, buildMessages(system, user, imageDataUrl));
-  if (result.kind === "ok") {
-    return json({ data: result.data }, 200, env.allowedOrigin);
-  }
-  if (result.kind === "http-error") {
-    return json({ error: `ai_request_failed:${result.status}`, detail: result.detail }, 502, env.allowedOrigin);
-  }
-  if (result.kind === "empty") {
-    return json({ error: "ai_empty_response" }, 502, env.allowedOrigin);
-  }
-  return json({ error: "ai_request_failed", detail: result.detail }, 502, env.allowedOrigin);
+  return providerResultResponse(result, env.allowedOrigin);
 }
