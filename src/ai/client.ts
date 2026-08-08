@@ -1,4 +1,5 @@
 import { readAiConfig } from "./config";
+import { supabase } from "../lib/supabase";
 
 export type AiRequest = {
   system: string;
@@ -7,6 +8,43 @@ export type AiRequest = {
 };
 
 export type AiResult = { ok: true; data: unknown } | { ok: false; message: string };
+
+async function currentAccessToken(): Promise<string> {
+  if (!supabase) return "";
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? "";
+}
+
+async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequest): Promise<unknown> {
+  const token = await currentAccessToken();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+  try {
+    const response = await fetch(edgeFunctionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        system: request.system,
+        user: request.user,
+        imageDataUrl: request.imageDataUrl ?? undefined,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`AI request failed (${response.status}).`);
+    }
+    const payload = (await response.json()) as { data?: unknown; error?: string };
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return payload.data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function extractImage(imageDataUrl: string): { mimeType: string; base64: string } {
   const match = /^data:([^;]+);base64,(.*)$/s.exec(imageDataUrl);
@@ -97,6 +135,10 @@ export async function requestAiJson(request: AiRequest): Promise<AiResult> {
     return { ok: false, message: "AI 補帳尚未設定。請在 .env 設定 AI_API_KEY 與 AI_PROVIDER。" };
   }
   try {
+    if (config.edgeFunctionUrl) {
+      const data = await requestAiViaEdgeFunction(config.edgeFunctionUrl, request);
+      return { ok: true, data };
+    }
     const { baseUrl } = config;
     // Vision requests (receipt/invoice photos) use a dedicated vision-capable
     // model when configured; text parsing keeps the fast default model.
