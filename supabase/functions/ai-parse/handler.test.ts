@@ -1,4 +1,3 @@
-// NOSONAR -- SonarJS does not recognize Deno.test cases (S2187 false positive).
 // Unit tests for the pure ai-parse handler. Run with `deno test` (or
 // `npm run test:edge`). The suite injects fake auth and fetch dependencies,
 // so no Supabase project or provider credentials are required.
