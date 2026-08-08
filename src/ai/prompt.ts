@@ -24,7 +24,15 @@ export function buildLedgerSystemPrompt(context: AiLedgerContext): string {
   ].join("\n");
 }
 
+const RECEIPT_PROMPT = [
+  "請逐行辨識這張發票/收據的每個品項。",
+  "重點:品項名稱與金額要分開,「75g」「300ml」這類字樣是包裝容量,不是金額。",
+  "金額欄位只填真正的價錢,每行品項列為一筆 items。",
+  "總金額以收據的「總計」為準,不要用付款金額。",
+].join("\n");
+
 export function buildUserPrompt(input: string, imageDataUrl?: string): string {
-  const text = input.trim() || (imageDataUrl ? "請辨識這張發票/收據,把內容轉成 items JSON。" : "");
-  return text;
+  const text = input.trim();
+  if (text) return text;
+  return imageDataUrl ? RECEIPT_PROMPT : "";
 }

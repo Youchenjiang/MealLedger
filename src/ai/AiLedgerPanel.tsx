@@ -83,7 +83,14 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
     setError("");
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setSelectedImage({ name: file.name, dataUrl: String(reader.result) });
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      // Downscale large photos so the request stays within the edge-function
+      // body limit (base64 inflates ~33%).
+      void downscaleImage(dataUrl, 1600, 0.82).then((scaled) => {
+        setSelectedImage({ name: file.name, dataUrl: scaled });
+      });
+    };
     reader.readAsDataURL(file);
   };
 
@@ -231,6 +238,28 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
       ) : null}
     </div>
   );
+}
+
+async function downscaleImage(dataUrl: string, maxDimension: number, quality: number): Promise<string> {
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("image-load-failed"));
+      img.src = dataUrl;
+    });
+    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+    if (scale >= 1) return dataUrl;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return dataUrl;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch {
+    return dataUrl;
+  }
 }
 
 function asShortText(input: AiDraftSuggestion["input"]): string {
