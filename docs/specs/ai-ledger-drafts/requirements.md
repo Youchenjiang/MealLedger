@@ -65,6 +65,18 @@ input.
   keep base64 payloads under the edge-function body limit.
 - Text parsing uses `AI_MODEL`; image requests use `AI_VISION_MODEL` when set.
   Verified with NVIDIA: `deepseek-ai/deepseek-v4-flash-0731` parses text
-  reliably; `meta/llama-3.2-11b-vision-instruct` splits a sample receipt into
+  reliably; `meta/llama-3.2-11b-vision-instruct` splits a synthetic receipt into
   line items summing to the 總計 (small-text OCR errors remain, so confirmation
   matters). The 90b vision model times out on the free tier.
+- Verified live with a real two-receipt photo: `meta/llama-3.2-11b-vision-
+  instruct` is unreliable on dense small-text receipts (repetition loops and
+  fabricated amounts), even upscaled 3x. Taiwan invoices come in two forms:
+  paper receipts with printed line items (AI OCR path) and electronic invoice
+  vouchers whose QR code is the only link to line items (the Ministry of
+  Finance API path). The voucher form is not an OCR problem: the correct flow
+  is decode the QR (invoice number, random number, seller ID) and query the
+  Ministry of Finance e-invoice API, which is authoritative and error-free.
+- The Ministry of Finance e-invoice API (`einvoice.nat.gov.tw`) requires a
+  free `appID`/`appKey`; without credentials it returns the login page. QR
+  decoding of vouchers and the e-invoice query are a follow-up feature tracked
+  separately from AI OCR.
