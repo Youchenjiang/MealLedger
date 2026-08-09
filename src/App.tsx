@@ -55,6 +55,7 @@ import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "
 import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel } from "./ai/AiLedgerPanel";
+import { buildPrefillForm } from "./ai/parse";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "概覽", path: "/", icon: Home },
@@ -3784,6 +3785,14 @@ function CapturePage({
           categories: aiCategories,
           onSaveRecord,
           onSaveDraft,
+          onApplyToForm: (suggestion) => {
+            const form = buildPrefillForm(suggestion.input, accounts, aiCategories, localDate());
+            setForm(form);
+            setCleanForm(form);
+            setFormError(null);
+            setSavedMessage("");
+            setCaptureIntent("manual-ledger");
+          },
         }}
        />
       {captureIntent === "manual-ledger" ? <SavedRecordPanel recordCount={records.length} navigate={navigate} /> : null}

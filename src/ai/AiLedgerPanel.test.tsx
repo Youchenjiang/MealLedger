@@ -24,7 +24,7 @@ describe("AiLedgerPanel", () => {
     const onSaveRecord = vi.fn(() => true);
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} />);
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "中午吃牛肉麵 480");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -46,7 +46,7 @@ describe("AiLedgerPanel", () => {
     const onSaveDraft = vi.fn();
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={onSaveDraft} />);
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={onSaveDraft} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "早餐 90");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
@@ -63,12 +63,33 @@ describe("AiLedgerPanel", () => {
     });
     const user = userEvent.setup();
 
-    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} />);
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
     await user.type(screen.getByLabelText("記帳內容"), "測試 100");
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
 
     expect(await screen.findByText(/帳戶.*不存在/u)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "確認寫入" })).not.toBeInTheDocument();
+  });
+
+  test("lets the user prefill the ledger form when the account is missing", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", itemName: "牛肉麵", amount: 480 }] },
+    });
+    const onApplyToForm = vi.fn();
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={onApplyToForm} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    const button = await screen.findByRole("button", { name: /填入表單/u });
+    expect(button).toBeInTheDocument();
+
+    await user.click(button);
+
+    expect(onApplyToForm).toHaveBeenCalledTimes(1);
   });
 });

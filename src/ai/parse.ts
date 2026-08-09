@@ -130,6 +130,20 @@ function buildForm(input: AiSuggestionInput, account: { name: string; currency: 
   return form;
 }
 
+// Builds a ledger form from an AI suggestion, filling only the fields the
+// model actually provided. An unknown account or category is left blank
+// instead of rejecting the suggestion, so the user can complete it in the
+// ledger form before saving.
+export function buildPrefillForm(
+  input: AiSuggestionInput,
+  accounts: AiLedgerAccounts,
+  categories: string[],
+  today: string,
+): DraftForm {
+  const account = matchAccount(input.account, accounts) ?? { name: "", currency: "TWD" };
+  return buildForm(input, account, categories, today);
+}
+
 export function parseDraftSuggestions(
   payload: unknown,
   accounts: AiLedgerAccounts,

@@ -36,9 +36,12 @@ export type AiLedgerPanelProps = Readonly<{
   categories: string[];
   onSaveRecord: (draft: TransactionDraft) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
+  // Prefills the ledger form with the fields the AI could identify so the
+  // user can complete the remaining ones (account, category, …) manually.
+  onApplyToForm: (suggestion: AiDraftSuggestion) => void;
 }>;
 
-export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft }: AiLedgerPanelProps) {
+export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft, onApplyToForm }: AiLedgerPanelProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -241,9 +244,16 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft 
                   </button>
                 </div>
               ) : (
-                <ul className="ai-issues">
-                  {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
-                </ul>
+                <>
+                  <ul className="ai-issues">
+                    {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                  </ul>
+                  <div className="record-actions">
+                    <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+                      填入表單補齊欄位
+                    </button>
+                  </div>
+                </>
               )}
             </article>
           ))}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseDraftSuggestions } from "./parse";
+import { buildPrefillForm, parseDraftSuggestions } from "./parse";
 
 const accounts = [
   { name: "Daily wallet", currency: "TWD" },
@@ -116,5 +116,32 @@ describe("parseDraftSuggestions", () => {
 
   test("ignores non-array payloads", () => {
     expect(parseDraftSuggestions({ foo: 1 }, accounts, categories, today)).toEqual([]);
+  });
+});
+
+describe("buildPrefillForm", () => {
+  test("fills the fields the model provided and leaves unknown account/category blank", () => {
+    const form = buildPrefillForm({
+      kind: "expense",
+      date: "7/25",
+      itemName: "牛肉麵",
+      amount: 480,
+      counterparty: "麵店",
+    }, accounts, categories, today);
+
+    expect(form.kind).toBe("expense");
+    expect(form.date).toBe("2026-07-25");
+    expect(form.itemName).toBe("牛肉麵");
+    expect(form.counterparty).toBe("麵店");
+    expect(form.amount).toBe("480");
+    expect(form.account).toBe("");
+    expect(form.category).toBe("");
+  });
+
+  test("uses the matched account currency when the account exists", () => {
+    const form = buildPrefillForm({ account: "Bank", amount: 100 }, accounts, categories, today);
+
+    expect(form.account).toBe("Bank");
+    expect(form.currency).toBe("TWD");
   });
 });
