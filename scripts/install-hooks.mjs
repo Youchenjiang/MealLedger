@@ -27,5 +27,6 @@ for (const name of hookNames) {
   } catch {
     // Windows: chmod is a no-op; Git for Windows still runs the hook via sh.
   }
+  // skipcq: JS-0002 -- Node CLI; the install confirmation is the intended stdout output.
   console.log(`Installed hook: .git/hooks/${name} (from scripts/hooks/${name})`);
 }

@@ -43,7 +43,7 @@ const EXCLUDED_DIRS = new Set([
 
 function walk(dir) {
   const files = [];
-  let entries;
+  let entries = null;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
@@ -90,18 +90,17 @@ export function checkLinks(mdFiles) {
       }
 
       LINK_RE.lastIndex = 0;
-      let m;
-      while ((m = LINK_RE.exec(lines[i])) !== null) {
-        const target = m[1];
+      for (let match = LINK_RE.exec(lines[i]); match !== null; match = LINK_RE.exec(lines[i])) {
+        const target = match[1];
         // Same-file anchors, autolinks, and external URLs are out of scope.
         if (target.startsWith("#")) continue;
         if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) continue;
 
-        let clean;
+        let clean = target.split(/[#?]/)[0];
         try {
-          clean = decodeURIComponent(target.split(/[#?]/)[0]);
+          clean = decodeURIComponent(clean);
         } catch {
-          clean = target.split(/[#?]/)[0];
+          // Not valid percent-encoding; keep the raw target.
         }
         if (!clean) continue;
 
@@ -173,7 +172,7 @@ export function checkSingleSource(files) {
         if (pattern.test(content)) {
           errors.push(
             `${rel}: embeds ${rule.name} rule text (/${pattern.source}/). ` +
-              `Keep rule values only in the canonical files.`,
+              "Keep rule values only in the canonical files.",
           );
         }
       }
@@ -202,6 +201,7 @@ function main() {
     console.error(`${errors.length} problem(s) found.`);
     process.exit(1);
   }
+  // skipcq: JS-0002 -- Node CLI; the pass message is the intended stdout output.
   console.log(`OK — ${mdFiles.length} markdown files checked, links resolve, policies are single-source.`);
   process.exit(0);
 }

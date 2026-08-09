@@ -176,8 +176,8 @@ export function areasForPaths(paths) {
 
 export function validateSubject(subject) {
   const errors = [];
-  const s = String(subject ?? "").trim();
-  if (!s) {
+  const subjectText = String(subject ?? "").trim();
+  if (!subjectText) {
     errors.push("Subject is empty.");
     return errors;
   }
@@ -185,13 +185,13 @@ export function validateSubject(subject) {
   const typePattern = POLICY.types.join("|");
   const scopePattern = POLICY.scopes.join("|");
   const pattern = new RegExp(`^(${typePattern})\\((${scopePattern})\\): (.+)$`);
-  const match = s.match(pattern);
+  const match = subjectText.match(pattern);
 
   if (!match) {
     errors.push(
       `Subject must match ${describeFormat()} using an allowed type and scope.`,
     );
-    errors.push(`  Given: ${s}`);
+    errors.push(`  Given: ${subjectText}`);
     errors.push(`  Allowed types: ${POLICY.types.join(", ")}`);
     errors.push(`  Allowed scopes: ${POLICY.scopes.join(", ")}`);
     return errors;
@@ -199,9 +199,9 @@ export function validateSubject(subject) {
 
   const description = match[3];
 
-  if (s.length > POLICY.subjectMaxLength) {
+  if (subjectText.length > POLICY.subjectMaxLength) {
     errors.push(
-      `Subject must be ${POLICY.subjectMaxLength} characters or fewer (this one is ${s.length}).`,
+      `Subject must be ${POLICY.subjectMaxLength} characters or fewer (this one is ${subjectText.length}).`,
     );
   }
   if (!POLICY.descriptionStart.test(description)) {
@@ -209,7 +209,7 @@ export function validateSubject(subject) {
       `Description must start with a lowercase letter or digit: "${description}".`,
     );
   }
-  if (s.endsWith(".")) {
+  if (subjectText.endsWith(".")) {
     errors.push("Subject must not end with a period.");
   }
   if (POLICY.vagueDescriptions.includes(description.toLowerCase())) {
@@ -319,33 +319,35 @@ function main() {
       errors = validateSubject(arg);
       break;
     case "message": {
-      let text;
-      if (arg) {
-        text = readFileSync(arg, "utf8");
-      } else {
-        text = readFileSync(0, "utf8");
-      }
+      const text = arg ? readFileSync(arg, "utf8") : readFileSync(0, "utf8");
       errors = validateCommitMessage(text);
       break;
     }
     case "list":
-      console.log(`types: ${POLICY.types.join(", ")}`);
-      console.log(`scopes: ${POLICY.scopes.join(", ")}`);
-      console.log(`subjectMaxLength: ${POLICY.subjectMaxLength}`);
-      console.log(`body: numbered list starting with "1. " or "1)"`);
+      // skipcq: JS-0002 -- Node CLI; the policy dump is the intended stdout output.
+      console.log(
+        [
+          `types: ${POLICY.types.join(", ")}`,
+          `scopes: ${POLICY.scopes.join(", ")}`,
+          `subjectMaxLength: ${POLICY.subjectMaxLength}`,
+          'body: numbered list starting with "1. " or "1)"',
+        ].join("\n"),
+      );
       process.exit(0);
+      break;
     case "self-test":
       errors = runSelfTest();
       break;
     case "suggest-scope": {
       const args = process.argv.slice(3).filter(Boolean);
       const json = args.includes("--json");
-      const explicitPaths = args.filter((arg) => arg !== "--json");
+      const explicitPaths = args.filter((candidate) => candidate !== "--json");
 
       let paths = explicitPaths;
       let staged = false;
       if (paths.length === 0) {
         try {
+          // NOSONAR -- git resolves via PATH; standard for a dev tool, and hardcoding its path would break on other OSes.
           const output = execFileSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" });
           paths = output.split("\n").map((p) => p.trim()).filter(Boolean);
           staged = true;
@@ -366,6 +368,7 @@ function main() {
 
       if (json) {
         // Machine-readable output goes to stdout; the human tip stays on stderr.
+        // skipcq: JS-0002 -- Node CLI; the JSON payload is the intended stdout protocol.
         console.log(JSON.stringify({
           suggestedScopes: suggestions,
           allowedScopes: POLICY.scopes,
@@ -386,6 +389,7 @@ function main() {
         console.error(`  Allowed scopes: ${POLICY.scopes.join(", ")}`);
       }
       process.exit(0);
+      break;
     }
     default:
       printUsage();
@@ -398,6 +402,7 @@ function main() {
     }
     process.exit(1);
   }
+  // skipcq: JS-0002 -- Node CLI; the pass message is the intended stdout output.
   console.log("OK");
   process.exit(0);
 }
