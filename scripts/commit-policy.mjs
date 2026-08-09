@@ -347,8 +347,8 @@ function main() {
       let staged = false;
       if (paths.length === 0) {
         try {
-          // NOSONAR -- git resolves via PATH; standard for a dev tool, and hardcoding its path would break on other OSes.
-          const output = execFileSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" });
+          // git resolves via PATH; standard for a dev tool, and hardcoding its path would break on other OSes.
+          const output = execFileSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" }); // NOSONAR
           paths = output.split("\n").map((p) => p.trim()).filter(Boolean);
           staged = true;
         } catch {
