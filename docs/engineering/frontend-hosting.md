@@ -91,3 +91,10 @@ Dashboard setup (one-time, needs your Cloudflare account):
 npm run build
 npx wrangler deploy --dry-run   # validates assets + SPA config without deploying
 ```
+
+`wrangler` is intentionally **not** a repository dependency: it is fetched on
+demand via `npx` (deploy command in the dashboard integration, dry-run above).
+Keeping it out of `devDependencies` avoids pulling `sharp`/`@img/sharp-*`
+(LGPL-3.0-or-later) into `package-lock.json`, which the license scan flags.
+Pin the deploy tool when reproducibility matters with
+`npx wrangler@<version> deploy`.
