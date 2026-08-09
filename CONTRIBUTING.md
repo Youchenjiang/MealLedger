@@ -16,92 +16,23 @@ MealLedger uses a strict commit and pull request policy. The goal is to keep his
 
 ## Commit Format
 
-Every commit must use Conventional Commits:
+Every commit and PR title must follow the [repository commit policy](docs/engineering/commit-policy.md):
 
 ```text
 <type>(<scope>): <description>
 ```
 
-Examples:
-
-```text
-feat(meal): add photo-linked meal entries
-fix(r2): reject non-image upload content types
-docs(setup): document Supabase secrets
-test(ledger): cover transfer export rows
-```
-
-## Commit Types
-
-| Type | Use for |
-| --- | --- |
-| `feat` | New user-facing capability |
-| `fix` | Bug fix |
-| `refactor` | Internal restructuring with no behavior change |
-| `docs` | Documentation only |
-| `test` | Tests and test fixtures |
-| `chore` | Tooling, config, dependencies, repository maintenance |
-| `style` | Formatting only, no behavior change |
-| `perf` | Performance improvement |
-| `security` | Security or privacy hardening |
-
-## Commit Scopes
-
-Prefer one of these scopes:
-
-| Scope | Area |
-| --- | --- |
-| `app` | Frontend app shell and navigation |
-| `ledger` | Accounts, transactions, transfers, exports |
-| `meal` | Meal entries and food logging |
-| `media` | Photo metadata, thumbnails, image handling |
-| `r2` | Cloudflare R2 upload/download integration |
-| `supabase` | Supabase schema, RLS, Edge Functions |
-| `ai` | OCR, parsing, suggestions, embeddings |
-| `auth` | Login, user identity, permissions |
-| `docs` | Repository documentation |
-| `ci` | GitHub Actions and automation |
-| `deps` | Dependency updates |
-| `product` | Product direction, roadmap, and non-goals |
-| `accounting` | Accounting rules and reporting semantics |
-| `taxonomy` | Categories, tags, aliases, and events |
-| `imports` | Import and export planning |
-| `security` | Security, privacy, and access control docs |
-| `sync` | Offline, sync, conflict, and idempotency docs |
-| `flows` | Product flow documentation |
-| `v1` | V1 defaults, tradeoffs, and scope decisions |
-| `data` | Data lifecycle and schema planning |
-| `ops` | Technical operations and monitoring |
-| `test` | Test planning |
-| `privacy` | Privacy and compliance planning |
-| `workflow` | Development, PR, and review workflows |
-| `spec` | Feature-level specs |
-| `decisions` | Architecture decision records |
-
-Use a new scope only when none of the above is accurate.
-
-## Commit Message Rules
-
-- Use English.
-- Keep the subject under 72 characters.
-- Use lowercase after the colon.
-- Do not end the subject with a period.
-- Do not use vague subjects like `update files`, `fix bug`, or `misc changes`.
-- Reference issues in the body, not the subject, unless the issue number is the main point.
-
-Good:
+Example:
 
 ```text
 feat(ledger): add clean CSV export view
 ```
 
-Bad:
-
-```text
-update
-fix stuff
-feat: Added Things.
-```
+The allowed types, scopes, length, and body requirements are defined in the
+policy doc — **do not restate them here**. The policy is enforced identically
+by the local `commit-msg` hook and by CI, and the rules live in exactly one
+file (`scripts/commit-policy.mjs`). To change a rule, edit that file only (see
+the policy doc).
 
 ## Atomic Commit Rules
 
@@ -129,33 +60,24 @@ feat(app): add meals, upload photos, rewrite docs, fix exports
 
 ## Pull Request Rules
 
-PR titles must also follow Conventional Commits:
-
-```text
-<type>(<scope>): <description>
-```
-
-PR descriptions must include:
-
-- Summary
-- Key Changes
-- Verification
-- Data/Privacy Impact
+PR titles must follow the same commit policy (enforced by CI and the local
+hook). Fill the PR description using the sections defined in
+[`.github/pull_request_template.md`](.github/pull_request_template.md) — that
+template is the only definition of the PR description format.
 
 Small PRs are preferred. If a PR touches more than one subsystem, explain why it should be reviewed together.
 
 ## Verification Expectations
 
-Before requesting review, include the checks you ran. At minimum:
+Before requesting review, include the checks you ran. The required evidence
+per change area is defined in exactly one place — the
+[Testing Policy](docs/engineering/testing-policy.md) — and the commands are
+defined in `package.json`. See also the
+[Development Workflow](docs/engineering/development-workflow.md) for the
+frontend smoke checklist and generated artifact rules.
 
-- Frontend changes: run `npm run build`, perform a browser smoke test, and confirm the console has no errors.
-- Schema changes: verify SQL applies cleanly to a fresh Supabase project or local Supabase DB.
-- Production Supabase changes: follow [Supabase Deployment Policy](docs/engineering/supabase-deployment.md); migrations are reviewed in Git and deployed from `main` through the GitHub integration.
-- R2 changes: verify signed upload URLs never expose R2 secrets.
-- Export changes: verify exports do not include image bytes or base64 media.
-- AI changes: verify AI output remains draft/suggestion data unless explicitly confirmed by the user.
-
-See [Development Workflow](docs/engineering/development-workflow.md) for frontend workflow and generated artifact rules.
+Non-negotiable privacy rules are listed below under Privacy Rules; they are
+not repeated in the Testing Policy.
 
 ## Privacy Rules
 

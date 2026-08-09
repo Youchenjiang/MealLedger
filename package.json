@@ -7,6 +7,9 @@
     "node": ">=20.6.0"
   },
   "scripts": {
+    "prepare": "node scripts/install-hooks.mjs",
+    "test:policy": "node scripts/commit-policy.mjs self-test",
+    "test:docs": "node scripts/check-docs.mjs",
     "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
     "dev:5200": "vite --host 127.0.0.1 --port 5200 --strictPort",
     "build": "tsc -b && vite build",

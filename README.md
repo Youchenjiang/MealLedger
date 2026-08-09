@@ -32,7 +32,7 @@ For implementation work, start from the relevant feature spec under `docs/specs/
 
 ## Development
 
-Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md). The repository enforces Conventional Commit PR titles and commit subjects through GitHub Actions.
+Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md). The repository enforces its [commit and PR policy](docs/engineering/commit-policy.md) identically through a local git hook and GitHub Actions.
 Frontend work must follow [Development Workflow](docs/engineering/development-workflow.md).
 
 ```sh
