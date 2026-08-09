@@ -72,7 +72,7 @@ export const POLICY = {
   vagueDescriptions: ["update", "misc", "stuff", "changes", "fix bug", "bug fix"],
   body: {
     // Body must contain a numbered list in English starting at "1. " or "1)".
-    numberedListPattern: /^\s*1[.)]\s+/m,
+    numberedListPattern: /^\s{0,3}1[.)]\s+/m,
   },
 };
 
@@ -135,7 +135,7 @@ const SORTED_SCOPE_HINTS = [...SCOPE_HINTS].sort((a, b) => b.prefix.length - a.p
 export function scopeHintsForPaths(paths) {
   const entries = [];
   for (const rawPath of paths) {
-    const path = rawPath.replace(/\\/g, "/");
+    const path = rawPath.replaceAll("\\", "/");
     const hit = SORTED_SCOPE_HINTS.find((hint) => path.startsWith(hint.prefix));
     entries.push({
       path,
@@ -165,7 +165,7 @@ export function areasForPaths(paths) {
   const areas = [];
   const seen = new Set();
   for (const rawPath of paths) {
-    const path = rawPath.replace(/\\/g, "/");
+    const path = rawPath.replaceAll("\\", "/");
     const hit = SORTED_SCOPE_HINTS.find((hint) => path.startsWith(hint.prefix));
     if (!hit || seen.has(hit.area)) continue;
     seen.add(hit.area);
@@ -184,16 +184,18 @@ export function validateSubject(subject) {
 
   const typePattern = POLICY.types.join("|");
   const scopePattern = POLICY.scopes.join("|");
-  const pattern = new RegExp(`^(${typePattern})\\((${scopePattern})\\): (.+)$`);
-  const match = subjectText.match(pattern);
+  const pattern = new RegExp(String.raw`^(${typePattern})\((${scopePattern})\): (.+)$`);
+  const match = pattern.exec(subjectText);
 
   if (!match) {
     errors.push(
-      `Subject must match ${describeFormat()} using an allowed type and scope.`,
+      [
+        `Subject must match ${describeFormat()} using an allowed type and scope.`,
+        `  Given: ${subjectText}`,
+        `  Allowed types: ${POLICY.types.join(", ")}`,
+        `  Allowed scopes: ${POLICY.scopes.join(", ")}`,
+      ].join("\n"),
     );
-    errors.push(`  Given: ${subjectText}`);
-    errors.push(`  Allowed types: ${POLICY.types.join(", ")}`);
-    errors.push(`  Allowed scopes: ${POLICY.scopes.join(", ")}`);
     return errors;
   }
 
@@ -221,7 +223,7 @@ export function validateSubject(subject) {
 
 export function validateCommitMessage(message) {
   const errors = [];
-  const text = String(message ?? "").replace(/\r\n/g, "\n");
+  const text = String(message ?? "").replaceAll("\r\n", "\n");
   const lines = text.split("\n");
 
   // Subject: first line that is not a git comment (lines starting with "#").
@@ -306,9 +308,74 @@ function printUsage() {
   );
 }
 
+function finish(errors) {
+  if (errors.length > 0) {
+    for (const error of errors) {
+      console.error(`[COMMIT BLOCKED] ${error}`);
+    }
+    process.exit(1);
+  }
+  // skipcq: JS-0002 -- Node CLI; the pass message is the intended stdout output.
+  console.log("OK");
+  process.exit(0);
+}
+
+function runSuggestScope() {
+  const args = process.argv.slice(3).filter(Boolean);
+  const json = args.includes("--json");
+  const explicitPaths = args.filter((candidate) => candidate !== "--json");
+
+  let paths = explicitPaths;
+  let staged = false;
+  if (paths.length === 0) {
+    try {
+      // git resolves via PATH; standard for a dev tool, and hardcoding its path would break on other OSes.
+      const output = execFileSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" }); // NOSONAR
+      paths = output.split("\n").map((p) => p.trim()).filter(Boolean);
+      staged = true;
+    } catch {
+      paths = [];
+    }
+  }
+
+  const hints = scopeHintsForPaths(paths);
+  const suggestions = suggestScopesForPaths(paths);
+  const areas = areasForPaths(paths);
+  const splitNote = areas.length > 1
+    ? ` Staged files span unrelated areas (${areas.join(", ")}) — consider splitting into separate commits (atomic commit rule).`
+    : "";
+  const scopeTip = suggestions.length === 0
+    ? "Staged changes did not map to an allowed scope. Pick one from the allowlist for your commit subject."
+    : `Staged changes suggest scope: ${suggestions.join(", ")}. Commit subject must match <type>(<scope>): <description>; commit-msg and CI enforce the allowlist.`;
+  const tip = `${scopeTip}${splitNote}`;
+
+  if (json) {
+    // Machine-readable output goes to stdout; the human tip stays on stderr.
+    // skipcq: JS-0002 -- Node CLI; the JSON payload is the intended stdout protocol.
+    console.log(JSON.stringify({
+      suggestedScopes: suggestions,
+      allowedScopes: POLICY.scopes,
+      paths: hints,
+      areas,
+      staged,
+      tip,
+    }, null, 2));
+    process.exit(0);
+  }
+
+  if (paths.length === 0) {
+    // No staged files (fresh repo or `git commit -a`) — stay quiet.
+    process.exit(0);
+  }
+  console.error(`[SCOPE TIP] ${tip}`);
+  if (suggestions.length === 0) {
+    console.error(`  Allowed scopes: ${POLICY.scopes.join(", ")}`);
+  }
+  process.exit(0);
+}
+
 function main() {
   const [mode, arg] = process.argv.slice(2);
-  let errors = [];
 
   switch (mode) {
     case "subject":
@@ -316,11 +383,11 @@ function main() {
         printUsage();
         process.exit(2);
       }
-      errors = validateSubject(arg);
+      finish(validateSubject(arg));
       break;
     case "message": {
       const text = arg ? readFileSync(arg, "utf8") : readFileSync(0, "utf8");
-      errors = validateCommitMessage(text);
+      finish(validateCommitMessage(text));
       break;
     }
     case "list":
@@ -336,75 +403,15 @@ function main() {
       process.exit(0);
       break;
     case "self-test":
-      errors = runSelfTest();
+      finish(runSelfTest());
       break;
-    case "suggest-scope": {
-      const args = process.argv.slice(3).filter(Boolean);
-      const json = args.includes("--json");
-      const explicitPaths = args.filter((candidate) => candidate !== "--json");
-
-      let paths = explicitPaths;
-      let staged = false;
-      if (paths.length === 0) {
-        try {
-          // git resolves via PATH; standard for a dev tool, and hardcoding its path would break on other OSes.
-          const output = execFileSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" }); // NOSONAR
-          paths = output.split("\n").map((p) => p.trim()).filter(Boolean);
-          staged = true;
-        } catch {
-          paths = [];
-        }
-      }
-
-      const hints = scopeHintsForPaths(paths);
-      const suggestions = suggestScopesForPaths(paths);
-      const areas = areasForPaths(paths);
-      const splitNote = areas.length > 1
-        ? ` Staged files span unrelated areas (${areas.join(", ")}) — consider splitting into separate commits (atomic commit rule).`
-        : "";
-      const tip = `${suggestions.length === 0
-        ? "Staged changes did not map to an allowed scope. Pick one from the allowlist for your commit subject."
-        : `Staged changes suggest scope: ${suggestions.join(", ")}. Commit subject must match <type>(<scope>): <description>; commit-msg and CI enforce the allowlist.`}${splitNote}`;
-
-      if (json) {
-        // Machine-readable output goes to stdout; the human tip stays on stderr.
-        // skipcq: JS-0002 -- Node CLI; the JSON payload is the intended stdout protocol.
-        console.log(JSON.stringify({
-          suggestedScopes: suggestions,
-          allowedScopes: POLICY.scopes,
-          paths: hints,
-          areas,
-          staged,
-          tip,
-        }, null, 2));
-        process.exit(0);
-      }
-
-      if (paths.length === 0) {
-        // No staged files (fresh repo or `git commit -a`) — stay quiet.
-        process.exit(0);
-      }
-      console.error(`[SCOPE TIP] ${tip}`);
-      if (suggestions.length === 0) {
-        console.error(`  Allowed scopes: ${POLICY.scopes.join(", ")}`);
-      }
-      process.exit(0);
+    case "suggest-scope":
+      runSuggestScope();
       break;
-    }
     default:
       printUsage();
       process.exit(2);
   }
-
-  if (errors.length > 0) {
-    for (const error of errors) {
-      console.error(`[COMMIT BLOCKED] ${error}`);
-    }
-    process.exit(1);
-  }
-  // skipcq: JS-0002 -- Node CLI; the pass message is the intended stdout output.
-  console.log("OK");
-  process.exit(0);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -65,53 +65,75 @@ function walk(dir) {
 // Check 1: relative markdown links resolve
 // ---------------------------------------------------------------------------
 
-const LINK_RE = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const LINK_RE = /\[[^\[\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+
+function isFenceLine(trimmed) {
+  return /^(```|~~~)/.test(trimmed);
+}
+
+// Same-file anchors, autolinks, and external URLs are out of scope.
+function isOutOfScopeTarget(target) {
+  return target.startsWith("#") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target);
+}
+
+function cleanLinkTarget(target) {
+  const raw = target.split(/[#?]/)[0];
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // Not valid percent-encoding; keep the raw target.
+    return raw;
+  }
+}
+
+function checkLinksInLine(file, line, lineNo, errors) {
+  LINK_RE.lastIndex = 0;
+  for (let match = LINK_RE.exec(line); match !== null; match = LINK_RE.exec(line)) {
+    const target = match[1];
+    if (isOutOfScopeTarget(target)) continue;
+    const clean = cleanLinkTarget(target);
+    if (!clean) continue;
+
+    const resolved = resolve(dirname(file), clean);
+    if (!existsSync(resolved)) {
+      errors.push(
+        `${relative(root, file).replaceAll("\\", "/")}:${lineNo}: broken link -> ${target}`,
+      );
+    }
+  }
+}
+
+function checkFileLinks(file, errors) {
+  const lines = readFileSync(file, "utf8").split("\n");
+  let inFence = false;
+  let inComment = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    const isFence = isFenceLine(trimmed);
+    const isCommentStart = trimmed.startsWith("<!--");
+    const isCommentEnd = trimmed.includes("-->");
+
+    if (isFence) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    if (isCommentStart) inComment = true;
+    if (inComment) {
+      if (isCommentEnd) inComment = false;
+      continue;
+    }
+
+    checkLinksInLine(file, lines[i], i + 1, errors);
+  }
+}
 
 export function checkLinks(mdFiles) {
   const errors = [];
   for (const file of mdFiles) {
-    const lines = readFileSync(file, "utf8").split("\n");
-    let inFence = false;
-    let inComment = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-
-      if (/^(```|~~~)/.test(trimmed)) {
-        inFence = !inFence;
-        continue;
-      }
-      if (inFence) continue;
-
-      if (/^<!--/.test(trimmed)) inComment = true;
-      if (inComment) {
-        if (/-->/.test(trimmed)) inComment = false;
-        continue;
-      }
-
-      LINK_RE.lastIndex = 0;
-      for (let match = LINK_RE.exec(lines[i]); match !== null; match = LINK_RE.exec(lines[i])) {
-        const target = match[1];
-        // Same-file anchors, autolinks, and external URLs are out of scope.
-        if (target.startsWith("#")) continue;
-        if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) continue;
-
-        let clean = target.split(/[#?]/)[0];
-        try {
-          clean = decodeURIComponent(clean);
-        } catch {
-          // Not valid percent-encoding; keep the raw target.
-        }
-        if (!clean) continue;
-
-        const resolved = resolve(dirname(file), clean);
-        if (!existsSync(resolved)) {
-          errors.push(
-            `${relative(root, file).replace(/\\/g, "/")}:${i + 1}: broken link -> ${target}`,
-          );
-        }
-      }
-    }
+    checkFileLinks(file, errors);
   }
   return errors;
 }
@@ -163,7 +185,7 @@ export function checkSingleSource(files) {
   const textFiles = files.filter((f) => /\.(md|txt|yml|yaml)$/.test(f));
 
   for (const file of textFiles) {
-    const rel = relative(root, file).replace(/\\/g, "/");
+    const rel = relative(root, file).replaceAll("\\", "/");
     const content = readFileSync(file, "utf8");
 
     for (const rule of FORBIDDEN) {
