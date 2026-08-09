@@ -34,10 +34,10 @@ Alternatives, kept in mind:
 
 Cloudflare **Workers Git integration** (dashboard, not GitHub Actions): every
 push to `main` triggers a production deploy; non-production branches get
-version-preview deploys. This matches the repo's minimal-CI convention (GitHub
-Actions only runs `policy.yml` and `test.yml`). Do not add a
-`.github/workflows/deploy.yml` while the dashboard integration is enabled, or
-every push deploys twice.
+version-preview deploys. This matches the repo's minimal-CI convention: GitHub
+Actions is reserved for the commit-policy and unit-test workflows, with no
+deploy workflow. Do not add a `.github/workflows/deploy.yml` while the
+dashboard integration is enabled, or every push deploys twice.
 
 Dashboard setup (one-time, needs your Cloudflare account):
 
