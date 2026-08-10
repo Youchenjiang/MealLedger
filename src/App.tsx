@@ -4422,7 +4422,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const renderAuthModeSwitch = () => (
     <fieldset className="segmented-fieldset">
-      <legend>Sign in or create account</legend>
+      <legend className="visually-hidden">Sign in or create account</legend>
       <div className="segmented-control">
         {(["sign-in", "sign-up"] as const).map((view) => (
           <label className={authView === view ? "active" : ""} key={view}>
@@ -4484,7 +4484,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
       }
       return (
         <form className="auth-form account-page-form" onSubmit={authView === "sign-up" ? handleSignUp : handleSignIn}>
-          <p className="field-help">Use MealLedger locally without an account. Sign in only to enable cloud sync for this workspace.</p>
+          <p className="field-help">Use MealLedger locally without an account, or sign in to enable cloud sync for this workspace.</p>
           {renderAuthModeSwitch()}
           <label htmlFor="account-email">Email</label>
           <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
