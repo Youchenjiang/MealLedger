@@ -157,7 +157,7 @@ describe("auth provider", () => {
     await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
     await user.click(screen.getByRole("button", { name: "Google sign in" }));
 
-    expect(authMock.signInWithOAuth).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: `${window.location.origin}/settings` } });
+    expect(authMock.signInWithOAuth).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: `${window.location.origin}/account` } });
     expect(screen.getByLabelText("auth-state")).toHaveTextContent("loading");
   });
 });

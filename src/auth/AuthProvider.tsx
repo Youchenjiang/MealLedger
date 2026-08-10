@@ -50,7 +50,7 @@ function applySession(
 }
 
 function authRedirect(): string {
-  return `${window.location.origin}/settings`;
+  return `${window.location.origin}/account`;
 }
 
 function clearAuthCallbackHash(): void {
