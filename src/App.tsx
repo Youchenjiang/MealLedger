@@ -4436,7 +4436,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const renderProviderActions = () => (
     <>
-      <p className="auth-divider">or continue with</p>
+      <p className="auth-divider">or use</p>
       <div className="auth-provider-actions">
         <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
           <img className="auth-provider-mark" src={googleG} alt="" /> Continue with Google
