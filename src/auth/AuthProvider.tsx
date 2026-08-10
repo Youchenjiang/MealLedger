@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
 import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
@@ -68,6 +68,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState(configurationError ? configurationMessage : "");
+  // While a recovery link is being restored, supabase-js may still emit the
+  // stored session as INITIAL_SESSION or SIGNED_IN after the app has already
+  // switched to the password-recovery view; those late events must not
+  // override the recovery state.
+  const recoveryStartup = useRef(false);
 
   useStableEffect(() => {
     if (isLocalDevelopmentMode || !supabase) {
@@ -83,6 +88,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setState("password-recovery");
         return;
       }
+      if (recoveryStartup.current && (event === "INITIAL_SESSION" || event === "SIGNED_IN")) {
+        return;
+      }
       applySession(session, setUserId, setIdentities, setState);
     };
 
@@ -90,6 +98,16 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const callback = await restoreOAuthCallbackSession(client, window.location.href);
       if (callback.handled) {
         clearAuthCallbackHash();
+        if (callback.recovery) {
+          recoveryStartup.current = true;
+          if (callback.result.ok) {
+            handleSession("PASSWORD_RECOVERY", callback.result.session);
+          } else if (mounted) {
+            setState("auth-error");
+            setMessage(callback.result.message);
+          }
+          return;
+        }
         if (callback.result.ok) {
           handleSession("SIGNED_IN", callback.result.session);
         } else if (mounted) {
@@ -137,6 +155,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const normalizedEmail = requestedEmail.trim();
       setEmail(normalizedEmail);
       setMessage("");
+      recoveryStartup.current = false;
 
       if (isLocalDevelopmentMode) {
         setUserId("local-user");
@@ -165,6 +184,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const normalizedEmail = requestedEmail.trim();
       setEmail(normalizedEmail);
       setMessage("");
+      recoveryStartup.current = false;
 
       if (isLocalDevelopmentMode) {
         setUserId("local-user");
@@ -213,7 +233,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return;
       }
       const result = await updatePassword(supabase, password);
-      setState(result.ok ? "signed-in" : "password-recovery");
+      if (result.ok) {
+        recoveryStartup.current = false;
+        setState("signed-in");
+      } else {
+        setState("password-recovery");
+      }
       setMessage(result.message);
     },
     signInWithOAuth: async (provider) => {
@@ -261,6 +286,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setMessage(result.message);
     },
     signOut: async () => {
+      recoveryStartup.current = false;
       if (isLocalDevelopmentMode) {
         setUserId("local-user");
         setState("signed-out");

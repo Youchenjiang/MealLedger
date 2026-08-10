@@ -7,6 +7,7 @@ function createAuthMock() {
   return {
     getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
     onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    setSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: "remote-user" } } }, error: null }),
     signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { user: { id: "remote-user" } } }, error: null }),
     signUp: vi.fn(),
     resetPasswordForEmail: vi.fn(),
@@ -142,6 +143,26 @@ describe("app auth boundary", () => {
     act(() => authListener("PASSWORD_RECOVERY", { user: { id: "remote-user" } }));
 
     expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("New password"), "new-secret");
+    await user.click(screen.getByRole("button", { name: "Set new password" }));
+
+    expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
+    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
+  });
+
+  test("lands a password-recovery link on the new-password form instead of signing in", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    authMock.updateUser = vi.fn().mockResolvedValue({ error: null });
+
+    window.history.pushState(null, "", "/account#access_token=access&refresh_token=refresh&type=recovery");
+    await renderRemoteApp(authMock);
+
+    expect(authMock.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+    expect(await screen.findByLabelText("New password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set new password" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm cloud handoff" })).not.toBeInTheDocument();
+
     await user.type(screen.getByLabelText("New password"), "new-secret");
     await user.click(screen.getByRole("button", { name: "Set new password" }));
 

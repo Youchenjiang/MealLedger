@@ -73,8 +73,11 @@ flow they are in:
 - **Forgot password** is its own view: email plus **Send reset link**, with
   **Back to sign in** to return. Sign-in itself no longer fires a reset
   email from a background link.
-- The recovery view (set new password) remains a separate flow driven by the
-  Supabase `PASSWORD_RECOVERY` session event.
+- The recovery view (set new password) is its own flow: the app owns callback
+  hash handling (`detectSessionInUrl: false`), maps `type=recovery` hashes to
+  the `password-recovery` state directly, and guards the view against late
+  `INITIAL_SESSION` / `SIGNED_IN` emissions from supabase-js so the form is
+  not overridden back to a sign-in.
 
 ## Password Visibility Toggle
 

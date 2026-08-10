@@ -146,16 +146,24 @@ export async function unlinkIdentity(client: IdentityLinkClient, identity: Linke
     : { ok: true, message: `${identity.provider} sign-in removed.` };
 }
 
-export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, href: string): Promise<{ handled: false } | { handled: true; result: PasswordAuthResult }> {
+export type OAuthCallbackResult =
+  | { handled: false }
+  | { handled: true; recovery: boolean; result: PasswordAuthResult };
+
+export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, href: string): Promise<OAuthCallbackResult> {
   const params = new URLSearchParams(new URL(href).hash.slice(1));
   const accessToken = params.get("access_token");
   const refreshToken = params.get("refresh_token");
   if (!accessToken || !refreshToken) return { handled: false };
+  // Password-recovery links land with the same implicit-grant hash as OAuth
+  // callbacks plus `type=recovery`. The caller maps these to the
+  // password-recovery state instead of a sign-in so the new-password form shows.
+  const recovery = params.get("type") === "recovery";
 
   const { data, error } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-  if (error) return { handled: true, result: { ok: false, message: authFailureMessage(error) } };
+  if (error) return { handled: true, recovery, result: { ok: false, message: authFailureMessage(error) } };
   if (!data?.session) {
-    return { handled: true, result: { ok: false, message: "Authentication did not return a workspace session." } };
+    return { handled: true, recovery, result: { ok: false, message: "Authentication did not return a workspace session." } };
   }
-  return { handled: true, result: { ok: true, session: data.session } };
+  return { handled: true, recovery, result: { ok: true, session: data.session } };
 }

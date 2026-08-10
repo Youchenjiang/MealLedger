@@ -123,9 +123,42 @@ describe("password auth action", () => {
 
     await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/settings#access_token=access&refresh_token=refresh")).resolves.toEqual({
       handled: true,
+      recovery: false,
       result: { ok: true, session },
     });
     expect(setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+  });
+
+  test("restores a password-recovery session and flags it for the recovery state", async () => {
+    const session = { user: { id: "recovering-user" } };
+    const setSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+    await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
+      result: { ok: true, session },
+    });
+    expect(setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+  });
+
+  test("keeps the recovery flag when restoring a recovery link fails", async () => {
+    const setSession = vi.fn().mockResolvedValue({ data: { session: null }, error: new Error("expired recovery token") });
+
+    await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/account#access_token=expired&refresh_token=expired&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
+      result: { ok: false, message: "expired recovery token" },
+    });
+  });
+
+  test("keeps the recovery flag when a recovery link returns no session", async () => {
+    const setSession = vi.fn().mockResolvedValue({ data: {}, error: null });
+
+    await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
+      result: { ok: false, message: "Authentication did not return a workspace session." },
+    });
   });
 
   test("ignores a normal settings URL", async () => {
