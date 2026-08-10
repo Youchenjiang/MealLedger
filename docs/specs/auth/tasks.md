@@ -24,6 +24,12 @@
 - [x] Remove the temporary Magic Link UI and action.
 - [x] Add `npm run dev:5200` for the review server.
 - [x] Add email/password reset and recovery callback flow.
+- [x] Separate sign-in, sign-up, and forgot-password into distinct Account
+      page views with a segmented mode switch.
+- [x] Add confirm-password validation to the sign-up view.
+- [x] Route duplicate sign-up to the sign-in view with the email kept.
+- [x] Add per-field password visibility toggles to the sign-in, sign-up, and
+      recovery password fields with stateful accessible labels.
 - [x] Add Google OAuth sign-in and callback flow.
 - [x] Add Facebook OAuth sign-in and callback flow.
 - [x] Add provider configuration and redirect-URL documentation.
@@ -33,6 +39,9 @@
       states in the Settings Account section.
 - [x] Keep Settings for user authentication and import/export; keep ledger
       accounts under Ledger > Accounts.
+- [x] Link Google and Facebook identities to a signed-in account and list
+      them as sign-in methods.
+- [x] Unlink a provider identity while keeping the workspace intact.
 - [x] Verify the Account page stays within desktop and mobile viewports.
 
 ## Verification

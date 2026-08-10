@@ -7,23 +7,27 @@ import {
   CheckCircle2,
   Cloud,
   CloudOff,
+  Eye,
+  EyeOff,
   Home,
   ImagePlus,
   KeyRound,
   LogIn,
   LogOut,
   Plus,
+  UserPlus,
   ReceiptText,
   Settings,
   Sparkles,
   Upload,
+  UserRound,
   Wifi,
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
-import type { OAuthProvider } from "./auth/authActions";
+import { ALREADY_REGISTERED_MESSAGE, type LinkedIdentity, type OAuthProvider } from "./auth/authActions";
 import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
@@ -55,10 +59,11 @@ const navItems: NavItem[] = [
   { route: "overview", label: "Overview", path: "/", icon: Home },
   { route: "ledger", label: "Ledger", path: "/ledger", icon: Banknote },
   { route: "capture", label: "Capture", path: "/capture", icon: Camera },
-  { route: "settings", label: "Settings", path: "/settings", icon: Settings },
+  { route: "settings", label: "Workspace", path: "/settings", icon: Settings },
+  { route: "account", label: "Cloud & account", path: "/account", icon: UserRound },
 ];
-const primaryNavItems = navItems.filter((item) => item.route !== "settings");
-const settingsNavItems = navItems.filter((item) => item.route === "settings");
+const primaryNavItems = navItems.filter((item) => item.route !== "settings" && item.route !== "account");
+const utilityNavItems = navItems.filter((item) => item.route === "settings" || item.route === "account");
 
 type RouteDefinition = {
   segments: string[];
@@ -83,6 +88,7 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["capture"], route: "capture" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
+  { segments: ["account"], route: "account" },
 ];
 
 function navItemFor(route: AppRoute): NavItem {
@@ -561,11 +567,14 @@ type AccountPageProps = Readonly<{
   cloudDataOwnerMatches: boolean;
   handoffCounts: HandoffCounts;
   storageStatus: Pick<StatusItem, "label" | "detail" | "tone">;
+  identities: LinkedIdentity[];
   onSignIn: (email?: string, password?: string) => Promise<void>;
   onSignUp: (email?: string, password?: string) => Promise<void>;
   onRequestPasswordReset: (email?: string) => Promise<void>;
   onUpdatePassword: (password?: string) => Promise<void>;
   onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  onLinkIdentity: (provider: OAuthProvider) => Promise<void>;
+  onUnlinkIdentity: (identity: LinkedIdentity) => Promise<void>;
   onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
 }>;
@@ -811,7 +820,7 @@ function Sidebar({ route, reviewCount, navigate }: Readonly<{
       <Brand caption="Personal ledger with optional meal notes" />
       <div className="sidebar-navigation">
         <PrimaryNav items={primaryNavItems} route={route} reviewCount={reviewCount} navigate={navigate} />
-        <PrimaryNav items={settingsNavItems} className="sidebar-settings-nav" route={route} reviewCount={reviewCount} navigate={navigate} />
+        <PrimaryNav items={utilityNavItems} className="sidebar-settings-nav" route={route} reviewCount={reviewCount} navigate={navigate} />
       </div>
     </aside>
   );
@@ -874,7 +883,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -1258,7 +1267,7 @@ function AuthenticatedApp() {
       <section className="workspace">
         <WorkspaceHeader
           route={route}
-          statusItems={route !== "settings" ? shellStatusItems(statusItems) : []}
+          statusItems={route !== "settings" && route !== "account" ? shellStatusItems(statusItems) : []}
         />
         {renderRoute({
           route,
@@ -1293,6 +1302,9 @@ function AuthenticatedApp() {
           onRequestPasswordReset: requestPasswordReset,
           onUpdatePassword: updatePassword,
           onSignInWithOAuth: signInWithOAuth,
+          identities,
+          onLinkIdentity: linkIdentity,
+          onUnlinkIdentity: unlinkIdentity,
           onClaimLocalWorkspace: claimLocalWorkspace,
           onSignOut: signOut,
           onSaveMeal: (meal) => setMeals((current) => [...current, meal]),
@@ -1492,6 +1504,9 @@ type RouteRenderContext = {
   onRequestPasswordReset: (email?: string) => Promise<void>;
   onUpdatePassword: (password?: string) => Promise<void>;
   onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  identities: LinkedIdentity[];
+  onLinkIdentity: (provider: OAuthProvider) => Promise<void>;
+  onUnlinkIdentity: (identity: LinkedIdentity) => Promise<void>;
   onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
   onSaveMeal: (meal: MealEntry) => void;
@@ -1531,6 +1546,9 @@ function renderRoute({
   onRequestPasswordReset,
   onUpdatePassword,
   onSignInWithOAuth,
+  identities,
+  onLinkIdentity,
+  onUnlinkIdentity,
   onClaimLocalWorkspace,
   onSignOut,
   onSaveMeal,
@@ -1660,20 +1678,12 @@ function renderRoute({
     case "settings":
       return (
         <SettingsPage
-          authState={authState}
-          authMessage={authMessage}
-          cloudDataOwnerMatches={cloudDataOwnerMatches}
-          handoffCounts={handoffCounts}
-          storageStatus={storageStatus}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-          onRequestPasswordReset={onRequestPasswordReset}
-          onUpdatePassword={onUpdatePassword}
-          onSignInWithOAuth={onSignInWithOAuth}
-          onClaimLocalWorkspace={onClaimLocalWorkspace}
-          onSignOut={onSignOut}
           accounts={accounts}
           records={records}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
+          onReopenOnboarding={onReopenOnboarding}
+          onOpenAccount={() => navigate(navItemFor("account"))}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
@@ -1691,6 +1701,26 @@ function renderRoute({
             setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
             return true;
           }}
+        />
+      );
+    case "account":
+      return (
+        <AccountPage
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          identities={identities}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onLinkIdentity={onLinkIdentity}
+          onUnlinkIdentity={onUnlinkIdentity}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
         />
       );
     default:
@@ -4277,53 +4307,52 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   );
 }
 
-type SettingsPageProps = AccountPageProps & {
+type SettingsPageProps = {
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
+  onAddAccount: (account: LocalAccount) => void;
+  onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
+  onReopenOnboarding: () => void;
+  onOpenAccount: () => void;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 };
 
 function SettingsPage({
-  authState,
-  authMessage,
-  cloudDataOwnerMatches,
-  handoffCounts,
-  storageStatus,
-  onSignIn,
-  onSignUp,
-  onRequestPasswordReset,
-  onUpdatePassword,
-  onSignInWithOAuth,
-  onClaimLocalWorkspace,
-  onSignOut,
   accounts,
   records,
+  onAddAccount,
+  onSaveInitialFunding,
+  onReopenOnboarding,
+  onOpenAccount,
   onImportRecord,
   onMergeImportDraft,
 }: Readonly<SettingsPageProps>) {
-  const [section, setSection] = useState<"account" | "portability">("account");
+  const [section, setSection] = useState<"ledger-accounts" | "portability">("ledger-accounts");
 
   return (
     <section className="settings-page">
+      <section className="settings-account-entry" aria-labelledby="cloud-account-title">
+        <div>
+          <p className="eyebrow">Optional cloud features</p>
+          <h2 id="cloud-account-title">Cloud &amp; account</h2>
+          <p>Keep using MealLedger locally, or sign in when you are ready to sync this workspace.</p>
+        </div>
+        <button className="secondary-action" type="button" onClick={onOpenAccount}>
+          <UserRound size={18} aria-hidden="true" />
+          Manage cloud access
+        </button>
+      </section>
       <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-        <button className={`settings-tab ${section === "account" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "account"} onClick={() => setSection("account")}>Account</button>
+        <button className={`settings-tab ${section === "ledger-accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ledger-accounts"} onClick={() => setSection("ledger-accounts")}>Money accounts</button>
         <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
       </div>
-      {section === "account" ? (
-        <AccountPage
-          authState={authState}
-          authMessage={authMessage}
-          cloudDataOwnerMatches={cloudDataOwnerMatches}
-          handoffCounts={handoffCounts}
-          storageStatus={storageStatus}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-          onRequestPasswordReset={onRequestPasswordReset}
-          onUpdatePassword={onUpdatePassword}
-          onSignInWithOAuth={onSignInWithOAuth}
-          onClaimLocalWorkspace={onClaimLocalWorkspace}
-          onSignOut={onSignOut}
+      {section === "ledger-accounts" ? (
+        <LedgerAccountsPanel
+          accounts={accounts}
+          onAddAccount={onAddAccount}
+          onSaveInitialFunding={onSaveInitialFunding}
+          onReopenOnboarding={onReopenOnboarding}
         />
       ) : (
         <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
@@ -4332,15 +4361,81 @@ function SettingsPage({
   );
 }
 
-function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
+function PasswordInput({ id, value, autoComplete, visible, onValueChange, onToggleVisible }: Readonly<{
+  id: string;
+  value: string;
+  autoComplete: string;
+  visible: boolean;
+  onValueChange: (value: string) => void;
+  onToggleVisible: () => void;
+}>) {
+  return (
+    <div className="password-field">
+      <input
+        id={id}
+        type={visible ? "text" : "password"}
+        required
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className="password-toggle"
+        aria-label={visible ? "Hide password" : "Show password"}
+        onClick={onToggleVisible}
+      >
+        {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
+
+function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const [newPasswordVisible, setNewPasswordVisible] = useState(false);
+  const [authView, setAuthView] = useState<"sign-in" | "sign-up" | "forgot-password">("sign-in");
+  const [signUpError, setSignUpError] = useState("");
+
+  const switchAuthView = (view: "sign-in" | "sign-up" | "forgot-password") => {
+    setAuthView(view);
+    setSignUpError("");
+    setConfirmPassword("");
+    setPasswordVisible(false);
+    setConfirmPasswordVisible(false);
+  };
+
+  const previousAuthMessage = useRef(authMessage);
+  useEffect(() => {
+    if (authView === "sign-up" && authMessage === ALREADY_REGISTERED_MESSAGE && previousAuthMessage.current !== ALREADY_REGISTERED_MESSAGE) {
+      switchAuthView("sign-in");
+    }
+    previousAuthMessage.current = authMessage;
+  }, [authMessage, authView]);
 
   const handleSignIn = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSignIn(email, password).catch(() => undefined);
+  };
+
+  const handleSignUp = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (password !== confirmPassword) {
+      setSignUpError("Passwords do not match.");
+      return;
+    }
+    onSignUp(email, password).catch(() => undefined);
+  };
+
+  const handlePasswordReset = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onRequestPasswordReset(email).catch(() => undefined);
   };
 
   const handlePasswordUpdate = (event: FormEvent<HTMLFormElement>) => {
@@ -4348,76 +4443,119 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     onUpdatePassword(newPassword).catch(() => undefined);
   };
 
-  const renderAccountContent = () => {
-    if (authState === "password-recovery") {
-      return (
-        <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
-          <p className="field-help">Set a new password to finish resetting your account.</p>
-          <label htmlFor="account-new-password">New password</label>
-          <input id="account-new-password" type="password" required autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-          <button className="primary-action auth-submit" type="submit">
-            <KeyRound size={18} aria-hidden="true" />
-            Set new password
-          </button>
-          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-        </form>
-      );
+  const renderAuthModeSwitch = () => (
+    <fieldset className="segmented-fieldset">
+      <legend className="visually-hidden">Sign in or create account</legend>
+      <div className="segmented-control">
+        {(["sign-in", "sign-up"] as const).map((view) => (
+          <label className={authView === view ? "active" : ""} key={view}>
+            <input checked={authView === view} name="auth-view" type="radio" value={view} onChange={() => switchAuthView(view)} />
+            <span>{view === "sign-in" ? "Sign in" : "Create account"}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+
+  const renderProviderActions = () => (
+    <>
+      <p className="auth-divider">or use</p>
+      <div className="auth-provider-actions">
+        <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
+          <img className="auth-provider-mark" src={googleG} alt="" /> Continue with Google
+        </button>
+        <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
+          <img className="auth-provider-mark" src={facebookF} alt="" /> Continue with Facebook
+        </button>
+      </div>
+    </>
+  );
+
+  const accountSubmitLabel = (): string => {
+    if (authView === "sign-up") {
+      return authState === "loading" ? "Creating account..." : "Create account";
     }
-    if (!isSignedIn) {
-      if (isLocalDevelopmentMode) {
-        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
-      }
-      return (
-        <form className="auth-form account-page-form" onSubmit={handleSignIn}>
-          <label htmlFor="account-email">Email</label>
-          <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-          <div className="auth-password-row">
-            <label htmlFor="account-password">Password</label>
-            <button className="quiet-action auth-forgot-action" type="button" onClick={() => onRequestPasswordReset(email).catch(() => undefined)}>Forgot password?</button>
-          </div>
-          <input id="account-password" type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
-          <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
-            <LogIn size={18} aria-hidden="true" />
-            {authState === "loading" ? "Signing in..." : "Sign in"}
-          </button>
-          <div className="auth-helper-actions">
-            <button className="quiet-action" type="button" onClick={() => onSignUp(email, password).catch(() => undefined)}>Create an account</button>
-          </div>
-          <p className="auth-divider">or continue with</p>
-          <div className="auth-provider-actions">
-            <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("google").catch(() => undefined)}>
-              <img className="auth-provider-mark" src={googleG} alt="" /> Continue with Google
-            </button>
-            <button className="auth-provider-action" type="button" onClick={() => onSignInWithOAuth("facebook").catch(() => undefined)}>
-              <img className="auth-provider-mark" src={facebookF} alt="" /> Continue with Facebook
-            </button>
-          </div>
-          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-        </form>
-      );
-    }
-    if (!cloudDataOwnerMatches) {
-      return (
-        <div className="auth-form account-page-form">
-          <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
-          <dl className="handoff-list" aria-label="Local data handoff summary">
-            <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
-            <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
-            <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
-            <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
-            <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
-          </dl>
-          <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
-            <Cloud size={18} aria-hidden="true" />
-            Confirm cloud handoff
-          </button>
-          <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
-            <LogOut size={18} aria-hidden="true" />
-            Sign out
-          </button>
-        </div>
-      );
-    }
+    return authState === "loading" ? "Signing in..." : "Continue";
+  };
+
+  const renderRecoveryForm = () => (
+    <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
+      <p className="field-help">Set a new password to finish resetting your account.</p>
+      <label htmlFor="account-new-password">New password</label>
+      <PasswordInput id="account-new-password" value={newPassword} autoComplete="new-password" visible={newPasswordVisible} onValueChange={setNewPassword} onToggleVisible={() => setNewPasswordVisible((current) => !current)} />
+      <button className="primary-action auth-submit" type="submit">
+        <KeyRound size={18} aria-hidden="true" />
+        Set new password
+      </button>
+      {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+    </form>
+  );
+
+  const renderForgotPasswordForm = () => (
+    <form className="auth-form account-page-form" onSubmit={handlePasswordReset}>
+      <p className="field-help">Enter your email and we will send a link to reset your password.</p>
+      <label htmlFor="account-reset-email">Email</label>
+      <input id="account-reset-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+      <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+        <KeyRound size={18} aria-hidden="true" />
+        {authState === "loading" ? "Sending link..." : "Send reset link"}
+      </button>
+      <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>Back to sign in</button>
+      {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+    </form>
+  );
+
+  const renderAuthForm = () => (
+    <form className="auth-form account-page-form" onSubmit={authView === "sign-up" ? handleSignUp : handleSignIn}>
+      {renderAuthModeSwitch()}
+      <label htmlFor="account-email">Email</label>
+      <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+      <div className="auth-password-row">
+        <label htmlFor="account-password">Password</label>
+        {authView === "sign-in" ? (
+          <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>Forgot password?</button>
+        ) : null}
+      </div>
+      <PasswordInput id="account-password" value={password} autoComplete={authView === "sign-up" ? "new-password" : "current-password"} visible={passwordVisible} onValueChange={setPassword} onToggleVisible={() => setPasswordVisible((current) => !current)} />
+      {authView === "sign-up" ? (
+        <>
+          <label htmlFor="account-confirm-password">Confirm password</label>
+          <PasswordInput id="account-confirm-password" value={confirmPassword} autoComplete="new-password" visible={confirmPasswordVisible} onValueChange={setConfirmPassword} onToggleVisible={() => setConfirmPasswordVisible((current) => !current)} />
+          {signUpError ? <p className="auth-message" role="alert">{signUpError}</p> : null}
+        </>
+      ) : null}
+      <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+        {authView === "sign-up" ? <UserPlus size={18} aria-hidden="true" /> : <LogIn size={18} aria-hidden="true" />}
+        {accountSubmitLabel()}
+      </button>
+      {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+      {renderProviderActions()}
+    </form>
+  );
+
+  const renderHandoffForm = () => (
+    <div className="auth-form account-page-form">
+      <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
+      <dl className="handoff-list" aria-label="Local data handoff summary">
+        <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
+        <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
+        <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
+        <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
+        <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
+      </dl>
+      <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
+        <Cloud size={18} aria-hidden="true" />
+        Confirm cloud handoff
+      </button>
+      <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+        <LogOut size={18} aria-hidden="true" />
+        Sign out
+      </button>
+    </div>
+  );
+
+  const renderSignedInAccount = () => {
+    const hasEmailIdentity = identities.some((identity) => identity.provider === "email");
     return (
       <div className="auth-form account-page-form">
         <p className="field-help">Cloud sync is enabled for this workspace.</p>
@@ -4425,17 +4563,64 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
           <strong>{storageStatus.label}</strong>
           <span>{storageStatus.detail}</span>
         </output>
+        <fieldset className="linked-identities">
+          <legend>Sign-in methods</legend>
+          <ul>
+            {hasEmailIdentity ? (
+              <li className="identity-row">
+                <span className="identity-name">Email &amp; password</span>
+                <span className="identity-badge">Primary</span>
+              </li>
+            ) : null}
+            {(["google", "facebook"] as const).map((provider) => {
+              const identity = identities.find((entry) => entry.provider === provider);
+              return (
+                <li className="identity-row" key={provider}>
+                  <span className="identity-name">
+                    <img className="auth-provider-mark" src={provider === "google" ? googleG : facebookF} alt="" />
+                    {provider === "google" ? "Google" : "Facebook"}
+                  </span>
+                  {identity ? (
+                    <button className="quiet-action" type="button" onClick={() => onUnlinkIdentity(identity).catch(() => undefined)}>Unlink</button>
+                  ) : (
+                    <button className="quiet-action" type="button" onClick={() => onLinkIdentity(provider).catch(() => undefined)}>Link {provider === "google" ? "Google" : "Facebook"}</button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
         <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
           <LogOut size={18} aria-hidden="true" />
           Sign out
         </button>
+        {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
       </div>
     );
   };
 
+  const renderAccountContent = () => {
+    if (authState === "password-recovery") {
+      return renderRecoveryForm();
+    }
+    if (!isSignedIn) {
+      if (isLocalDevelopmentMode) {
+        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
+      }
+      if (authView === "forgot-password") {
+        return renderForgotPasswordForm();
+      }
+      return renderAuthForm();
+    }
+    if (!cloudDataOwnerMatches) {
+      return renderHandoffForm();
+    }
+    return renderSignedInAccount();
+  };
+
   return (
     <div className="account-page">
-      <Panel title="Account settings" eyebrow="User account">
+      <Panel title="Optional cloud sync">
         {renderAccountContent()}
       </Panel>
     </div>
@@ -4636,12 +4821,12 @@ function NotFoundPage({ navigate }: Readonly<{ navigate: (item: NavItem) => void
   );
 }
 
-function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow: string; children: React.ReactNode }>) {
+function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow?: string; children: React.ReactNode }>) {
   return (
     <article className="panel">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">{eyebrow}</p>
+          {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
           <h2>{title}</h2>
         </div>
       </div>
@@ -4684,6 +4869,8 @@ function routeTitle(route: AppRoute) {
       return "Capture";
     case "settings":
       return "Settings";
+    case "account":
+      return "Account";
     default:
       return "Unknown route";
   }

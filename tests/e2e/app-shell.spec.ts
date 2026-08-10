@@ -77,17 +77,15 @@ test("opens the account page with provider sign-in actions", async ({ page }) =>
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("tab", { name: "Account", exact: true }).click();
+  await page.getByRole("button", { name: "Cloud & account", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Account settings", exact: true })).toBeVisible();
-  expect(page.url()).toMatch(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
+  expect(page.url()).toMatch(/\/account$/);
   const emailInput = page.getByLabel("Email", { exact: true });
   if (await emailInput.count()) {
     await expect(emailInput).toBeVisible();
     await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue with Google", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue with Facebook", exact: true })).toBeVisible();
   } else {
@@ -163,10 +161,8 @@ test("keeps the account page compact and aligned on mobile", async ({ page }) =>
   await page.setViewportSize({ width: 390, height: 844 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("tab", { name: "Account", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Account settings", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cloud & account", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -194,9 +190,10 @@ test("keeps the mobile workspace header aligned across routes", async ({ page })
   await page.setViewportSize({ width: 390, height: 844 });
 
   await openWorkspace(page);
+  expect(await page.locator(".sidebar").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(80);
   const headerPositions: number[] = [];
   const sidebarHeights: number[] = [];
-  for (const routeName of ["Overview", "Ledger", "Capture", "Settings"]) {
+  for (const routeName of ["Overview", "Ledger", "Capture", "Workspace", "Cloud & account"]) {
     await page.getByRole("button", { name: routeName, exact: true }).click();
     await expect(page.locator(".page-header")).toBeVisible();
     const measurements = await page.locator(".page-header, .sidebar").evaluateAll((elements) =>
@@ -208,6 +205,19 @@ test("keeps the mobile workspace header aligned across routes", async ({ page })
 
   expect(new Set(headerPositions.map((position) => Math.round(position))).size).toBe(1);
   expect(new Set(sidebarHeights.map((height) => Math.round(height))).size).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test("keeps the compact navigation on one row", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+  await page.setViewportSize({ width: 1000, height: 900 });
+
+  await openWorkspace(page);
+  const tops = await page.locator("aside[aria-label='MealLedger navigation'] .nav-item").evaluateAll((items) =>
+    items.map((item) => Math.round(item.getBoundingClientRect().top)),
+  );
+  expect(new Set(tops).size).toBe(1);
+  await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });
 

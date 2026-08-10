@@ -31,6 +31,21 @@ export type OAuthCallbackClient = {
   };
 };
 
+export type LinkedIdentity = {
+  id: string;
+  user_id: string;
+  identity_id: string;
+  provider: string;
+  provider_id?: string;
+};
+
+export type IdentityLinkClient = {
+  auth: {
+    linkIdentity: (options: { provider: OAuthProvider; options: { redirectTo: string } }) => Promise<{ error: unknown }>;
+    unlinkIdentity: (identity: LinkedIdentity) => Promise<{ error: unknown }>;
+  };
+};
+
 export type PasswordSession = { user?: { id?: string } } | null;
 export type PasswordAuthResult = { ok: true; session: PasswordSession } | { ok: false; message: string };
 
@@ -47,6 +62,15 @@ function validatePasswordCredentials(email: string, password: string): PasswordA
 
 function authFailureMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Authentication failed. Try again.";
+}
+
+export const ALREADY_REGISTERED_MESSAGE = "An account with this email already exists. Sign in with your password.";
+
+function isAlreadyRegisteredError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  if (message.includes("already registered") || message.includes("already exists")) return true;
+  return (error as { code?: unknown }).code === "user_already_exists";
 }
 
 export async function signInWithPassword(client: PasswordAuthClient, email: string, password: string): Promise<PasswordAuthResult> {
@@ -73,7 +97,12 @@ export async function signUpWithPassword(client: PasswordRegistrationClient, ema
   if (invalid) return invalid;
 
   const { data, error } = await client.auth.signUp({ email: email.trim(), password });
-  if (error) return { ok: false, message: authFailureMessage(error) };
+  if (error) {
+    if (isAlreadyRegisteredError(error)) {
+      return { ok: false, message: ALREADY_REGISTERED_MESSAGE };
+    }
+    return { ok: false, message: authFailureMessage(error) };
+  }
   if (!data?.session) {
     return { ok: false, message: "Account created. Verify your email, then sign in to enable cloud sync." };
   }
@@ -101,6 +130,20 @@ export async function signInWithOAuth(client: OAuthClient, provider: OAuthProvid
   return error
     ? { ok: false, message: authFailureMessage(error) }
     : { ok: true, message: `Opening ${provider} sign-in...` };
+}
+
+export async function linkIdentity(client: IdentityLinkClient, provider: OAuthProvider, redirectTo: string): Promise<{ ok: boolean; message: string }> {
+  const { error } = await client.auth.linkIdentity({ provider, options: { redirectTo } });
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: `Opening ${provider} sign-in...` };
+}
+
+export async function unlinkIdentity(client: IdentityLinkClient, identity: LinkedIdentity): Promise<{ ok: boolean; message: string }> {
+  const { error } = await client.auth.unlinkIdentity(identity);
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: `${identity.provider} sign-in removed.` };
 }
 
 export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, href: string): Promise<{ handled: false } | { handled: true; result: PasswordAuthResult }> {

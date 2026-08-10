@@ -22,6 +22,20 @@
 - `src/App.auth.test.tsx` verifies the dedicated Account page, email/password
   sign-in, Google/Facebook provider actions, absence of the sign-in gate, and
   explicit local-data handoff summary before cloud ownership is claimed.
+- Password visibility tests in `src/App.auth.test.tsx` verify every password
+  field starts masked, each field's toggle flips only that field between
+  `password` and `text`, the toggle label switches between `Show password`
+  and `Hide password`, and the typed value survives the toggle for
+  submission.
+- Sign-up view tests verify the segmented switch to Create account, the
+  confirm-password field, local rejection of mismatched passwords before any
+  Supabase call, duplicate sign-up landing on the sign-in view with the email
+  kept, and the dedicated forgot-password view sending the reset link.
+- Identity link/unlink tests in `src/auth/authActions.test.ts` cover the
+  provider redirect initiation, unlink calls, and error paths.
+- `src/App.auth.test.tsx` verifies the signed-in account lists sign-in
+  methods, marks email/password as primary, and links and unlinks providers
+  from the Account page.
 - Cloud sync status must remain blocked as `Local data review required` until
   the user confirms handoff, then become `Cloud sync enabled` only after the
   handoff is accepted.

@@ -11,6 +11,8 @@ type SupabaseAuthMock = {
   resetPasswordForEmail: ReturnType<typeof vi.fn>;
   updateUser: ReturnType<typeof vi.fn>;
   signInWithOAuth: ReturnType<typeof vi.fn>;
+  linkIdentity: ReturnType<typeof vi.fn>;
+  unlinkIdentity: ReturnType<typeof vi.fn>;
   signOut: ReturnType<typeof vi.fn>;
 };
 
@@ -36,6 +38,8 @@ async function renderAuthHarness(authMock?: SupabaseAuthMock) {
         <button type="button" onClick={() => { auth.requestPasswordReset(" user@example.com ").catch(() => undefined); }}>Reset password</button>
         <button type="button" onClick={() => { auth.updatePassword("new-secret").catch(() => undefined); }}>Update password</button>
         <button type="button" onClick={() => { auth.signInWithOAuth("google").catch(() => undefined); }}>Google sign in</button>
+        <button type="button" onClick={() => { auth.linkIdentity("google").catch(() => undefined); }}>Link Google</button>
+        <button type="button" onClick={() => { auth.unlinkIdentity({ id: "g1", user_id: "remote-user", identity_id: "g1", provider: "google" }).catch(() => undefined); }}>Unlink Google</button>
         <button type="button" onClick={() => { auth.signOut().catch(() => undefined); }}>Sign out</button>
         {children}
       </div>
@@ -54,6 +58,8 @@ function createAuthMock(session: unknown = null): SupabaseAuthMock {
     resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
     updateUser: vi.fn().mockResolvedValue({ error: null }),
     signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
+    linkIdentity: vi.fn().mockResolvedValue({ error: null }),
+    unlinkIdentity: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
   };
 }
@@ -157,7 +163,41 @@ describe("auth provider", () => {
     await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
     await user.click(screen.getByRole("button", { name: "Google sign in" }));
 
-    expect(authMock.signInWithOAuth).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: `${window.location.origin}/settings` } });
+    expect(authMock.signInWithOAuth).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: `${window.location.origin}/account` } });
     expect(screen.getByLabelText("auth-state")).toHaveTextContent("loading");
+  });
+
+  test("links a provider identity for the signed-in account", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock({ user: { id: "remote-user" } });
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-in"));
+    await user.click(screen.getByRole("button", { name: "Link Google" }));
+
+    expect(authMock.linkIdentity).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: `${window.location.origin}/account` } });
+    expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-in");
+  });
+
+  test("unlinks a provider identity while staying signed in", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock({ user: { id: "remote-user" } });
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-in"));
+    await user.click(screen.getByRole("button", { name: "Unlink Google" }));
+
+    expect(authMock.unlinkIdentity).toHaveBeenCalledWith({ id: "g1", user_id: "remote-user", identity_id: "g1", provider: "google" });
+    expect(screen.getByLabelText("auth-message")).toHaveTextContent("google sign-in removed.");
+    expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-in");
+  });
+
+  test("defers identity linking until cloud authentication is configured", async () => {
+    const user = userEvent.setup();
+    await renderAuthHarness();
+
+    await user.click(screen.getByRole("button", { name: "Link Google" }));
+
+    expect(screen.getByLabelText("auth-message")).toHaveTextContent("Linking google is available after cloud authentication is configured.");
   });
 });
