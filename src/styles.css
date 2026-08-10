@@ -50,7 +50,7 @@ a {
 
 .auth-form {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   max-width: 420px;
 }
 
@@ -61,8 +61,8 @@ a {
 .auth-form input {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  padding: 9px 12px;
+  min-height: 40px;
+  padding: 8px 12px;
   border: 1px solid #d7cec1;
   border-radius: 8px;
   color: #242321;
@@ -116,7 +116,7 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 4px 0 0;
+  margin: 0;
   color: #69645c;
   font-size: 13px;
 }
@@ -136,7 +136,7 @@ a {
   justify-content: center;
   gap: 8px;
   min-width: 0;
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 10px;
   border: 1px solid #d7d0c4;
   border-radius: 8px;
@@ -973,6 +973,15 @@ h2 {
   margin-inline: auto;
 }
 
+.account-page .panel {
+  padding: 14px;
+  gap: 8px;
+}
+
+.account-page .primary-action {
+  min-height: 40px;
+}
+
 .account-page-form {
   width: min(520px, 100%);
   max-width: 520px;
@@ -983,6 +992,37 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #69645c;
+  background: transparent;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: #2f2b26;
+  background: #f0eadf;
 }
 
 .account-storage-status {
@@ -1008,6 +1048,37 @@ h2 {
   display: grid;
   min-width: 0;
   gap: 16px;
+}
+
+.settings-account-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid #c8ddd2;
+  border-radius: 8px;
+  background: #f2f7f3;
+}
+
+.settings-account-entry h2,
+.settings-account-entry p {
+  margin: 0;
+}
+
+.settings-account-entry h2 {
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.settings-account-entry > div > p:last-child {
+  margin-top: 5px;
+  color: #5f594f;
+  line-height: 1.45;
+}
+
+.settings-account-entry .secondary-action {
+  flex: 0 0 auto;
 }
 
 .settings-tabs {
@@ -1403,8 +1474,8 @@ h2 {
 .segmented-control {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
+  gap: 3px;
+  padding: 3px;
   border: 1px solid #d7cec1;
   border-radius: 8px;
   background: #fcfaf5;
@@ -1412,7 +1483,7 @@ h2 {
 
 .segmented-fieldset {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1449,6 +1520,8 @@ h2 {
 .segmented-control label {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
   min-height: 34px;
   padding: 0 10px;
   border-radius: 6px;
@@ -2113,18 +2186,18 @@ button.action-card.unavailable {
 
   .sidebar-navigation {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: center;
     gap: 6px;
   }
 
-  .sidebar-settings-nav {
-    margin-top: 0;
+  .sidebar-navigation > .nav-list,
+  .sidebar-navigation > .sidebar-settings-nav {
+    display: contents;
   }
 
-  .nav-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
+  .sidebar-settings-nav {
+    margin-top: 0;
   }
 
   .nav-item {
@@ -2153,11 +2226,11 @@ button.action-card.unavailable {
 @media (max-width: 760px) {
   .sidebar {
     display: block;
-    padding: 8px;
+    padding: 6px 8px;
   }
 
   .sidebar-navigation {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
   }
 
@@ -2192,11 +2265,12 @@ button.action-card.unavailable {
 
   .nav-item {
     display: grid;
-    min-height: 56px;
+    min-height: 48px;
     justify-items: center;
-    gap: 4px;
-    padding: 6px 4px;
+    gap: 1px;
+    padding: 4px 4px;
     font-size: 12px;
+    line-height: 1.1;
     text-align: center;
   }
 
@@ -2256,13 +2330,28 @@ button.action-card.unavailable {
 }
 
 @media (max-width: 560px) {
+  .settings-account-entry {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-account-entry .secondary-action {
+    justify-content: center;
+  }
+
   .workspace,
   .signed-out-shell {
-    padding: 16px;
+    padding: 10px;
   }
 
   .workspace {
-    padding-bottom: 16px;
+    gap: 8px;
+    padding-bottom: 12px;
+  }
+
+  .page-header,
+  .topbar-title {
+    min-height: 42px;
   }
 
   .file-picker-name {
