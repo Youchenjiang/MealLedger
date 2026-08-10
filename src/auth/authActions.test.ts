@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, updatePassword } from "./authActions";
+import { linkIdentity, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
 
 function passwordClient(signInWithPasswordMock = vi.fn(), signUpMock = vi.fn()) {
   return { auth: { signInWithPassword: signInWithPasswordMock, signUp: signUpMock } };
@@ -124,5 +124,49 @@ describe("password auth action", () => {
 
     await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/settings")).resolves.toEqual({ handled: false });
     expect(setSession).not.toHaveBeenCalled();
+  });
+
+  test("links a provider identity for the signed-in user", async () => {
+    const linkIdentityMock = vi.fn().mockResolvedValue({ error: null });
+    const client = { auth: { linkIdentity: linkIdentityMock, unlinkIdentity: vi.fn() } };
+
+    await expect(linkIdentity(client, "facebook", "https://app.test/account")).resolves.toEqual({
+      ok: true,
+      message: "Opening facebook sign-in...",
+    });
+    expect(linkIdentityMock).toHaveBeenCalledWith({ provider: "facebook", options: { redirectTo: "https://app.test/account" } });
+  });
+
+  test("reports a failed identity link", async () => {
+    const linkIdentityMock = vi.fn().mockResolvedValue({ error: new Error("Already linked") });
+    const client = { auth: { linkIdentity: linkIdentityMock, unlinkIdentity: vi.fn() } };
+
+    await expect(linkIdentity(client, "google", "https://app.test/account")).resolves.toEqual({
+      ok: false,
+      message: "Already linked",
+    });
+  });
+
+  test("unlinks a provider identity", async () => {
+    const unlinkIdentityMock = vi.fn().mockResolvedValue({ error: null });
+    const identity = { id: "id-1", user_id: "user-1", identity_id: "identity-1", provider: "google" };
+    const client = { auth: { linkIdentity: vi.fn(), unlinkIdentity: unlinkIdentityMock } };
+
+    await expect(unlinkIdentity(client, identity)).resolves.toEqual({
+      ok: true,
+      message: "google sign-in removed.",
+    });
+    expect(unlinkIdentityMock).toHaveBeenCalledWith(identity);
+  });
+
+  test("reports a failed identity unlink", async () => {
+    const unlinkIdentityMock = vi.fn().mockResolvedValue({ error: new Error("Last sign-in method") });
+    const identity = { id: "id-1", user_id: "user-1", identity_id: "identity-1", provider: "facebook" };
+    const client = { auth: { linkIdentity: vi.fn(), unlinkIdentity: unlinkIdentityMock } };
+
+    await expect(unlinkIdentity(client, identity)).resolves.toEqual({
+      ok: false,
+      message: "Last sign-in method",
+    });
   });
 });

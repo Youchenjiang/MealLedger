@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -11,6 +11,8 @@ function createAuthMock() {
     resetPasswordForEmail: vi.fn(),
     updateUser: vi.fn(),
     signInWithOAuth: vi.fn(),
+    linkIdentity: vi.fn().mockResolvedValue({ error: null }),
+    unlinkIdentity: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
   };
 }
@@ -83,6 +85,45 @@ describe("app auth boundary", () => {
 
     await user.click(screen.getByRole("button", { name: "Confirm cloud handoff" }));
     expect(await screen.findByText("Cloud sync is enabled for this workspace.")).toBeInTheDocument();
+  });
+
+  test("links and unlinks provider identities from the signed-in account", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    authMock.signInWithPassword = vi.fn().mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: "remote-user",
+            identities: [
+              { id: "email-1", user_id: "remote-user", identity_id: "email-1", provider: "email" },
+              { id: "google-1", user_id: "remote-user", identity_id: "google-1", provider: "google" },
+            ],
+          },
+        },
+      },
+      error: null,
+    });
+    await renderRemoteApp(authMock);
+
+    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await user.type(screen.getByLabelText("Email"), "user@example.com");
+    await user.type(screen.getByLabelText("Password"), "secret");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(await screen.findByRole("button", { name: "Confirm cloud handoff" }));
+    await screen.findByText("Cloud sync is enabled for this workspace.");
+
+    const methods = screen.getByRole("group", { name: "Sign-in methods" });
+    expect(within(methods).getByText("Email & password")).toBeInTheDocument();
+    expect(within(methods).getByText("Primary")).toBeInTheDocument();
+    expect(within(methods).getByRole("button", { name: "Unlink" })).toBeInTheDocument();
+    expect(within(methods).getByRole("button", { name: "Link Facebook" })).toBeInTheDocument();
+
+    await user.click(within(methods).getByRole("button", { name: "Unlink" }));
+    expect(authMock.unlinkIdentity).toHaveBeenCalledWith({ id: "google-1", user_id: "remote-user", identity_id: "google-1", provider: "google" });
+
+    await user.click(within(methods).getByRole("button", { name: "Link Facebook" }));
+    expect(authMock.linkIdentity).toHaveBeenCalledWith({ provider: "facebook", options: { redirectTo: `${window.location.origin}/account` } });
   });
 
   test("sets a new password from a recovery session", async () => {
