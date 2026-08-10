@@ -19,7 +19,7 @@ async function openWorkspace(page: Page) {
 }
 
 async function addAccount(page: Page, name: string) {
-  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("button", { name: "明細", exact: true }).click();
   await page.getByRole("tab", { name: "Accounts", exact: true }).click();
   await page.getByLabel("Account name").fill(name);
   await page.getByRole("button", { name: "Add account" }).click();
@@ -56,7 +56,7 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
 
   await openWorkspace(page);
   await addAccount(page, "Daily wallet");
-  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: "新增" }).click();
   await page.getByLabel("Account", { exact: true }).selectOption("Daily wallet");
   await page.getByLabel("Category", { exact: true }).selectOption("Daily");
   await page.getByLabel("Merchant", { exact: true }).fill("全聯");
@@ -77,7 +77,8 @@ test("opens the account page with provider sign-in actions", async ({ page }) =>
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Cloud & account", exact: true }).click();
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("button", { name: "Manage cloud access", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
   expect(page.url()).toMatch(/\/account$/);
@@ -101,7 +102,7 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
 
   await openWorkspace(page);
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: "新增" }).click();
   await page.getByRole("button", { name: /Record meal/ }).click();
   const mealLabels = page.locator(".meal-form > label");
   await expect(mealLabels).toHaveCount(2);
@@ -119,7 +120,7 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
   await page.getByRole("button", { name: "Save meal" }).click();
 
   await expect(page.getByText("Meal saved locally with 2 photos.")).toBeVisible();
-  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("button", { name: "明細", exact: true }).click();
   await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -128,7 +129,7 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: "新增" }).click();
   await page.getByRole("button", { name: /Scan invoice/ }).click();
   await page.getByLabel("Scan images").setInputFiles({
     name: "invoice.jpg",
@@ -139,8 +140,8 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
 
   await expect(page.getByText("1 scan draft saved locally for review.")).toBeVisible();
   await expect(page.getByText("invoice.jpg")).toBeVisible();
-  await page.getByRole("button", { name: /^Ledger/ }).click();
-  await expect(page.getByRole("button", { name: /^Ledger/ }).locator(".nav-badge")).toHaveText("1");
+  await page.getByRole("button", { name: /^明細/ }).click();
+  await expect(page.getByRole("button", { name: /^明細/ }).locator(".nav-badge")).toHaveText("1");
   await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -150,7 +151,7 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await openWorkspace(page);
-  await expect(page.locator("aside[aria-label='MealLedger navigation']")).toBeVisible();
+  await expect(page.locator("nav[aria-label='MealLedger navigation']")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
@@ -161,7 +162,8 @@ test("keeps the account page compact and aligned on mobile", async ({ page }) =>
   await page.setViewportSize({ width: 390, height: 844 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Cloud & account", exact: true }).click();
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("button", { name: "Manage cloud access", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
@@ -172,13 +174,13 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await page.setViewportSize({ width: 390, height: 844 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: "新增" }).click();
   await expect(page.getByRole("heading", { name: "Capture", exact: true })).toBeVisible();
   await expect(page.locator(".capture-intent-button")).toHaveCount(6);
   await expect(page.getByRole("heading", { name: "What are you saving?" })).toBeVisible();
-  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("button", { name: "明細", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
-  await expectHorizontallyWithinViewport(page, "aside[aria-label='MealLedger navigation'] .nav-item");
+  await expectHorizontallyWithinViewport(page, "nav[aria-label='MealLedger navigation'] .nav-item");
   await expect(page.locator(".table-card")).toHaveCount(0);
   await expect(page.locator(".ledger-record-card")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
@@ -190,21 +192,21 @@ test("keeps the mobile workspace header aligned across routes", async ({ page })
   await page.setViewportSize({ width: 390, height: 844 });
 
   await openWorkspace(page);
-  expect(await page.locator(".sidebar").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(80);
+  expect(await page.locator(".bottom-nav").evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(90);
   const headerPositions: number[] = [];
-  const sidebarHeights: number[] = [];
-  for (const routeName of ["Overview", "Ledger", "Capture", "Workspace", "Cloud & account"]) {
+  const navHeights: number[] = [];
+  for (const routeName of ["概覽", "明細", "新增", "專區", "設定"]) {
     await page.getByRole("button", { name: routeName, exact: true }).click();
     await expect(page.locator(".page-header")).toBeVisible();
-    const measurements = await page.locator(".page-header, .sidebar").evaluateAll((elements) =>
+    const measurements = await page.locator(".page-header, .bottom-nav").evaluateAll((elements) =>
       elements.map((element) => ({ className: element.className, top: element.getBoundingClientRect().top, height: element.getBoundingClientRect().height })),
     );
     headerPositions.push(measurements.find((item) => item.className === "page-header")?.top ?? -1);
-    sidebarHeights.push(measurements.find((item) => item.className === "sidebar")?.height ?? -1);
+    navHeights.push(measurements.find((item) => item.className === "bottom-nav")?.height ?? -1);
   }
 
   expect(new Set(headerPositions.map((position) => Math.round(position))).size).toBe(1);
-  expect(new Set(sidebarHeights.map((height) => Math.round(height))).size).toBe(1);
+  expect(new Set(navHeights.map((height) => Math.round(height))).size).toBe(1);
   expect(errors).toEqual([]);
 });
 
@@ -213,7 +215,7 @@ test("keeps the compact navigation on one row", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 900 });
 
   await openWorkspace(page);
-  const tops = await page.locator("aside[aria-label='MealLedger navigation'] .nav-item").evaluateAll((items) =>
+  const tops = await page.locator("nav[aria-label='MealLedger navigation'] .nav-item").evaluateAll((items) =>
     items.map((item) => Math.round(item.getBoundingClientRect().top)),
   );
   expect(new Set(tops).size).toBe(1);
@@ -226,7 +228,7 @@ test("keeps the first-account flow usable at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Capture" }).click();
+  await page.getByRole("button", { name: "新增" }).click();
   await page.getByRole("button", { name: "Create first account" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Add account" });
@@ -248,7 +250,7 @@ test("keeps compact navigation stable near its breakpoint", async ({ page }) => 
   await page.setViewportSize({ width: 720, height: 900 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "Ledger", exact: true }).click();
+  await page.getByRole("button", { name: "明細", exact: true }).click();
   await page.getByRole("tab", { name: "Accounts", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ledger", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ledger accounts", exact: true })).toBeVisible();
