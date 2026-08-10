@@ -54,7 +54,7 @@ describe("app auth boundary", () => {
     const { authMock } = await renderRemoteApp();
 
     await user.click(screen.getByRole("button", { name: "Cloud & account" }));
-    expect(screen.getByRole("heading", { name: "Cloud sync" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Optional cloud sync" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/account");
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();

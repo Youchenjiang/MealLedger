@@ -79,7 +79,7 @@ test("opens the account page with provider sign-in actions", async ({ page }) =>
   await openWorkspace(page);
   await page.getByRole("button", { name: "Cloud & account", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Cloud sync", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
   expect(page.url()).toMatch(/\/account$/);
   const emailInput = page.getByLabel("Email", { exact: true });
   if (await emailInput.count()) {
@@ -162,7 +162,7 @@ test("keeps the account page compact and aligned on mobile", async ({ page }) =>
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "Cloud & account", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Cloud sync", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);
 });

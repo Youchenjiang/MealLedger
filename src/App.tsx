@@ -4499,7 +4499,6 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
       }
       return (
         <form className="auth-form account-page-form" onSubmit={authView === "sign-up" ? handleSignUp : handleSignIn}>
-          <p className="field-help">Use MealLedger locally without an account, or sign in to enable cloud sync for this workspace.</p>
           {renderAuthModeSwitch()}
           <label htmlFor="account-email">Email</label>
           <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
@@ -4596,7 +4595,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   return (
     <div className="account-page">
-      <Panel title="Cloud sync">
+      <Panel title="Optional cloud sync">
         {renderAccountContent()}
       </Panel>
     </div>
