@@ -64,6 +64,15 @@ function authFailureMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Authentication failed. Try again.";
 }
 
+export const ALREADY_REGISTERED_MESSAGE = "An account with this email already exists. Sign in with your password.";
+
+function isAlreadyRegisteredError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  if (message.includes("already registered") || message.includes("already exists")) return true;
+  return (error as { code?: unknown }).code === "user_already_exists";
+}
+
 export async function signInWithPassword(client: PasswordAuthClient, email: string, password: string): Promise<PasswordAuthResult> {
   const invalid = validatePasswordCredentials(email, password);
   if (invalid) return invalid;
@@ -88,7 +97,12 @@ export async function signUpWithPassword(client: PasswordRegistrationClient, ema
   if (invalid) return invalid;
 
   const { data, error } = await client.auth.signUp({ email: email.trim(), password });
-  if (error) return { ok: false, message: authFailureMessage(error) };
+  if (error) {
+    if (isAlreadyRegisteredError(error)) {
+      return { ok: false, message: ALREADY_REGISTERED_MESSAGE };
+    }
+    return { ok: false, message: authFailureMessage(error) };
+  }
   if (!data?.session) {
     return { ok: false, message: "Account created. Verify your email, then sign in to enable cloud sync." };
   }

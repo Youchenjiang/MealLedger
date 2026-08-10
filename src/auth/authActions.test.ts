@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { linkIdentity, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
+import { ALREADY_REGISTERED_MESSAGE, linkIdentity, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
 
 function passwordClient(signInWithPasswordMock = vi.fn(), signUpMock = vi.fn()) {
   return { auth: { signInWithPassword: signInWithPasswordMock, signUp: signUpMock } };
@@ -60,6 +60,15 @@ describe("password auth action", () => {
 
     expect(result).toEqual({ ok: true, session });
     expect(signUpMock).toHaveBeenCalledWith({ email: "new@example.com", password: "secret" });
+  });
+
+  test("words a duplicate registration as an existing-account prompt", async () => {
+    const signUpMock = vi.fn().mockResolvedValue({ data: null, error: new Error("User already registered") });
+
+    await expect(signUpWithPassword(passwordClient(vi.fn(), signUpMock), "dup@example.com", "secret")).resolves.toEqual({
+      ok: false,
+      message: ALREADY_REGISTERED_MESSAGE,
+    });
   });
 
   test("does not claim registration when Supabase returns no session", async () => {
