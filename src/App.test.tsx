@@ -313,7 +313,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await openWorkspace(user);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
 
     expect(screen.getByRole("button", { name: "Export CSV" })).toHaveClass("primary-action");
@@ -338,7 +338,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await openWorkspace(user);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
     const file = new File([`date,account,amount\n${testLocalDate()},Cash,417\n`], "ledger.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
@@ -353,7 +353,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
@@ -374,7 +374,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await createExpenseRecord(user);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
@@ -392,7 +392,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await createExpenseRecord(user);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
@@ -414,7 +414,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await createExpenseRecord(user);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
@@ -559,10 +559,10 @@ describe("App shell draft flow", () => {
 
     expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
 
-    for (const route of ["Ledger", "Capture", "Settings", "Overview"]) {
-      await user.click(screen.getByRole("button", { name: route }));
-      expect(screen.getByRole("heading", { name: route })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: route })).toHaveAttribute("aria-current", "page");
+    for (const [navigationLabel, heading] of [["Ledger", "Ledger"], ["Capture", "Capture"], ["Workspace", "Settings"], ["Cloud & account", "Account"], ["Overview", "Overview"]]) {
+      await user.click(screen.getByRole("button", { name: navigationLabel }));
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: navigationLabel })).toHaveAttribute("aria-current", "page");
     }
   });
 
@@ -627,15 +627,15 @@ describe("App shell draft flow", () => {
     act(() => window.dispatchEvent(new Event("offline")));
     expect(screen.getByText("Offline")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Application status" })).not.toBeInTheDocument();
 
     act(() => window.dispatchEvent(new Event("online")));
     await user.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.queryByRole("region", { name: "Application status" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
+    expect(screen.getByRole("tab", { name: "Money accounts" })).toHaveAttribute("aria-selected", "true");
   });
 
   test("keeps an offline manual record visibly local-only", async () => {
@@ -660,7 +660,7 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await openWorkspace(user);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
     await user.click(screen.getByRole("tab", { name: "Import & export" }));
     await user.upload(screen.getByLabelText("CSV import file"), new File(["unknown,other\nvalue\n"], "invalid.csv", { type: "text/csv" }));
 
