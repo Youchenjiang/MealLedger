@@ -80,7 +80,9 @@ views so the active flow is always identifiable.
 
 WHEN the user registers with email/password
 THE SYSTEM SHALL require a matching confirm-password entry and reject
-mismatches locally before calling Supabase.
+mismatches locally before calling Supabase. If the email already belongs to
+an account, THE SYSTEM SHALL switch to the Sign in view with the email kept
+and show an existing-account message instead of a raw provider error.
 
 WHEN the user types a password into any Account page password field
 THE SYSTEM SHALL mask the value by default and provide a per-field visibility

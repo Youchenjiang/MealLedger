@@ -29,8 +29,8 @@
   submission.
 - Sign-up view tests verify the segmented switch to Create account, the
   confirm-password field, local rejection of mismatched passwords before any
-  Supabase call, and the dedicated forgot-password view sending the reset
-  link.
+  Supabase call, duplicate sign-up landing on the sign-in view with the email
+  kept, and the dedicated forgot-password view sending the reset link.
 - Identity link/unlink tests in `src/auth/authActions.test.ts` cover the
   provider redirect initiation, unlink calls, and error paths.
 - `src/App.auth.test.tsx` verifies the signed-in account lists sign-in

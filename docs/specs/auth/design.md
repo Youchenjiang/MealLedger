@@ -67,7 +67,9 @@ flow they are in:
 - A segmented control switches between **Sign in** and **Create account**;
   each view keeps only the fields and primary action for that flow.
 - **Sign-up** adds a **Confirm password** field; mismatched values are
-  rejected locally before any Supabase call.
+  rejected locally before any Supabase call. If the email already belongs to
+  an account, the view switches back to **Sign in** with the email kept, and
+  shows an existing-account message instead of a raw provider error.
 - **Forgot password** is its own view: email plus **Send reset link**, with
   **Back to sign in** to return. Sign-in itself no longer fires a reset
   email from a background link.
