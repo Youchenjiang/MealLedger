@@ -4552,7 +4552,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   return (
     <div className="account-page">
-      <Panel title="Cloud sync" eyebrow="Account & data ownership">
+      <Panel title="Cloud sync">
         {renderAccountContent()}
       </Panel>
     </div>
@@ -4753,12 +4753,12 @@ function NotFoundPage({ navigate }: Readonly<{ navigate: (item: NavItem) => void
   );
 }
 
-function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow: string; children: React.ReactNode }>) {
+function Panel({ title, eyebrow, children }: Readonly<{ title: string; eyebrow?: string; children: React.ReactNode }>) {
   return (
     <article className="panel">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">{eyebrow}</p>
+          {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
           <h2>{title}</h2>
         </div>
       </div>
