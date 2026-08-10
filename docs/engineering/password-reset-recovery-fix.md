@@ -1,6 +1,6 @@
 # 密碼重設（Password Reset）修復紀錄
 
-狀態：**已修復**（2026-08-11，分支 `feature/navigation-restructure`）。修復內容與驗證見下方「修復結果」；根因分析保留原文供回溯。
+狀態：**已修復**（2026-08-11，分支 `fix/password-reset-recovery`）。修復內容與驗證見下方「修復結果」；根因分析保留原文供回溯。
 
 ## 症狀
 
@@ -101,15 +101,20 @@ app 訂閱前就已觸發且 hash 已被清掉，app 端 `getSession()` 拿到�
 4. `supabase/config.toml`：`additional_redirect_urls` 加入 dev port
    `http://127.0.0.1:4173`、`http://127.0.0.1:4174`、`http://127.0.0.1:5200`。
 5. `docs/engineering/setup.md`：回呼 URL 說明改為實際的 `origin + /account`。
-6. 測試：
+6. 競態加固：recovery 落地後，supabase-js 仍可能把已存 session 以 `INITIAL_SESSION` /
+   `SIGNED_IN` 補發（`onAuthStateChange` 訂閱後的一次性事件、`setSession` 內部事件），
+   可能覆蓋 `password-recovery` 狀態。`AuthProvider` 以 `recoveryStartup` ref 在 recovery
+   流程中忽略這兩種事件，直到完成改密或登出/登入才清除。
+7. 測試：
    - `authActions.test.ts`：recovery URL → `{ handled: true, recovery: true }` 且 `setSession`
-     被呼叫；OAuth URL 維持 `recovery: false`。
-   - `AuthProvider.test.tsx`：落地 recovery hash → 狀態為 `password-recovery`、hash 被清。
+     被呼叫；OAuth URL 維持 `recovery: false`；失敗/無 session 也保留 `recovery: true`。
+   - `AuthProvider.test.tsx`：落地 recovery hash → 狀態為 `password-recovery`、hash 被清；
+     失敗的 recovery 連結 → `auth-error`；遲到的 `INITIAL_SESSION`/`SIGNED_IN` 不會覆蓋。
    - `App.auth.test.tsx`：落地 `/account#...type=recovery` → 出現「New password」表單、
      不會出現 `Confirm cloud handoff`（未誤登入）；送出後 `updateUser` 被呼叫並回到已登入。
 
-驗證：`npx vitest run src/App.auth.test.tsx src/auth` 42/42 通過；完整 `npm test`
-344+ 通過；`npm run typecheck`、`npm run build`、`npm run test:e2e` 通過。
+驗證：`npx vitest run src/App.auth.test.tsx src/auth` 44/44 通過；完整 `npm test`
+347 通過；`npm run typecheck`、`npm run build`、`npm run test:e2e` 通過。
 
 ## 驗證方式
 

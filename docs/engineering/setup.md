@@ -66,10 +66,13 @@ npm run dev:5200
 Password reset links and provider callbacks return to the current origin plus
 `/account` — for example `http://127.0.0.1:5200/account` with `npm run
 dev:5200`. The dev ports (4173, 4174, 5200) are registered in
-`supabase/config.toml` as `additional_redirect_urls`. Creating the OAuth
-clients, adding redirect URLs, and entering credentials in Supabase Auth
-follows the [Auth provider setup](../specs/auth/provider-setup.md) guide. Keep
-provider client secrets out of Vite environment files.
+`supabase/config.toml` as `additional_redirect_urls` for local `supabase
+start`; when the dev flow targets a remote linked Supabase project instead,
+add the same dev redirect URLs to that project's dashboard Authentication →
+URL Configuration → Redirect URLs. Creating the OAuth clients, adding
+redirect URLs, and entering credentials in Supabase Auth follows the [Auth
+provider setup](../specs/auth/provider-setup.md) guide. Keep provider client
+secrets out of Vite environment files.
 
 ## Cloudflare R2
 

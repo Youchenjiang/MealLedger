@@ -170,6 +170,39 @@ describe("auth provider", () => {
     window.history.pushState(null, "", "/");
   });
 
+  test("lands a failed recovery link on auth-error instead of the form or a sign-in", async () => {
+    window.history.pushState(null, "", "/account#access_token=expired&refresh_token=expired&type=recovery");
+    const authMock = createAuthMock();
+    authMock.setSession = vi.fn().mockResolvedValue({ data: { session: null }, error: new Error("expired recovery token") });
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("auth-error"));
+    expect(screen.getByLabelText("auth-message")).toHaveTextContent("expired recovery token");
+    expect(screen.getByLabelText("auth-user")).toHaveTextContent("");
+
+    window.history.pushState(null, "", "/");
+  });
+
+  test("keeps the recovery view when supabase-js emits a stored session afterwards", async () => {
+    let authListener: (_event: string, session: unknown) => void = () => undefined;
+    const authMock = createAuthMock();
+    authMock.onAuthStateChange.mockImplementation((listener) => {
+      authListener = listener;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    window.history.pushState(null, "", "/account#access_token=access&refresh_token=refresh&type=recovery");
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("password-recovery"));
+    act(() => authListener("INITIAL_SESSION", { user: { id: "remote-user" } }));
+    act(() => authListener("SIGNED_IN", { user: { id: "remote-user" } }));
+
+    expect(screen.getByLabelText("auth-state")).toHaveTextContent("password-recovery");
+    expect(screen.getByLabelText("auth-user")).toHaveTextContent("remote-user");
+
+    window.history.pushState(null, "", "/");
+  });
+
   test("starts an OAuth redirect through the same provider", async () => {
     const user = userEvent.setup();
     const authMock = createAuthMock();

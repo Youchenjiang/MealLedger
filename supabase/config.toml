@@ -162,7 +162,7 @@ site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 # Local dev servers (npm run dev/dev:5200/dev:e2e) and the legacy 3000 convention.
 additional_redirect_urls = [
-  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3000",
   "http://127.0.0.1:4173",
   "http://127.0.0.1:4174",
   "http://127.0.0.1:5200",
