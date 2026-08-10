@@ -90,6 +90,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       const callback = await restoreOAuthCallbackSession(client, window.location.href);
       if (callback.handled) {
         clearAuthCallbackHash();
+        if (callback.recovery) {
+          if (callback.result.ok) {
+            handleSession("PASSWORD_RECOVERY", callback.result.session);
+          } else if (mounted) {
+            setState("auth-error");
+            setMessage(callback.result.message);
+          }
+          return;
+        }
         if (callback.result.ok) {
           handleSession("SIGNED_IN", callback.result.session);
         } else if (mounted) {

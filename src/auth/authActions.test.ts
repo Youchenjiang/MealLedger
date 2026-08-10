@@ -123,6 +123,19 @@ describe("password auth action", () => {
 
     await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/settings#access_token=access&refresh_token=refresh")).resolves.toEqual({
       handled: true,
+      recovery: false,
+      result: { ok: true, session },
+    });
+    expect(setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+  });
+
+  test("restores a password-recovery session and flags it for the recovery state", async () => {
+    const session = { user: { id: "recovering-user" } };
+    const setSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+    await expect(restoreOAuthCallbackSession({ auth: { setSession } }, "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
       result: { ok: true, session },
     });
     expect(setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 type SupabaseAuthMock = {
   getSession: ReturnType<typeof vi.fn>;
   onAuthStateChange: ReturnType<typeof vi.fn>;
+  setSession: ReturnType<typeof vi.fn>;
   signInWithPassword: ReturnType<typeof vi.fn>;
   signUp: ReturnType<typeof vi.fn>;
   resetPasswordForEmail: ReturnType<typeof vi.fn>;
@@ -53,6 +54,7 @@ function createAuthMock(session: unknown = null): SupabaseAuthMock {
   return {
     getSession: vi.fn().mockResolvedValue({ data: { session }, error: null }),
     onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    setSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: "remote-user" } } }, error: null }),
     signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { user: { id: "remote-user" } } }, error: null }),
     signUp: vi.fn().mockResolvedValue({ data: { session: { user: { id: "new-user" } } }, error: null }),
     resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
@@ -153,6 +155,19 @@ describe("auth provider", () => {
 
     expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
     await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-in"));
+  });
+
+  test("lands a password-recovery link on the recovery state instead of signing in", async () => {
+    window.history.pushState(null, "", "/account#access_token=access&refresh_token=refresh&type=recovery");
+    const authMock = createAuthMock();
+    await renderAuthHarness(authMock);
+
+    expect(authMock.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("password-recovery"));
+    expect(screen.getByLabelText("auth-user")).toHaveTextContent("remote-user");
+    expect(window.location.hash).toBe("");
+
+    window.history.pushState(null, "", "/");
   });
 
   test("starts an OAuth redirect through the same provider", async () => {
