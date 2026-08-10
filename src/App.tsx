@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
-import type { LinkedIdentity, OAuthProvider } from "./auth/authActions";
+import { ALREADY_REGISTERED_MESSAGE, type LinkedIdentity, type OAuthProvider } from "./auth/authActions";
 import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
@@ -4411,6 +4411,14 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     setConfirmPasswordVisible(false);
   };
 
+  const previousAuthMessage = useRef(authMessage);
+  useEffect(() => {
+    if (authView === "sign-up" && authMessage === ALREADY_REGISTERED_MESSAGE && previousAuthMessage.current !== ALREADY_REGISTERED_MESSAGE) {
+      switchAuthView("sign-in");
+    }
+    previousAuthMessage.current = authMessage;
+  }, [authMessage, authView]);
+
   const handleSignIn = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSignIn(email, password).catch(() => undefined);
@@ -4522,8 +4530,8 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
               ? authView === "sign-up" ? "Creating account..." : "Signing in..."
               : authView === "sign-up" ? "Create account" : "Continue"}
           </button>
-          {renderProviderActions()}
           {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+          {renderProviderActions()}
         </form>
       );
     }

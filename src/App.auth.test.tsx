@@ -1,4 +1,5 @@
 import { act, render, screen, within } from "@testing-library/react";
+import { ALREADY_REGISTERED_MESSAGE } from "./auth/authActions";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -210,6 +211,24 @@ describe("app auth boundary", () => {
     await user.click(screen.getByRole("button", { name: "Create account" }));
 
     expect(authMock.signUp).toHaveBeenCalledWith({ email: "new@example.com", password: "secret" });
+  });
+
+  test("lands a duplicate sign-up on the sign-in view with the email kept", async () => {
+    const user = userEvent.setup();
+    const { authMock } = await renderRemoteApp();
+    authMock.signUp = vi.fn().mockResolvedValue({ data: null, error: new Error("User already registered") });
+
+    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await user.click(screen.getByRole("radio", { name: "Create account" }));
+    await user.type(screen.getByLabelText("Email"), "dup@example.com");
+    await user.type(screen.getByLabelText("Password"), "secret");
+    await user.type(screen.getByLabelText("Confirm password"), "secret");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(authMock.signUp).toHaveBeenCalledWith({ email: "dup@example.com", password: "secret" });
+    expect(await screen.findByText(ALREADY_REGISTERED_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Sign in" })).toBeChecked();
+    expect(screen.getByLabelText("Email")).toHaveValue("dup@example.com");
   });
 
   test("rejects mismatched passwords before calling Supabase", async () => {
