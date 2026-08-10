@@ -24,6 +24,11 @@
 - [x] Remove the temporary Magic Link UI and action.
 - [x] Add `npm run dev:5200` for the review server.
 - [x] Add email/password reset and recovery callback flow.
+- [x] Separate sign-in, sign-up, and forgot-password into distinct Account
+      page views with a segmented mode switch.
+- [x] Add confirm-password validation to the sign-up view.
+- [x] Add per-field password visibility toggles to the sign-in, sign-up, and
+      recovery password fields with stateful accessible labels.
 - [x] Add Google OAuth sign-in and callback flow.
 - [x] Add Facebook OAuth sign-in and callback flow.
 - [x] Add provider configuration and redirect-URL documentation.

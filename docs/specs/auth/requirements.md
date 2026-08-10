@@ -73,3 +73,23 @@ sign-in.
 WHEN the provider is changed
 THE SYSTEM SHALL preserve the same user-owned ledger boundary and must not
 create a second local copy silently.
+
+WHEN the user opens the Account page signed out
+THE SYSTEM SHALL show distinct Sign in, Create account, and Forgot password
+views so the active flow is always identifiable.
+
+WHEN the user registers with email/password
+THE SYSTEM SHALL require a matching confirm-password entry and reject
+mismatches locally before calling Supabase.
+
+WHEN the user types a password into any Account page password field
+THE SYSTEM SHALL mask the value by default and provide a per-field visibility
+toggle button that reveals or hides it.
+
+WHEN the user activates the visibility toggle
+THE SYSTEM SHALL switch only that field between masked and revealed, update
+the toggle's accessible label to match the state, and never log or persist the
+revealed value.
+
+WHEN the user leaves and returns to the Account page
+THE SYSTEM SHALL reset all password fields to their masked default.

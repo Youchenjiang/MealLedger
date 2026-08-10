@@ -58,9 +58,47 @@ Automatic claiming of another user's local data is forbidden. Cloud
 persistence, RLS, and idempotency remain governed by the cloud-persistence
 spec after authentication succeeds.
 
+## Sign-in, Sign-up, and Password Reset Views
+
+The Account page separates sign-in, account creation, and password reset into
+distinct views instead of one shared form, so the user always knows which
+flow they are in:
+
+- A segmented control switches between **Sign in** and **Create account**;
+  each view keeps only the fields and primary action for that flow.
+- **Sign-up** adds a **Confirm password** field; mismatched values are
+  rejected locally before any Supabase call.
+- **Forgot password** is its own view: email plus **Send reset link**, with
+  **Back to sign in** to return. Sign-in itself no longer fires a reset
+  email from a background link.
+- The recovery view (set new password) remains a separate flow driven by the
+  Supabase `PASSWORD_RECOVERY` session event.
+
+## Password Visibility Toggle
+
+Every password input on the Account page — `account-password` (sign-in),
+`account-confirm-password` (sign-up), and `account-new-password` (recovery) —
+renders inside a `password-field` wrapper with an eye toggle button
+(`Eye` / `EyeOff` from lucide-react) positioned at the field's right edge.
+
+- All fields start masked (`type="password"`); activating the toggle flips
+  only that field to `type="text"` and back.
+- The toggle is a `type="button"` with an accessible label that follows the
+  state: `Show password` when masked, `Hide password` when revealed. The icon
+  is `aria-hidden`; the label is the accessible name.
+- Visibility state is per-field component state (`passwordVisible`,
+  `confirmPasswordVisible`, `newPasswordVisible`) and resets whenever the
+  Account page remounts or the user switches auth views, so a revealed field
+  never persists across navigation.
+- Revealing a password changes only the input's presentation; it never alters
+  the auth boundary, the values submitted to `signIn`/`signUp`/`updatePassword`,
+  or what is logged or stored.
+
 ## Security Boundary
 
 - Browser code never receives service-role credentials.
 - Session state comes from Supabase Auth, not a local boolean.
 - A signed-out or expired session cannot issue cloud writes.
 - Auth errors must not erase local data.
+- The visibility toggle is presentation-only and must never log, store, or
+  submit the revealed value in plaintext anywhere except the input itself.
