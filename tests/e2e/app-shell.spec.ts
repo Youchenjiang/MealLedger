@@ -85,7 +85,7 @@ test("opens the account page with provider sign-in actions", async ({ page }) =>
   if (await emailInput.count()) {
     await expect(emailInput).toBeVisible();
     await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue with Google", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue with Facebook", exact: true })).toBeVisible();
   } else {

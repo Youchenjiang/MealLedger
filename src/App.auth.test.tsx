@@ -56,14 +56,14 @@ describe("app auth boundary", () => {
     expect(window.location.pathname).toBe("/account");
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with Facebook" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Forgot password?" })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Email"), "user@example.com");
     await user.type(screen.getByLabelText("Password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(authMock.signInWithPassword).toHaveBeenCalledWith({ email: "user@example.com", password: "secret" });
     expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("app auth boundary", () => {
     await user.click(screen.getByRole("button", { name: "Cloud & account" }));
     await user.type(screen.getByLabelText("Email"), "user@example.com");
     await user.type(screen.getByLabelText("Password"), "secret");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
     expect(screen.getByLabelText("Local data handoff summary")).toHaveTextContent("Accounts0Records0Drafts0Meals0Media0");
 

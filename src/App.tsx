@@ -4506,7 +4506,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
             {authView === "sign-up" ? <UserPlus size={18} aria-hidden="true" /> : <LogIn size={18} aria-hidden="true" />}
             {authState === "loading"
               ? authView === "sign-up" ? "Creating account..." : "Signing in..."
-              : authView === "sign-up" ? "Create account" : "Sign in"}
+              : authView === "sign-up" ? "Create account" : "Continue"}
           </button>
           {renderProviderActions()}
           {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
