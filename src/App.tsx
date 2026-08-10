@@ -4422,7 +4422,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
 
   const renderAuthModeSwitch = () => (
     <fieldset className="segmented-fieldset">
-      <legend>Account access</legend>
+      <legend>Sign in or create account</legend>
       <div className="segmented-control">
         {(["sign-in", "sign-up"] as const).map((view) => (
           <label className={authView === view ? "active" : ""} key={view}>
