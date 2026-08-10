@@ -93,3 +93,17 @@ revealed value.
 
 WHEN the user leaves and returns to the Account page
 THE SYSTEM SHALL reset all password fields to their masked default.
+
+WHEN the user signs in to a workspace
+THE SYSTEM SHALL show the linked sign-in methods and allow Google or Facebook
+to be linked or unlinked without leaving the signed-in state.
+
+WHEN the user links a provider
+THE SYSTEM SHALL start that provider's OAuth flow and, on success, attach the
+provider identity to the current account so later provider sign-in reaches
+the same workspace.
+
+WHEN the user unlinks a provider
+THE SYSTEM SHALL remove only that provider identity, keep the workspace
+intact, and report Supabase rejection when it is the last remaining
+sign-in method.

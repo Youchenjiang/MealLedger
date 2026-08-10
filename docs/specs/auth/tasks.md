@@ -38,6 +38,9 @@
       states in the Settings Account section.
 - [x] Keep Settings for user authentication and import/export; keep ledger
       accounts under Ledger > Accounts.
+- [x] Link Google and Facebook identities to a signed-in account and list
+      them as sign-in methods.
+- [x] Unlink a provider identity while keeping the workspace intact.
 - [x] Verify the Account page stays within desktop and mobile viewports.
 
 ## Verification

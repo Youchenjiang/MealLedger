@@ -94,6 +94,22 @@ renders inside a `password-field` wrapper with an eye toggle button
   the auth boundary, the values submitted to `signIn`/`signUp`/`updatePassword`,
   or what is logged or stored.
 
+## Linked Sign-in Methods
+
+A signed-in account can attach Google or Facebook identities so any linked
+provider opens the same workspace. The signed-in view lists **Sign-in
+methods**: the email/password identity (when present) is marked **Primary**,
+and Google and Facebook each show a **Link** or **Unlink** action based on
+the session's `identities`.
+
+- Linking starts the provider OAuth flow through `linkIdentity` and redirects
+  back to the Account page; the returned session carries the new identity.
+- Unlinking removes only that provider identity and never deletes the
+  workspace. Supabase rejects unlinking the last remaining identity, and that
+  error surfaces in the account message without logging the user out.
+- The visible list reflects `session.user.identities`, so signing in with a
+  linked provider shows that provider as linked.
+
 ## Security Boundary
 
 - Browser code never receives service-role credentials.

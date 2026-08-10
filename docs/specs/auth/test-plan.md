@@ -31,6 +31,11 @@
   confirm-password field, local rejection of mismatched passwords before any
   Supabase call, and the dedicated forgot-password view sending the reset
   link.
+- Identity link/unlink tests in `src/auth/authActions.test.ts` cover the
+  provider redirect initiation, unlink calls, and error paths.
+- `src/App.auth.test.tsx` verifies the signed-in account lists sign-in
+  methods, marks email/password as primary, and links and unlinks providers
+  from the Account page.
 - Cloud sync status must remain blocked as `Local data review required` until
   the user confirms handoff, then become `Cloud sync enabled` only after the
   handoff is accepted.
