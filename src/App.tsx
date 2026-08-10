@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { isLocalDevelopmentMode, isSupabaseConfigured, supabase } from "./lib/supabase";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
-import type { OAuthProvider } from "./auth/authActions";
+import type { LinkedIdentity, OAuthProvider } from "./auth/authActions";
 import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
@@ -567,11 +567,14 @@ type AccountPageProps = Readonly<{
   cloudDataOwnerMatches: boolean;
   handoffCounts: HandoffCounts;
   storageStatus: Pick<StatusItem, "label" | "detail" | "tone">;
+  identities: LinkedIdentity[];
   onSignIn: (email?: string, password?: string) => Promise<void>;
   onSignUp: (email?: string, password?: string) => Promise<void>;
   onRequestPasswordReset: (email?: string) => Promise<void>;
   onUpdatePassword: (password?: string) => Promise<void>;
   onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  onLinkIdentity: (provider: OAuthProvider) => Promise<void>;
+  onUnlinkIdentity: (identity: LinkedIdentity) => Promise<void>;
   onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
 }>;
@@ -880,7 +883,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -1299,6 +1302,9 @@ function AuthenticatedApp() {
           onRequestPasswordReset: requestPasswordReset,
           onUpdatePassword: updatePassword,
           onSignInWithOAuth: signInWithOAuth,
+          identities,
+          onLinkIdentity: linkIdentity,
+          onUnlinkIdentity: unlinkIdentity,
           onClaimLocalWorkspace: claimLocalWorkspace,
           onSignOut: signOut,
           onSaveMeal: (meal) => setMeals((current) => [...current, meal]),
@@ -1498,6 +1504,9 @@ type RouteRenderContext = {
   onRequestPasswordReset: (email?: string) => Promise<void>;
   onUpdatePassword: (password?: string) => Promise<void>;
   onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  identities: LinkedIdentity[];
+  onLinkIdentity: (provider: OAuthProvider) => Promise<void>;
+  onUnlinkIdentity: (identity: LinkedIdentity) => Promise<void>;
   onClaimLocalWorkspace: () => void;
   onSignOut: () => Promise<void>;
   onSaveMeal: (meal: MealEntry) => void;
@@ -1537,6 +1546,9 @@ function renderRoute({
   onRequestPasswordReset,
   onUpdatePassword,
   onSignInWithOAuth,
+  identities,
+  onLinkIdentity,
+  onUnlinkIdentity,
   onClaimLocalWorkspace,
   onSignOut,
   onSaveMeal,
@@ -1699,11 +1711,14 @@ function renderRoute({
           cloudDataOwnerMatches={cloudDataOwnerMatches}
           handoffCounts={handoffCounts}
           storageStatus={storageStatus}
+          identities={identities}
           onSignIn={onSignIn}
           onSignUp={onSignUp}
           onRequestPasswordReset={onRequestPasswordReset}
           onUpdatePassword={onUpdatePassword}
           onSignInWithOAuth={onSignInWithOAuth}
+          onLinkIdentity={onLinkIdentity}
+          onUnlinkIdentity={onUnlinkIdentity}
           onClaimLocalWorkspace={onClaimLocalWorkspace}
           onSignOut={onSignOut}
         />
@@ -4376,7 +4391,7 @@ function PasswordInput({ id, value, autoComplete, visible, onValueChange, onTogg
   );
 }
 
-function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
+function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -4535,6 +4550,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
         </div>
       );
     }
+    const hasEmailIdentity = identities.some((identity) => identity.provider === "email");
     return (
       <div className="auth-form account-page-form">
         <p className="field-help">Cloud sync is enabled for this workspace.</p>
@@ -4542,10 +4558,38 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
           <strong>{storageStatus.label}</strong>
           <span>{storageStatus.detail}</span>
         </output>
+        <fieldset className="linked-identities">
+          <legend>Sign-in methods</legend>
+          <ul>
+            {hasEmailIdentity ? (
+              <li className="identity-row">
+                <span className="identity-name">Email &amp; password</span>
+                <span className="identity-badge">Primary</span>
+              </li>
+            ) : null}
+            {(["google", "facebook"] as const).map((provider) => {
+              const identity = identities.find((entry) => entry.provider === provider);
+              return (
+                <li className="identity-row" key={provider}>
+                  <span className="identity-name">
+                    <img className="auth-provider-mark" src={provider === "google" ? googleG : facebookF} alt="" />
+                    {provider === "google" ? "Google" : "Facebook"}
+                  </span>
+                  {identity ? (
+                    <button className="quiet-action" type="button" onClick={() => onUnlinkIdentity(identity).catch(() => undefined)}>Unlink</button>
+                  ) : (
+                    <button className="quiet-action" type="button" onClick={() => onLinkIdentity(provider).catch(() => undefined)}>Link {provider === "google" ? "Google" : "Facebook"}</button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
         <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
           <LogOut size={18} aria-hidden="true" />
           Sign out
         </button>
+        {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
       </div>
     );
   };

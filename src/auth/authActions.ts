@@ -31,6 +31,21 @@ export type OAuthCallbackClient = {
   };
 };
 
+export type LinkedIdentity = {
+  id: string;
+  user_id: string;
+  identity_id: string;
+  provider: string;
+  provider_id?: string;
+};
+
+export type IdentityLinkClient = {
+  auth: {
+    linkIdentity: (options: { provider: OAuthProvider; options: { redirectTo: string } }) => Promise<{ error: unknown }>;
+    unlinkIdentity: (identity: LinkedIdentity) => Promise<{ error: unknown }>;
+  };
+};
+
 export type PasswordSession = { user?: { id?: string } } | null;
 export type PasswordAuthResult = { ok: true; session: PasswordSession } | { ok: false; message: string };
 
@@ -101,6 +116,20 @@ export async function signInWithOAuth(client: OAuthClient, provider: OAuthProvid
   return error
     ? { ok: false, message: authFailureMessage(error) }
     : { ok: true, message: `Opening ${provider} sign-in...` };
+}
+
+export async function linkIdentity(client: IdentityLinkClient, provider: OAuthProvider, redirectTo: string): Promise<{ ok: boolean; message: string }> {
+  const { error } = await client.auth.linkIdentity({ provider, options: { redirectTo } });
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: `Opening ${provider} sign-in...` };
+}
+
+export async function unlinkIdentity(client: IdentityLinkClient, identity: LinkedIdentity): Promise<{ ok: boolean; message: string }> {
+  const { error } = await client.auth.unlinkIdentity(identity);
+  return error
+    ? { ok: false, message: authFailureMessage(error) }
+    : { ok: true, message: `${identity.provider} sign-in removed.` };
 }
 
 export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, href: string): Promise<{ handled: false } | { handled: true; result: PasswordAuthResult }> {

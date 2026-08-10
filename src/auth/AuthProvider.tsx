@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
 import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
-import { requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, updatePassword, type OAuthProvider } from "./authActions";
+import { linkIdentity, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword, type LinkedIdentity, type OAuthProvider } from "./authActions";
 
 type AuthContextValue = {
   state: AuthState;
@@ -15,6 +15,9 @@ type AuthContextValue = {
   requestPasswordReset: (email?: string) => Promise<void>;
   updatePassword: (password?: string) => Promise<void>;
   signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  identities: LinkedIdentity[];
+  linkIdentity: (provider: OAuthProvider) => Promise<void>;
+  unlinkIdentity: (identity: LinkedIdentity) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -31,7 +34,7 @@ function useStableEffect(effect: EffectCallback, dependencies: DependencyList): 
   useEffect(effect, dependencies);
 }
 
-type SessionLike = { user?: { id?: string } } | null;
+type SessionLike = { user?: { id?: string; identities?: LinkedIdentity[] } } | null;
 
 function initialAuthState(): AuthState {
   if (isLocalDevelopmentMode) {
@@ -43,9 +46,11 @@ function initialAuthState(): AuthState {
 function applySession(
   session: SessionLike,
   setUserId: Dispatch<SetStateAction<string>>,
+  setIdentities: Dispatch<SetStateAction<LinkedIdentity[]>>,
   setState: Dispatch<SetStateAction<AuthState>>,
 ): void {
   setUserId(session?.user?.id ?? "");
+  setIdentities(session?.user?.identities ?? []);
   setState(session ? "signed-in" : "signed-out");
 }
 
@@ -60,6 +65,7 @@ function clearAuthCallbackHash(): void {
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [state, setState] = useState<AuthState>(initialAuthState);
   const [userId, setUserId] = useState(isLocalDevelopmentMode ? "local-user" : "");
+  const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState(configurationError ? configurationMessage : "");
 
@@ -77,7 +83,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setState("password-recovery");
         return;
       }
-      applySession(session, setUserId, setState);
+      applySession(session, setUserId, setIdentities, setState);
     };
 
     const restoreSession = async (): Promise<void> => {
@@ -152,7 +158,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return;
       }
 
-      applySession(result.session, setUserId, setState);
+      applySession(result.session, setUserId, setIdentities, setState);
       setMessage("");
     },
     signUp: async (requestedEmail = "", password = "") => {
@@ -180,7 +186,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return;
       }
 
-      applySession(result.session, setUserId, setState);
+      applySession(result.session, setUserId, setIdentities, setState);
       setMessage("");
     },
     requestPasswordReset: async (requestedEmail = "") => {
@@ -225,6 +231,35 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setState(result.ok ? "loading" : "auth-error");
       setMessage(result.message);
     },
+    identities,
+    linkIdentity: async (provider) => {
+      setMessage("");
+      if (isLocalDevelopmentMode) {
+        setMessage(`Linking ${provider} is available after cloud authentication is configured.`);
+        return;
+      }
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+      const result = await linkIdentity(supabase, provider, authRedirect());
+      setMessage(result.message);
+    },
+    unlinkIdentity: async (identity) => {
+      setMessage("");
+      if (isLocalDevelopmentMode) {
+        setMessage("Unlinking a sign-in method is available after cloud authentication is configured.");
+        return;
+      }
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+      const result = await unlinkIdentity(supabase, identity);
+      setMessage(result.message);
+    },
     signOut: async () => {
       if (isLocalDevelopmentMode) {
         setUserId("local-user");
@@ -247,7 +282,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setUserId("");
       setState("signed-out");
     },
-  }), [email, message, state, userId]);
+  }), [email, identities, message, state, userId]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
