@@ -4471,92 +4471,90 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     </>
   );
 
-  const renderAccountContent = () => {
-    if (authState === "password-recovery") {
-      return (
-        <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
-          <p className="field-help">Set a new password to finish resetting your account.</p>
-          <label htmlFor="account-new-password">New password</label>
-          <PasswordInput id="account-new-password" value={newPassword} autoComplete="new-password" visible={newPasswordVisible} onValueChange={setNewPassword} onToggleVisible={() => setNewPasswordVisible((current) => !current)} />
-          <button className="primary-action auth-submit" type="submit">
-            <KeyRound size={18} aria-hidden="true" />
-            Set new password
-          </button>
-          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-        </form>
-      );
+  const accountSubmitLabel = (): string => {
+    if (authView === "sign-up") {
+      return authState === "loading" ? "Creating account..." : "Create account";
     }
-    if (!isSignedIn) {
-      if (isLocalDevelopmentMode) {
-        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
-      }
-      if (authView === "forgot-password") {
-        return (
-          <form className="auth-form account-page-form" onSubmit={handlePasswordReset}>
-            <p className="field-help">Enter your email and we will send a link to reset your password.</p>
-            <label htmlFor="account-reset-email">Email</label>
-            <input id="account-reset-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-            <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
-              <KeyRound size={18} aria-hidden="true" />
-              {authState === "loading" ? "Sending link..." : "Send reset link"}
-            </button>
-            <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>Back to sign in</button>
-            {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-          </form>
-        );
-      }
-      return (
-        <form className="auth-form account-page-form" onSubmit={authView === "sign-up" ? handleSignUp : handleSignIn}>
-          {renderAuthModeSwitch()}
-          <label htmlFor="account-email">Email</label>
-          <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-          <div className="auth-password-row">
-            <label htmlFor="account-password">Password</label>
-            {authView === "sign-in" ? (
-              <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>Forgot password?</button>
-            ) : null}
-          </div>
-          <PasswordInput id="account-password" value={password} autoComplete={authView === "sign-up" ? "new-password" : "current-password"} visible={passwordVisible} onValueChange={setPassword} onToggleVisible={() => setPasswordVisible((current) => !current)} />
-          {authView === "sign-up" ? (
-            <>
-              <label htmlFor="account-confirm-password">Confirm password</label>
-              <PasswordInput id="account-confirm-password" value={confirmPassword} autoComplete="new-password" visible={confirmPasswordVisible} onValueChange={setConfirmPassword} onToggleVisible={() => setConfirmPasswordVisible((current) => !current)} />
-              {signUpError ? <p className="auth-message" role="alert">{signUpError}</p> : null}
-            </>
-          ) : null}
-          <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
-            {authView === "sign-up" ? <UserPlus size={18} aria-hidden="true" /> : <LogIn size={18} aria-hidden="true" />}
-            {authState === "loading"
-              ? authView === "sign-up" ? "Creating account..." : "Signing in..."
-              : authView === "sign-up" ? "Create account" : "Continue"}
-          </button>
-          {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-          {renderProviderActions()}
-        </form>
-      );
-    }
-    if (!cloudDataOwnerMatches) {
-      return (
-        <div className="auth-form account-page-form">
-          <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
-          <dl className="handoff-list" aria-label="Local data handoff summary">
-            <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
-            <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
-            <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
-            <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
-            <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
-          </dl>
-          <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
-            <Cloud size={18} aria-hidden="true" />
-            Confirm cloud handoff
-          </button>
-          <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
-            <LogOut size={18} aria-hidden="true" />
-            Sign out
-          </button>
-        </div>
-      );
-    }
+    return authState === "loading" ? "Signing in..." : "Continue";
+  };
+
+  const renderRecoveryForm = () => (
+    <form className="auth-form account-page-form" onSubmit={handlePasswordUpdate}>
+      <p className="field-help">Set a new password to finish resetting your account.</p>
+      <label htmlFor="account-new-password">New password</label>
+      <PasswordInput id="account-new-password" value={newPassword} autoComplete="new-password" visible={newPasswordVisible} onValueChange={setNewPassword} onToggleVisible={() => setNewPasswordVisible((current) => !current)} />
+      <button className="primary-action auth-submit" type="submit">
+        <KeyRound size={18} aria-hidden="true" />
+        Set new password
+      </button>
+      {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+    </form>
+  );
+
+  const renderForgotPasswordForm = () => (
+    <form className="auth-form account-page-form" onSubmit={handlePasswordReset}>
+      <p className="field-help">Enter your email and we will send a link to reset your password.</p>
+      <label htmlFor="account-reset-email">Email</label>
+      <input id="account-reset-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+      <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+        <KeyRound size={18} aria-hidden="true" />
+        {authState === "loading" ? "Sending link..." : "Send reset link"}
+      </button>
+      <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>Back to sign in</button>
+      {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+    </form>
+  );
+
+  const renderAuthForm = () => (
+    <form className="auth-form account-page-form" onSubmit={authView === "sign-up" ? handleSignUp : handleSignIn}>
+      {renderAuthModeSwitch()}
+      <label htmlFor="account-email">Email</label>
+      <input id="account-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+      <div className="auth-password-row">
+        <label htmlFor="account-password">Password</label>
+        {authView === "sign-in" ? (
+          <button className="quiet-action auth-forgot-action" type="button" onClick={() => switchAuthView("forgot-password")}>Forgot password?</button>
+        ) : null}
+      </div>
+      <PasswordInput id="account-password" value={password} autoComplete={authView === "sign-up" ? "new-password" : "current-password"} visible={passwordVisible} onValueChange={setPassword} onToggleVisible={() => setPasswordVisible((current) => !current)} />
+      {authView === "sign-up" ? (
+        <>
+          <label htmlFor="account-confirm-password">Confirm password</label>
+          <PasswordInput id="account-confirm-password" value={confirmPassword} autoComplete="new-password" visible={confirmPasswordVisible} onValueChange={setConfirmPassword} onToggleVisible={() => setConfirmPasswordVisible((current) => !current)} />
+          {signUpError ? <p className="auth-message" role="alert">{signUpError}</p> : null}
+        </>
+      ) : null}
+      <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+        {authView === "sign-up" ? <UserPlus size={18} aria-hidden="true" /> : <LogIn size={18} aria-hidden="true" />}
+        {accountSubmitLabel()}
+      </button>
+      {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
+      {renderProviderActions()}
+    </form>
+  );
+
+  const renderHandoffForm = () => (
+    <div className="auth-form account-page-form">
+      <p className="field-help">Local records stay on this device until you confirm this handoff.</p>
+      <dl className="handoff-list" aria-label="Local data handoff summary">
+        <div><dt>Accounts</dt><dd>{handoffCounts.accounts}</dd></div>
+        <div><dt>Records</dt><dd>{handoffCounts.records}</dd></div>
+        <div><dt>Drafts</dt><dd>{handoffCounts.drafts}</dd></div>
+        <div><dt>Meals</dt><dd>{handoffCounts.meals}</dd></div>
+        <div><dt>Media</dt><dd>{handoffCounts.media}</dd></div>
+      </dl>
+      <button className="primary-action" type="button" onClick={onClaimLocalWorkspace}>
+        <Cloud size={18} aria-hidden="true" />
+        Confirm cloud handoff
+      </button>
+      <button className="secondary-action" type="button" onClick={() => onSignOut().catch(() => undefined)}>
+        <LogOut size={18} aria-hidden="true" />
+        Sign out
+      </button>
+    </div>
+  );
+
+  const renderSignedInAccount = () => {
     const hasEmailIdentity = identities.some((identity) => identity.provider === "email");
     return (
       <div className="auth-form account-page-form">
@@ -4599,6 +4597,25 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
         {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
       </div>
     );
+  };
+
+  const renderAccountContent = () => {
+    if (authState === "password-recovery") {
+      return renderRecoveryForm();
+    }
+    if (!isSignedIn) {
+      if (isLocalDevelopmentMode) {
+        return <p className="field-help">Cloud authentication is unavailable in this local preview.</p>;
+      }
+      if (authView === "forgot-password") {
+        return renderForgotPasswordForm();
+      }
+      return renderAuthForm();
+    }
+    if (!cloudDataOwnerMatches) {
+      return renderHandoffForm();
+    }
+    return renderSignedInAccount();
   };
 
   return (
