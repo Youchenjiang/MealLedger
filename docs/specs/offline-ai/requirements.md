@@ -49,13 +49,19 @@ Mode B keeps working with the raw speech transcript; Mode A shows a clear
 message and leaves manual ledger entry available; receipt photos are queued
 locally for later AI processing or reviewed manually.
 
-WHEN Mode B (逐步口說) runs offline with a local model available
+WHEN Mode B (逐步口說) runs with AI available (cloud or local)
+THE SYSTEM SHALL normalize the current field's transcript into the field's
+required format (amount, date, account/category match) by default and show the
+result for confirmation before it is written.
+
+WHEN Mode B runs offline with a local model available
 THE SYSTEM SHALL normalize the current field's transcript into the field's
 required format (amount, date, account/category match) and show the result for
 confirmation before it is written.
 
 WHEN Mode B runs offline without a local model
-THE SYSTEM SHALL write the raw transcript into the current field, unchanged.
+THE SYSTEM SHALL write the raw transcript into the current field, unchanged,
+as the no-AI fallback.
 
 WHEN Mode A (整段口說) runs offline with a local model available
 THE SYSTEM SHALL parse the description into validated prefilled ledger drafts

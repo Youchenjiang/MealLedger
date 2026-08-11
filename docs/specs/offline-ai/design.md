@@ -11,7 +11,7 @@ Today each ledger feature already degrades to a usable offline path:
 
 - manual entry saves local-only records queued for sync
 - capture media queues local bytes
-- Mode B voice capture writes the raw transcript without AI
+- Mode B voice capture falls back to the raw transcript when AI is unavailable
 
 Offline AI extends the same posture to the AI layer: the cloud stays the
 default, and a local/offline provider becomes an optional capability with the
@@ -43,14 +43,16 @@ offline + not configured → per-feature degradation; online → preference
 Each feature has an independent offline path and its own degradation rule.
 There is no cross-feature dependency.
 
-### Mode B (逐步口說) — baseline already offline
+### Mode B (逐步口說) — default AI correction, offline fallback
 
-- Raw transcript writes into the current highlighted field — no AI, no network.
-- When a local model is available, the current field's transcript is normalized
-  through a per-field prompt (amount, date, account/category match) reusing the
-  existing `requestAiJson`-style contract; the normalized value is shown for
-  confirmation before it is written.
-- Normalization is an enhancement, never a gate: no model → raw transcript.
+- With AI available (cloud or local), the current field's transcript is
+  normalized **by default** through a per-field prompt (amount, date,
+  account/category match) reusing the existing `requestAiJson`-style contract;
+  the normalized value is shown for confirmation before it is written.
+- Offline, the user chooses: enable offline AI (local model) to keep
+  normalizing, or write the raw transcript unchanged — no network, no AI.
+- The raw-transcript path is the fallback only, never the default when AI is
+  available.
 
 ### Mode A (整段口說) — offline parse
 

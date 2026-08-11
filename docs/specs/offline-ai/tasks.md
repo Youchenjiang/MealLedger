@@ -24,11 +24,12 @@ Expected verification:
 - Spike notes recorded in the design spec with model name, size, speed, and
   accuracy on the existing AI ledger fixtures.
 
-## Task 3: Mode B Offline Normalization
+## Task 3: Mode B Field Normalization
 
-When a local model is available, normalize the current field's transcript
-(amount, date, account/category match) with a per-field prompt and show the
-result for confirmation; without a model, write the raw transcript unchanged.
+Normalize the current field's transcript (amount, date, account/category match)
+with a per-field prompt **by default** whenever AI is available (cloud or
+local), showing the result for confirmation; write the raw transcript unchanged
+only when offline and no local model is available.
 
 Expected verification:
 

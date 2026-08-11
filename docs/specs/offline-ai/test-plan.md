@@ -13,17 +13,17 @@ Test provider never switches silently.
 Test offline with no local provider configured degrades per feature instead of
 blocking capture.
 
-## Mode B Offline Normalization
+## Mode B Normalization
 
-Test Mode B with a local model normalizes an amount transcript (e.g.
-「兩百五十」→ `250`) and shows the result for confirmation.
+Test Mode B with AI available (cloud or local) normalizes an amount transcript
+(e.g. 「兩百五十」→ `250`) by default and shows the result for confirmation.
 
 Test Mode B with a local model normalizes a date transcript (e.g.
 「七月二十五」→ `YYYY-MM-DD`) and shows the result for confirmation.
 
 Test Mode B with a local model matches account/category names case-insensitively.
 
-Test Mode B without a local model writes the raw transcript unchanged.
+Test Mode B offline without a local model writes the raw transcript unchanged as the fallback.
 
 Test Mode B normalized values are written only after confirmation (ADR 0003).
 
