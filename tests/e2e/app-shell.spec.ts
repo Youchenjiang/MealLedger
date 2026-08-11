@@ -140,8 +140,8 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
 
   await expect(page.getByText("1 scan draft saved locally for review.")).toBeVisible();
   await expect(page.getByText("invoice.jpg")).toBeVisible();
-  await page.getByRole("button", { name: /^明細/ }).click();
-  await expect(page.getByRole("button", { name: /^明細/ }).locator(".nav-badge")).toHaveText("1");
+  await page.getByRole("button", { name: /^明細/u }).click();
+  await expect(page.getByRole("button", { name: /^明細/u }).locator(".nav-badge")).toHaveText("1");
   await expect(page.getByText("No confirmed ledger records yet.")).toBeVisible();
   expect(errors).toEqual([]);
 });
