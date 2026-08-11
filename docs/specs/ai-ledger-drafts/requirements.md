@@ -22,8 +22,19 @@ WHEN a user selects a receipt or invoice photo
 THE SYSTEM SHALL send the image to the configured AI provider and produce the
 same prefilled draft suggestions.
 
-WHEN a suggestion cannot be validated (unknown account, unknown category,
-unparseable amount, or unsupported kind)
+WHEN a suggestion names an account or category that does not exist and the
+capture entity policy is existing-only
+THE SYSTEM SHALL show the item with a clear reason (e.g. 帳戶「X」不存在) and
+keep it out of the confirmed records.
+
+WHEN a suggestion names an account or category that does not exist and the
+capture entity policy allows new entities (ask or auto)
+THE SYSTEM SHALL carry the new value in the draft, visibly mark it as not yet
+existing, and create the entity only as part of the user's confirmed write
+(asking first when the policy is ask).
+
+WHEN a suggestion cannot be validated for other reasons (unparseable amount,
+unsupported kind, or same-account transfer)
 THE SYSTEM SHALL show the item with a clear reason and keep it out of the
 confirmed records.
 
@@ -59,8 +70,11 @@ save-draft, so the user can complete an AI suggestion in the manual ledger
 form whether or not it passed validation.
 
 - Account, category, and transfer destination are filled only when they
-  match an existing account or category; the manual form's account selectors
-  otherwise stay blank so the user chooses explicitly.
+  match an existing account or category; with the existing-only policy the
+  manual form's account selectors otherwise stay blank so the user chooses
+  explicitly. When the entity policy allows new entities, the spoken new name
+  is prefilled instead, and the save flow creates the entity (or asks first)
+  per [ADR 0012](../../decisions/0012-ai-capture-entity-policy-configurable.md).
 - Date is normalized to `YYYY-MM-DD`, amounts to a decimal string, and the
   currency defaults from the matched account (TWD when unknown).
 - Applying switches the capture view to the manual ledger form and never

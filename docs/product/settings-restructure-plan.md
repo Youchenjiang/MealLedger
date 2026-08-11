@@ -17,6 +17,7 @@
    - **刪除行為（已定案）**：預設作廢，可改真正刪除（行為由[明細列緊湊化計畫](ledger-row-compact-plan.md)消費）
    - **負餘額政策（已定案）**：供使用者選擇是否讓可編輯帳戶**不允許負餘額**；預設不開啟，維持現行「允許負餘額」行為，與 [docs/v1/accounting-rules.md](../v1/accounting-rules.md) 一致；開啟後可編輯帳戶餘額不得為負
    - 本地化（`/settings/localization` 併入）、其他偏好
+   - **AI 口說偏好（已定案）**：口說記帳時帳戶/類別可否提到尚未建立的實體，每種實體各三選項「只能現有／詢問是否新增／直接新增」，**預設只能現有**（維持現況行為）；設定先落在現行設定頁（本計畫落地前即提供），Phase 4 併入「相關設定」（決策已寫入 [ADR 0012](../decisions/0012-ai-capture-entity-policy-configurable.md)）
 
 ## 2. 影響範圍
 
@@ -34,6 +35,7 @@
 - **帳戶管理**留在設定的「相關設定」；概覽只做快速新增與檢視。
 - **刪除行為可設定**：預設作廢，可在設定改為真正刪除（決策已寫入 [ADR 0007](../decisions/0007-ledger-record-delete-void-or-hard-delete.md)）。
 - **可編輯帳戶的負餘額政策可設定**：設定「相關設定」提供選項；**預設不開啟**（維持「允許負餘額」模型，與 [docs/v1/accounting-rules.md](../v1/accounting-rules.md) 一致）；開啟後可編輯帳戶餘額不得為負（支出或餘額調整不得使餘額低於 0）（決策已寫入 [ADR 0008](../decisions/0008-configurable-negative-balance-policy.md)）。
+- **AI 口說偏好可設定**：口說記帳的帳戶/類別可否提到尚未建立的實體，每種實體各三選項「只能現有／詢問是否新增／直接新增」，預設只能現有；直接新增的帳戶比照預設錢包（TWD、無初始資金）、類別加入自訂類別，事後可在管理處修改（決策已寫入 [ADR 0012](../decisions/0012-ai-capture-entity-policy-configurable.md)）。
 
 ## 4. 驗證
 
