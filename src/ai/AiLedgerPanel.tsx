@@ -242,6 +242,9 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
                   <button className="secondary-action" type="button" onClick={() => saveSuggestionAsDraft(suggestion)}>
                     存草稿
                   </button>
+                  <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+                    填入表單
+                  </button>
                 </div>
               ) : (
                 <>
@@ -250,7 +253,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
                   </ul>
                   <div className="record-actions">
                     <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                      填入表單補齊欄位
+                      填入表單
                     </button>
                   </div>
                 </>

@@ -92,4 +92,26 @@ describe("AiLedgerPanel", () => {
 
     expect(onApplyToForm).toHaveBeenCalledTimes(1);
   });
+
+  test("offers the apply-to-form action for valid suggestions too", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", account: "Daily wallet", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
+    });
+    const onApplyToForm = vi.fn();
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={onApplyToForm} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    const button = await screen.findByRole("button", { name: "填入表單" });
+    expect(button).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "確認寫入" })).toBeInTheDocument();
+
+    await user.click(button);
+
+    expect(onApplyToForm).toHaveBeenCalledTimes(1);
+  });
 });

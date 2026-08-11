@@ -144,4 +144,29 @@ describe("buildPrefillForm", () => {
     expect(form.account).toBe("Bank");
     expect(form.currency).toBe("TWD");
   });
+
+  test("resolves the transfer destination to a matched account name", () => {
+    const form = buildPrefillForm({
+      kind: "transfer",
+      account: "Bank",
+      transferAccount: "Daily wallet",
+      amount: 1000,
+    }, accounts, categories, today);
+
+    expect(form.kind).toBe("transfer");
+    expect(form.account).toBe("Bank");
+    expect(form.transferAccount).toBe("Daily wallet");
+    expect(form.amount).toBe("1000");
+  });
+
+  test("leaves an unknown transfer destination blank for manual selection", () => {
+    const form = buildPrefillForm({
+      kind: "transfer",
+      account: "Bank",
+      transferAccount: "消失的帳戶",
+      amount: 1000,
+    }, accounts, categories, today);
+
+    expect(form.transferAccount).toBe("");
+  });
 });

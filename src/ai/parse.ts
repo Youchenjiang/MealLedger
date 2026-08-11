@@ -141,7 +141,14 @@ export function buildPrefillForm(
   today: string,
 ): DraftForm {
   const account = matchAccount(input.account, accounts) ?? { name: "", currency: "TWD" };
-  return buildForm(input, account, categories, today);
+  const form = buildForm(input, account, categories, today);
+  // The manual ledger form uses account selectors, so the destination must be
+  // a matched account name; an unknown destination stays blank for the user
+  // to pick manually.
+  if (form.kind === "transfer") {
+    form.transferAccount = matchAccount(input.transferAccount, accounts)?.name ?? "";
+  }
+  return form;
 }
 
 export function parseDraftSuggestions(
