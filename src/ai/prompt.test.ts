@@ -23,6 +23,7 @@ describe("buildLedgerSystemPrompt", () => {
     accounts: [{ name: "現金", currency: "TWD" }],
     categories: ["飲食", "交通"],
     today: "2026-08-08",
+    entityPolicy: { account: "existing", category: "existing" } as const,
   };
 
   test("includes the accounts, categories, and today in the prompt", () => {
@@ -41,5 +42,23 @@ describe("buildLedgerSystemPrompt", () => {
     const prompt = buildLedgerSystemPrompt(context);
     expect(prompt).toContain("explicit");
     expect(prompt).toContain("明確說出");
+  });
+
+  test("restricts accounts and categories to the lists under the existing policy", () => {
+    const prompt = buildLedgerSystemPrompt(context);
+    expect(prompt).toContain("account 只能從這些帳戶選");
+    expect(prompt).toContain("category 只能從這些類別選");
+    expect(prompt).not.toContain("用使用者講的帳戶名");
+  });
+
+  test("allows new account and category names when the policy permits them", () => {
+    const prompt = buildLedgerSystemPrompt({
+      ...context,
+      entityPolicy: { account: "auto", category: "ask" },
+    });
+    expect(prompt).toContain("account 用使用者講的帳戶名");
+    expect(prompt).toContain("category 用使用者講的類別名");
+    expect(prompt).toContain("現有帳戶:現金");
+    expect(prompt).toContain("現有類別:飲食、交通");
   });
 });

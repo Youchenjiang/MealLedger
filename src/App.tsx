@@ -55,7 +55,8 @@ import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "
 import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel } from "./ai/AiLedgerPanel";
-import { buildPrefillForm } from "./ai/parse";
+import { readAiEntityPolicy, writeAiEntityPolicy, type AiEntityPolicy, type AiEntityPolicyOption } from "./ai/entityPolicy";
+import { buildPrefillForm, type AiDraftSuggestion } from "./ai/parse";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "概覽", path: "/", icon: Home },
@@ -883,6 +884,7 @@ function AuthenticatedApp() {
   const uploadQueueRef = useRef(uploadQueue);
   uploadQueueRef.current = uploadQueue;
   const [persistenceWarning, setPersistenceWarning] = useState(false);
+  const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
@@ -902,6 +904,10 @@ function AuthenticatedApp() {
       setPersistenceWarning(true);
     }
   }, [drafts]);
+
+  useEffect(() => {
+    writeAiEntityPolicy(aiEntityPolicy);
+  }, [aiEntityPolicy]);
 
   useEffect(() => {
     try {
@@ -1280,6 +1286,8 @@ function AuthenticatedApp() {
           onRetryCloudSyncItem: (id) => setCloudSyncQueue((current) => retryCloudSyncItem(current, id, new Date().toISOString())),
           accounts,
           setAccounts,
+          aiEntityPolicy,
+          setAiEntityPolicy,
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
           onSignIn: signIn,
@@ -1482,6 +1490,8 @@ type RouteRenderContext = {
   onRetryCloudSyncItem: (id: string) => void;
   accounts: LocalAccount[];
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
+  aiEntityPolicy: AiEntityPolicy;
+  setAiEntityPolicy: Dispatch<SetStateAction<AiEntityPolicy>>;
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
   onSignIn: (email?: string, password?: string) => Promise<void>;
@@ -1524,6 +1534,8 @@ function renderRoute({
   onRetryCloudSyncItem,
   accounts,
   setAccounts,
+  aiEntityPolicy,
+  setAiEntityPolicy,
   navigate,
   onReopenOnboarding,
   onSignIn,
@@ -1642,6 +1654,7 @@ function renderRoute({
         <CapturePage
           records={records}
           accounts={accounts}
+          aiEntityPolicy={aiEntityPolicy}
           navigate={navigate}
           draftToEdit={draftToEdit}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
@@ -1665,6 +1678,8 @@ function renderRoute({
         <SettingsPage
           accounts={accounts}
           records={records}
+          entityPolicy={aiEntityPolicy}
+          onEntityPolicyChange={setAiEntityPolicy}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
           onReopenOnboarding={onReopenOnboarding}
@@ -3211,6 +3226,7 @@ function ManualLedgerPanel(props: Readonly<ManualLedgerFormProps>) {
 function CapturePage({
   records,
   accounts,
+  aiEntityPolicy,
   navigate,
   draftToEdit,
   onDiscardDraft,
@@ -3230,6 +3246,7 @@ function CapturePage({
 }: Readonly<{
   records: LocalLedgerRecord[];
   accounts: LocalAccount[];
+  aiEntityPolicy: AiEntityPolicy;
   navigate: (item: NavItem) => void;
   draftToEdit: TransactionDraft | null;
   onDiscardDraft: (id: string) => void;
@@ -3360,6 +3377,30 @@ function CapturePage({
   const hasSelectedAccount = accounts.some((account) => account.name === form.account);
   const categoryOptions = (form.kind === "income" ? incomeCategories : expenseCategories).concat(customCategories);
   const aiCategories = [...new Set([...expenseCategories, ...incomeCategories, ...customCategories])];
+
+  // Creates the not-yet-existing accounts/categories an AI suggestion carries,
+  // right before the confirmed write (see ADR 0012). New accounts follow the
+  // default-wallet convention (name as spoken, currency TWD), categories join
+  // the custom categories; the user can edit or delete either later in
+  // account/category management.
+  const resolveNewEntities = (suggestion: AiDraftSuggestion): boolean => {
+    const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
+    for (const name of newAccountNames) {
+      if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        continue;
+      }
+      const account = createLocalAccount(name, "TWD", crypto.randomUUID());
+      if (!account) {
+        return false;
+      }
+      onAddAccount(account);
+    }
+    const newCategory = suggestion.newCategory;
+    if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
+      setCustomCategories((current) => [...current, newCategory]);
+    }
+    return true;
+  };
   const sourceOptions = useMemo(
     () => [...new Set([...customSources, ...records.filter((record) => record.kind === "income" || record.kind === "fund-addition").map((record) => record.counterparty).filter(Boolean)])],
     [customSources, records],
@@ -3783,6 +3824,8 @@ function CapturePage({
         aiProps={{
           accounts,
           categories: aiCategories,
+          entityPolicy: aiEntityPolicy,
+          onResolveNewEntities: resolveNewEntities,
           onSaveRecord,
           onSaveDraft,
           onApplyToForm: (suggestion) => {
@@ -4305,6 +4348,8 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
 type SettingsPageProps = {
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
+  entityPolicy: AiEntityPolicy;
+  onEntityPolicyChange: (policy: AiEntityPolicy) => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -4316,6 +4361,8 @@ type SettingsPageProps = {
 function SettingsPage({
   accounts,
   records,
+  entityPolicy,
+  onEntityPolicyChange,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
@@ -4323,7 +4370,7 @@ function SettingsPage({
   onImportRecord,
   onMergeImportDraft,
 }: Readonly<SettingsPageProps>) {
-  const [section, setSection] = useState<"ledger-accounts" | "portability">("ledger-accounts");
+  const [section, setSection] = useState<"ledger-accounts" | "portability" | "ai-capture">("ledger-accounts");
 
   return (
     <section className="settings-page">
@@ -4341,6 +4388,7 @@ function SettingsPage({
       <div className="settings-tabs" role="tablist" aria-label="Settings sections">
         <button className={`settings-tab ${section === "ledger-accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ledger-accounts"} onClick={() => setSection("ledger-accounts")}>Money accounts</button>
         <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
+        <button className={`settings-tab ${section === "ai-capture" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ai-capture"} onClick={() => setSection("ai-capture")}>Voice &amp; AI</button>
       </div>
       {section === "ledger-accounts" ? (
         <LedgerAccountsPanel
@@ -4349,10 +4397,48 @@ function SettingsPage({
           onSaveInitialFunding={onSaveInitialFunding}
           onReopenOnboarding={onReopenOnboarding}
         />
+      ) : section === "ai-capture" ? (
+        <section className="settings-ai-policy" aria-labelledby="ai-capture-title">
+          <p className="eyebrow">Spoken capture</p>
+          <h2 id="ai-capture-title">Voice &amp; AI</h2>
+          <p className="panel-copy">
+            口說記帳時可否提到尚未建立的帳戶或類別;新帳戶以 TWD 建立(如同預設錢包),事後可在帳戶/類別管理修改。
+          </p>
+          <EntityPolicyRow
+            label="帳戶 Accounts"
+            value={entityPolicy.account}
+            onChange={(value) => onEntityPolicyChange({ ...entityPolicy, account: value })}
+          />
+          <EntityPolicyRow
+            label="類別 Categories"
+            value={entityPolicy.category}
+            onChange={(value) => onEntityPolicyChange({ ...entityPolicy, category: value })}
+          />
+        </section>
       ) : (
         <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
       )}
     </section>
+  );
+}
+
+const ENTITY_POLICY_OPTIONS: Array<{ value: AiEntityPolicyOption; label: string; hint: string }> = [
+  { value: "existing", label: "只能歸類到現有", hint: "講到不存在的帳戶/類別時,草稿會被拒絕並顯示原因" },
+  { value: "ask", label: "詢問是否新增", hint: "草稿帶新名稱,確認寫入前先詢問是否建立" },
+  { value: "auto", label: "直接新增", hint: "確認寫入時直接建立(帳戶以 TWD 建立),事後可修改或刪除" },
+];
+
+function EntityPolicyRow({ label, value, onChange }: Readonly<{ label: string; value: AiEntityPolicyOption; onChange: (value: AiEntityPolicyOption) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>{label}</legend>
+      {ENTITY_POLICY_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={option.hint}>
+          <input type="radio" name={label} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
   );
 }
 

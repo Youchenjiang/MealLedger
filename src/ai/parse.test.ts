@@ -147,6 +147,70 @@ describe("parseDraftSuggestions", () => {
   });
 });
 
+describe("parseDraftSuggestions with an allow-new entity policy", () => {
+  const allowNew = { account: "auto", category: "auto" } as const;
+
+  test("carries a new account into the draft with TWD and marks it", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", account: "新錢包", category: "午餐", amount: 480 }],
+    }, accounts, categories, today, allowNew);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.issues).toEqual([]);
+    expect(suggestion.newAccount).toBe("新錢包");
+    expect(suggestion.draft?.account).toBe("新錢包");
+    expect(suggestion.draft?.currency).toBe("TWD");
+  });
+
+  test("carries a new category into the draft and marks it", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", account: "Bank", category: "咖啡廳", amount: 180 }],
+    }, accounts, categories, today, allowNew);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.newCategory).toBe("咖啡廳");
+    expect(suggestion.draft?.category).toBe("咖啡廳");
+  });
+
+  test("carries a new transfer destination into the draft and marks it", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "transfer", account: "Bank", transferAccount: "新儲蓄戶", amount: 1000 }],
+    }, accounts, categories, today, allowNew);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.newTransferAccount).toBe("新儲蓄戶");
+    expect(suggestion.draft?.transferAccount).toBe("新儲蓄戶");
+  });
+
+  test("still rejects a blank account even when new accounts are allowed", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", category: "午餐", amount: 100 }],
+    }, accounts, categories, today, allowNew);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("帳戶");
+  });
+
+  test("still rejects a blank category even when new categories are allowed", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", account: "Bank", amount: 100 }],
+    }, accounts, categories, today, allowNew);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("類別");
+  });
+
+  test("treats the ask policy the same as auto at parse time", () => {
+    const askPolicy = { account: "ask", category: "ask" } as const;
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", account: "新錢包", category: "午餐", amount: 480 }],
+    }, accounts, categories, today, askPolicy);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.newAccount).toBe("新錢包");
+  });
+});
+
 describe("buildPrefillForm", () => {
   test("fills the fields the model provided and leaves unknown account/category blank", () => {
     const form = buildPrefillForm({

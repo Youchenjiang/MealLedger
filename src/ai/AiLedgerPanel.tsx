@@ -3,6 +3,7 @@ import { ImagePlus, Mic, Sparkles } from "lucide-react";
 import type { TransactionDraft } from "../appShell/drafts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
+import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
 import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
 import { parseDraftSuggestions, type AiDraftSuggestion, type AiSuggestionInput } from "./parse";
 
@@ -34,6 +35,15 @@ const kindLabel: Record<string, string> = {
 export type AiLedgerPanelProps = Readonly<{
   accounts: Array<{ name: string; currency: string }>;
   categories: string[];
+  // Per-entity-type policy for whether capture may mention accounts or
+  // categories that do not exist yet (see ADR 0012). Defaults to existing-only
+  // so current behavior is preserved.
+  entityPolicy?: AiEntityPolicy;
+  // Creates the not-yet-existing accounts/categories a suggestion carries
+  // (account with TWD like the default wallet, category appended to custom
+  // categories). Called only for ask/auto policies, right before the confirmed
+  // write. Returns false when creation fails.
+  onResolveNewEntities?: (suggestion: AiDraftSuggestion) => boolean;
   onSaveRecord: (draft: TransactionDraft) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
   // Prefills the ledger form with the fields the AI could identify so the
@@ -41,13 +51,14 @@ export type AiLedgerPanelProps = Readonly<{
   onApplyToForm: (suggestion: AiDraftSuggestion) => void;
 }>;
 
-export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft, onApplyToForm }: AiLedgerPanelProps) {
+export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_ENTITY_POLICY, onResolveNewEntities, onSaveRecord, onSaveDraft, onApplyToForm }: AiLedgerPanelProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<AiDraftSuggestion[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [pendingNewEntities, setPendingNewEntities] = useState<AiDraftSuggestion | null>(null);
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,14 +89,14 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
       // Compute once per submit so the system prompt and the parsed drafts
       // always agree on the reference date, even across midnight.
       const today = localToday();
-      const system = buildLedgerSystemPrompt({ accounts, categories, today });
+      const system = buildLedgerSystemPrompt({ accounts, categories, today, entityPolicy });
       const user = buildUserPrompt(inputText, selectedImage?.dataUrl);
       const result = await requestAiJson({ system, user, imageDataUrl: selectedImage?.dataUrl });
       if (!result.ok) {
         setError(result.message);
         return;
       }
-      const parsed = parseDraftSuggestions(result.data, accounts, categories, today);
+      const parsed = parseDraftSuggestions(result.data, accounts, categories, today, entityPolicy);
       setSuggestions(parsed);
       if (parsed.length === 0) {
         setError("AI 沒有辨識出任何交易,請換一種描述試試。");
@@ -144,10 +155,42 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
     recognition.start();
   };
 
+  // Whether confirming this suggestion must first ask the user to create the
+  // not-yet-existing entities, per the per-entity-type ask policy.
+  const needsNewEntityAsk = (suggestion: AiDraftSuggestion): boolean => {
+    return Boolean(
+      (suggestion.newAccount && entityPolicy.account === "ask")
+      || (suggestion.newCategory && entityPolicy.category === "ask"),
+    );
+  };
+
   const confirmSuggestion = (suggestion: AiDraftSuggestion) => {
     if (!suggestion.draft) return;
     setError("");
     setMessage("");
+    if (needsNewEntityAsk(suggestion)) {
+      setPendingNewEntities(suggestion);
+      return;
+    }
+    resolveAndPersist(suggestion);
+  };
+
+  // Creates any new entities the policy allows (auto, or the approved ask
+  // flow), then writes the official record. Creation never happens as a side
+  // effect of the AI call itself; only of the user's confirmed write.
+  const resolveAndPersist = (suggestion: AiDraftSuggestion) => {
+    if (!suggestion.draft) return;
+    const needsCreation = Boolean(suggestion.newAccount || suggestion.newCategory);
+    if (needsCreation) {
+      if (!onResolveNewEntities) {
+        setError("需要先建立新的帳戶/類別才能寫入,請改用「填入表單」或先在設定中建立。");
+        return;
+      }
+      if (!onResolveNewEntities(suggestion)) {
+        setError("新的帳戶/類別無法建立,請手動檢查。");
+        return;
+      }
+    }
     const saved = onSaveRecord(suggestion.draft);
     if (!saved) {
       setError("這筆記錄無法建立,請檢查帳戶與欄位後手動新增。");
@@ -155,6 +198,18 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
     }
     setSuggestions((current) => current.filter((item) => item !== suggestion));
     setMessage("已確認並寫入正式記錄。");
+  };
+
+  const approveNewEntities = () => {
+    const suggestion = pendingNewEntities;
+    setPendingNewEntities(null);
+    if (suggestion) {
+      resolveAndPersist(suggestion);
+    }
+  };
+
+  const cancelNewEntities = () => {
+    setPendingNewEntities(null);
   };
 
   const saveSuggestionAsDraft = (suggestion: AiDraftSuggestion) => {
@@ -213,6 +268,25 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
       {message ? <output className="inline-message">{message}</output> : null}
 
+      {pendingNewEntities ? (
+        <div className="ask-new-entities" role="dialog" aria-label="確認新增帳戶或類別">
+          <p>
+            這筆記錄提到尚未建立的
+            {pendingNewEntities.newAccount ? `帳戶「${pendingNewEntities.newAccount}」` : ""}
+            {pendingNewEntities.newCategory ? `${pendingNewEntities.newAccount ? "與" : ""}類別「${pendingNewEntities.newCategory}」` : ""}
+            ,是否要新增?
+          </p>
+          <div className="record-actions">
+            <button className="primary-action" type="button" onClick={approveNewEntities}>
+              新增並寫入
+            </button>
+            <button className="secondary-action" type="button" onClick={cancelNewEntities}>
+              取消
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {suggestions.length > 0 ? (
         <section className="ai-suggestions" aria-label="AI 記帳草稿">
           <div className="draft-list-heading">
@@ -248,6 +322,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
                         <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
                         {" · "}
                         <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
+                        {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
                       </>
                     ) : (
                       asShortText(suggestion.input) || "無法辨識的項目"
@@ -256,6 +331,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
                       <>
                         {" · "}
                         <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
+                        {suggestion.newCategory ? <NewEntityTag label="類別尚不存在" /> : null}
                       </>
                     ) : null}
                   </span>
@@ -366,6 +442,12 @@ function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; chil
   return inferred
     ? <span className="inferred-field" title="AI 推論的欄位,請確認">{children}</span>
     : <Fragment>{children}</Fragment>;
+}
+
+// Marks an account/category the user mentioned that does not exist yet; it is
+// created only when the user confirms the write (see ADR 0012).
+function NewEntityTag({ label }: Readonly<{ label: string }>): React.ReactElement {
+  return <span className="new-entity-badge" title={label}>{label}</span>;
 }
 
 // Renders the draft date, marking the year as inferred when the parser derived

@@ -164,6 +164,84 @@ describe("AiLedgerPanel", () => {
     expect(screen.queryByText(/Merchant unavailable/u)).not.toBeInTheDocument();
   });
 
+  test("creates a mentioned new account on confirm under the auto policy", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", account: "新錢包", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
+    });
+    const autoPolicy = { account: "auto", category: "auto" } as const;
+    const onResolveNewEntities = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => true);
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "新錢包 中午吃牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    expect(await screen.findByRole("button", { name: "確認寫入" })).toBeInTheDocument();
+    expect(screen.getByText("帳戶尚不存在")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "確認寫入" }));
+
+    expect(onResolveNewEntities).toHaveBeenCalledTimes(1);
+    expect(onResolveNewEntities).toHaveBeenCalledWith(expect.objectContaining({ newAccount: "新錢包" }));
+    expect(onSaveRecord).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/已確認/u)).toBeInTheDocument();
+  });
+
+  test("asks before creating a new entity under the ask policy and writes on approval", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", account: "新錢包", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
+    });
+    const askPolicy = { account: "ask", category: "ask" } as const;
+    const onResolveNewEntities = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => true);
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "新錢包 中午吃牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    await user.click(await screen.findByRole("button", { name: "確認寫入" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/帳戶「新錢包」/u);
+    expect(onSaveRecord).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "新增並寫入" }));
+
+    expect(onResolveNewEntities).toHaveBeenCalledTimes(1);
+    expect(onSaveRecord).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(/已確認/u)).toBeInTheDocument();
+  });
+
+  test("keeps the suggestion unconfirmed when the ask dialog is cancelled", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", account: "新錢包", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
+    });
+    const askPolicy = { account: "ask", category: "ask" } as const;
+    const onResolveNewEntities = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => true);
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "新錢包 中午吃牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    await user.click(await screen.findByRole("button", { name: "確認寫入" }));
+    await user.click(screen.getByRole("button", { name: "取消" }));
+
+    expect(onSaveRecord).not.toHaveBeenCalled();
+    expect(onResolveNewEntities).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "確認寫入" })).toBeInTheDocument();
+  });
+
   test("marks inferred fields and leaves explicitly stated ones unmarked", async () => {
     vi.mocked(requestAiJson).mockResolvedValue({
       ok: true,

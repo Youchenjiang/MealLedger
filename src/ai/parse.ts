@@ -1,4 +1,5 @@
 import { createTransactionDraft, missingCounterpartyLabel, missingItemNameLabel, type DraftForm, type TransactionDraft } from "../appShell/drafts";
+import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
 
 export type AiDraftKind = "expense" | "income" | "transfer";
 
@@ -25,6 +26,13 @@ export type AiDraftSuggestion = {
   draft: TransactionDraft | null;
   ok: boolean;
   issues: string[];
+  // Names the user mentioned that do not exist yet. With an ask/auto entity
+  // policy these are carried into the draft (account with TWD like the
+  // default wallet) and are only created as part of the confirmed write, per
+  // ADR 0012.
+  newAccount?: string;
+  newCategory?: string;
+  newTransferAccount?: string;
 };
 
 export type AiLedgerAccounts = Array<{ name: string; currency: string }>;
@@ -79,9 +87,8 @@ function matchCategory(value: unknown, categories: string[]): string {
   return categories.find((category) => category.toLocaleLowerCase() === normalized) ?? "";
 }
 
-function buildForm(input: AiSuggestionInput, account: { name: string; currency: string }, accounts: AiLedgerAccounts, categories: string[], today: string): DraftForm {
+function buildForm(input: AiSuggestionInput, account: { name: string; currency: string }, accounts: AiLedgerAccounts, today: string, category: string): DraftForm {
   const kind = normalizeKind(input.kind) ?? "expense";
-  const category = matchCategory(input.category, categories);
   const amount = parseAmount(input.amount);
   const date = normalizeDate(input.date, today);
   const counterparty = asText(input.counterparty);
@@ -125,7 +132,8 @@ function buildForm(input: AiSuggestionInput, account: { name: string; currency: 
   if (kind === "transfer") {
     // Resolve to the matched account name so the draft validator's exact
     // name lookup accepts case-insensitive input from the model, and so the
-    // same-account check compares canonical names.
+    // same-account check compares canonical names. An unmatched destination
+    // keeps its raw name so an allow-new policy can create it on confirm.
     form.transferAccount = matchAccount(input.transferAccount, accounts)?.name ?? asText(input.transferAccount);
     const transferAmount = parseAmount(input.transferAmount);
     if (transferAmount) {
@@ -140,7 +148,10 @@ function buildForm(input: AiSuggestionInput, account: { name: string; currency: 
 // Builds a ledger form from an AI suggestion, filling only the fields the
 // model actually provided. An unknown account or category is left blank
 // instead of rejecting the suggestion, so the user can complete it in the
-// ledger form before saving.
+// ledger form before saving. The manual ledger form uses account/category
+// selectors, so a not-yet-existing name cannot be prefilled here even when
+// the entity policy allows new entities; creation happens on the confirm
+// path in the AI panel.
 export function buildPrefillForm(
   input: AiSuggestionInput,
   accounts: AiLedgerAccounts,
@@ -148,7 +159,8 @@ export function buildPrefillForm(
   today: string,
 ): DraftForm {
   const account = matchAccount(input.account, accounts) ?? { name: "", currency: "TWD" };
-  const form = buildForm(input, account, accounts, categories, today);
+  const category = matchCategory(input.category, categories);
+  const form = buildForm(input, account, accounts, today, category);
   // The manual ledger form uses account selectors, so the destination must be
   // a matched account name; an unknown destination stays blank for the user
   // to pick manually.
@@ -163,6 +175,7 @@ export function parseDraftSuggestions(
   accounts: AiLedgerAccounts,
   categories: string[],
   today: string,
+  policy: AiEntityPolicy = DEFAULT_AI_ENTITY_POLICY,
 ): AiDraftSuggestion[] {
   let items: unknown[];
   if (Array.isArray(payload)) {
@@ -176,15 +189,35 @@ export function parseDraftSuggestions(
   return items.map((item): AiDraftSuggestion => {
     const input = (item && typeof item === "object" ? item : {}) as AiSuggestionInput;
     const issues: string[] = [];
+    const newEntities: Pick<AiDraftSuggestion, "newAccount" | "newCategory" | "newTransferAccount"> = {};
 
     const kind = normalizeKind(input.kind);
     if (!kind) {
       issues.push(`不支援的類型「${asText(input.kind) || "(空白)"}」。`);
     }
 
-    const account = matchAccount(input.account, accounts);
-    if (!account) {
-      issues.push(`帳戶「${asText(input.account) || "(空白)"}」不存在。`);
+    const rawAccount = asText(input.account);
+    const matchedAccount = matchAccount(input.account, accounts);
+    let account = matchedAccount;
+    if (!matchedAccount) {
+      if (policy.account === "existing" || !rawAccount) {
+        issues.push(`帳戶「${rawAccount || "(空白)"}」不存在。`);
+      } else {
+        newEntities.newAccount = rawAccount;
+        account = { name: rawAccount, currency: "TWD" };
+      }
+    }
+
+    const rawCategory = asText(input.category);
+    const matchedCategory = matchCategory(input.category, categories);
+    let category = matchedCategory;
+    if (!matchedCategory && kind !== "transfer") {
+      if (policy.category === "existing" || !rawCategory) {
+        issues.push(`類別「${rawCategory || "(空白)"}」不存在。`);
+      } else {
+        newEntities.newCategory = rawCategory;
+        category = rawCategory;
+      }
     }
 
     const amount = parseAmount(input.amount);
@@ -197,30 +230,47 @@ export function parseDraftSuggestions(
     }
 
     if (kind === "transfer" && !matchAccount(input.transferAccount, accounts)) {
-      issues.push(`轉帳目標帳戶「${asText(input.transferAccount) || "(空白)"}」不存在。`);
+      const rawTransfer = asText(input.transferAccount);
+      if (policy.account === "existing" || !rawTransfer) {
+        issues.push(`轉帳目標帳戶「${rawTransfer || "(空白)"}」不存在。`);
+      } else {
+        newEntities.newTransferAccount = rawTransfer;
+      }
     }
 
     if (!kind || !account || !effectiveAmount) {
-      return { input, draft: null, ok: false, issues };
+      return { input, draft: null, ok: false, issues, ...newEntities };
     }
 
-    const form = buildForm(input, account, accounts, categories, today);
-    if (kind !== "transfer" && !form.category) {
-      issues.push(`類別「${asText(input.category) || "(空白)"}」不存在。`);
-    }
+    const form = buildForm(input, account, accounts, today, category);
+    // buildForm already canonicalizes a matched destination (and keeps the raw
+    // name when the policy allows a new one); only the same-account check is
+    // left here.
     if (form.transferAccount === form.account) {
       issues.push("轉帳來源與目標帳戶相同。");
     }
 
     if (issues.length > 0) {
-      return { input, draft: null, ok: false, issues };
+      return { input, draft: null, ok: false, issues, ...newEntities };
     }
 
-    const draft = createTransactionDraft(form, `ai-${crypto.randomUUID()}`, accounts);
+    // A new account (or transfer destination) must be visible to the draft
+    // validator's exact-name account lookup; synthesize it with TWD, the same
+    // default the default wallet uses, so the draft passes validation before
+    // the user confirms and the entity is really created.
+    const syntheticAccounts: AiLedgerAccounts = [];
+    if (newEntities.newAccount) {
+      syntheticAccounts.push({ name: newEntities.newAccount, currency: "TWD" });
+    }
+    if (newEntities.newTransferAccount && newEntities.newTransferAccount !== newEntities.newAccount) {
+      syntheticAccounts.push({ name: newEntities.newTransferAccount, currency: "TWD" });
+    }
+
+    const draft = createTransactionDraft(form, `ai-${crypto.randomUUID()}`, [...accounts, ...syntheticAccounts]);
     if (!draft) {
       issues.push("欄位組合未通過既有記帳規則,請手動檢查。");
-      return { input, draft: null, ok: false, issues };
+      return { input, draft: null, ok: false, issues, ...newEntities };
     }
-    return { input, draft, ok: true, issues };
+    return { input, draft, ok: true, issues, ...newEntities };
   });
 }

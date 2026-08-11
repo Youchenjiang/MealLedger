@@ -93,6 +93,26 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.taxonomy.tags") ?? "[]")).toEqual(expect.arrayContaining(["訂閱"]));
   });
 
+  test("stores the spoken-capture entity policy chosen in Settings", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "Voice & AI" }));
+    expect(screen.getByRole("heading", { name: "Voice & AI" })).toBeInTheDocument();
+
+    const accountRow = screen.getByRole("group", { name: "帳戶 Accounts" });
+    await user.click(within(accountRow).getByRole("radio", { name: "直接新增" }));
+
+    const categoryRow = screen.getByRole("group", { name: "類別 Categories" });
+    await user.click(within(categoryRow).getByRole("radio", { name: "詢問是否新增" }));
+
+    expect(JSON.parse(window.localStorage.getItem("mealledger.ai.entity-policy") ?? "{}")).toEqual({
+      account: "auto",
+      category: "ask",
+    });
+  });
+
   test("records an entered starting balance as fund addition", async () => {
     const user = userEvent.setup();
     renderWorkspace();
