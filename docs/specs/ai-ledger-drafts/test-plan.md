@@ -12,6 +12,9 @@
 - The AI client sends provider-shaped requests (OpenAI chat-completions,
   Gemini generateContent) and parses JSON responses; errors surface as
   messages.
+- The AI client routes text to `AI_MODEL` and images to `AI_VISION_MODEL`,
+  and signs edge-proxy requests with the gateway key and session token;
+  proxy 401 responses explain the login requirement.
 
 ## Panel Tests
 
@@ -27,6 +30,8 @@
   shows a readable message instead of starting a session.
 - Photo input reads a selected file, shows its name, and submits image-only
   entries through the receipt prompt.
+- Receipt photos are downscaled before sending to keep payloads within the
+  edge-function body limit.
 - An empty submission asks for input without calling the AI.
 - A pending request shows loading and disables submit until it finishes.
 - An AI failure shows the returned error message and leaves the panel usable.
