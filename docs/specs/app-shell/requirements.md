@@ -33,16 +33,22 @@ WHEN the user is authenticated
 THE SYSTEM SHALL show the primary navigation.
 
 WHEN primary navigation is visible
-THE SYSTEM SHALL include Overview, Ledger, Capture, and Settings.
+THE SYSTEM SHALL include 概覽 (Overview), 明細 (Ledger), 新增 (Add), 專區 (Zone), and 設定 (Settings).
 
-WHEN the user selects Overview
+WHEN primary navigation is visible
+THE SYSTEM SHALL render 新增 (Add) as the center item, visually dominant as a raised circular "+" button that links to /capture.
+
+WHEN the user selects 概覽 (Overview)
 THE SYSTEM SHALL show account summary, confirmed ledger records, and draft review status placeholders.
 
-WHEN the user selects Ledger
+WHEN the user selects 明細 (Ledger)
 THE SYSTEM SHALL show an empty confirmed ledger state and any local drafts waiting for review.
 
-WHEN the user selects Capture
+WHEN the user selects 新增 (Add)
 THE SYSTEM SHALL show capture choices for manual entry, scan receipt or invoice, meal photo, and attachment.
+
+WHEN the user selects 專區 (Zone)
+THE SYSTEM SHALL show an empty-state placeholder for the not-yet-opened section.
 
 WHEN the user selects manual entry from Capture
 THE SYSTEM SHALL provide an entry point into the Manual Ledger form surface.
@@ -70,6 +76,9 @@ THE SYSTEM SHALL remove it from the local review queue without affecting confirm
 
 WHEN the user selects Settings
 THE SYSTEM SHALL show account, sync, import, and export safeguards.
+
+WHEN the user needs the account verification page
+THE SYSTEM SHALL reach it from Settings; /account is not part of the primary navigation.
 
 WHEN the app is offline
 THE SYSTEM SHALL show an offline indicator without blocking navigation.
