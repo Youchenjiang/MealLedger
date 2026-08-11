@@ -22,10 +22,16 @@ This sequence turns the current specs into a practical implementation order. It 
 8. Cloud persistence — Complete (provider sync, R2 cleanup, multi-device merge, and native offline deferred).
 9. Auth — Complete.
 10. Invoice import spike — Deferred until its decision gates pass.
+11. Localization — Planned; the spec at
+    [docs/specs/localization/](../specs/localization/requirements.md) is
+    restored but not started. Implementation must extract the currently
+    hardcoded Traditional Chinese UI copy into a `zh-TW` dictionary, add an
+    `en-US` fallback, and re-review the spec against the shipped
+    hardcoded-Chinese baseline before starting.
 
-All implementation tracks are merged into `main`. The only remaining sequence
-gate is the invoice import spike; deferred V2 items are listed at the end of
-this document.
+All implementation tracks except the deferred invoice import spike and the
+planned localization work are merged into `main`; deferred V2 items are
+listed at the end of this document.
 
 ## 1. App Shell
 
