@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Sparkles } from "lucide-react";
 import type { TransactionDraft } from "../appShell/drafts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
-import { parseDraftSuggestions, type AiDraftSuggestion } from "./parse";
+import { parseDraftSuggestions, type AiDraftSuggestion, type AiSuggestionInput } from "./parse";
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -54,6 +54,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
 
   const configured = isAiConfigured();
   const hasValidSuggestion = suggestions.some((item) => item.ok);
+  const anyInferred = suggestions.some((suggestion) => suggestion.draft && hasInferredField(suggestion.input, suggestion.draft));
 
   // Stop any in-flight speech session when the panel unmounts so the
   // recognition instance and its callbacks do not outlive the component.
@@ -221,20 +222,45 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
             </div>
             <span>{suggestions.length} 筆</span>
           </div>
-          {suggestions.map((suggestion) => (
-            <article className="draft-card" key={suggestionKey(suggestion)}>
-              <div>
-                <strong>
-                  {kindLabel[suggestion.input.kind as string] ?? "未知類型"} · {suggestion.draft ? `${suggestion.draft.currency} ${suggestion.draft.amount}` : "無法辨識"}
-                </strong>
-                <span>
-                  {suggestion.draft ? `${suggestion.draft.date} · ${suggestion.draft.account}` : (asShortText(suggestion.input) || "無法辨識的項目")}
-                  {suggestion.draft?.category ? ` · ${suggestion.draft.category}` : ""}
-                </span>
-                {suggestion.draft && merchantLineText(suggestion.draft) ? (
-                  <span>{merchantLineText(suggestion.draft)}</span>
-                ) : null}
-              </div>
+          {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
+          {suggestions.map((suggestion) => {
+            const merchant = suggestion.draft ? merchantLine(suggestion.draft, suggestion.input) : null;
+            const inferred = (field: string) => isInferred(suggestion.input, field);
+            return (
+              <article className="draft-card" key={suggestionKey(suggestion)}>
+                <div>
+                  <strong>
+                    <InferredSpan inferred={inferred("kind")}>{kindLabel[suggestion.input.kind as string] ?? "未知類型"}</InferredSpan>
+                    {suggestion.draft ? (
+                      <>
+                        {" · "}
+                        <InferredSpan inferred={inferred("currency")}>{suggestion.draft.currency}</InferredSpan>
+                        {" "}
+                        <InferredSpan inferred={inferred("amount")}>{suggestion.draft.amount}</InferredSpan>
+                      </>
+                    ) : (
+                      " · 無法辨識"
+                    )}
+                  </strong>
+                  <span>
+                    {suggestion.draft ? (
+                      <>
+                        <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
+                        {" · "}
+                        <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
+                      </>
+                    ) : (
+                      asShortText(suggestion.input) || "無法辨識的項目"
+                    )}
+                    {suggestion.draft?.category ? (
+                      <>
+                        {" · "}
+                        <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
+                      </>
+                    ) : null}
+                  </span>
+                  {merchant ? <span>{merchant}</span> : null}
+                </div>
               {suggestion.ok && suggestion.draft ? (
                 <div className="record-actions">
                   <button className="primary-action" type="button" onClick={() => confirmSuggestion(suggestion)}>
@@ -259,8 +285,9 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
                   </div>
                 </>
               )}
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </section>
       ) : null}
     </div>
@@ -301,14 +328,83 @@ function asShortText(input: AiDraftSuggestion["input"]): string {
   return parts.join(" ");
 }
 
+// Fields the model reports the user explicitly mentioned. An absent or
+// non-array explicit list means no provenance was reported, so nothing is
+// marked as inferred (legacy responses keep their current look).
+function explicitFieldNames(input: AiSuggestionInput): Set<string> {
+  const raw = input.explicit;
+  if (!Array.isArray(raw)) return new Set();
+  const names = new Set<string>();
+  for (const value of raw) {
+    if (typeof value === "string" && value.trim()) {
+      names.add(value.trim().toLowerCase());
+    }
+  }
+  return names;
+}
+
+function isInferred(input: AiSuggestionInput, field: string): boolean {
+  const explicit = explicitFieldNames(input);
+  return explicit.size > 0 && !explicit.has(field);
+}
+
+// Whether the year of the draft date was derived by the app: the parser fills
+// the current year when the model input has no 4-digit year (e.g. "7/25").
+function isDerivedYear(inputDate: unknown): boolean {
+  return typeof inputDate !== "string" || !/\d{4}/.test(inputDate);
+}
+
+// Whether the suggestion card shows any inferred marking (used for the hint).
+function hasInferredField(input: AiSuggestionInput, draft: TransactionDraft): boolean {
+  if (isDerivedYear(input.date)) return true;
+  const explicit = explicitFieldNames(input);
+  if (explicit.size === 0) return false;
+  return ["kind", "date", "account", "category", "counterparty", "itemName", "amount", "currency"].some((field) => !explicit.has(field));
+}
+
+function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; children: React.ReactNode }>): React.ReactElement {
+  return inferred
+    ? <span className="inferred-field" title="AI 推論的欄位,請確認">{children}</span>
+    : <Fragment>{children}</Fragment>;
+}
+
+// Renders the draft date, marking the year as inferred when the parser derived
+// it from today (the model input carried no 4-digit year).
+function DateDisplay({ inputDate, date, inferred }: Readonly<{ inputDate: unknown; date: string; inferred: boolean }>): React.ReactElement {
+  if (!isDerivedYear(inputDate)) {
+    return <InferredSpan inferred={inferred}>{date}</InferredSpan>;
+  }
+  const year = date.slice(0, 4);
+  const rest = date.slice(4);
+  return (
+    <Fragment>
+      <InferredSpan inferred>{year}</InferredSpan>
+      <InferredSpan inferred={inferred}>{rest}</InferredSpan>
+    </Fragment>
+  );
+}
+
 // Renders the merchant/item line of a suggestion card. Counterparty and item
 // name are shown independently so an item name is never hidden behind a
 // missing counterparty (the parser fills a placeholder when a field is
 // absent, so those placeholders are suppressed here).
-function merchantLineText(draft: TransactionDraft): string {
+function merchantLine(draft: TransactionDraft, input: AiSuggestionInput): React.ReactNode {
   const counterparty = draft.counterparty && draft.counterparty !== "Merchant unavailable" ? draft.counterparty : "";
   const itemName = draft.itemName && draft.itemName !== "Item unavailable" ? draft.itemName : "";
-  return [counterparty && `對象:${counterparty}`, itemName && `品項:${itemName}`].filter(Boolean).join(" · ");
+  const items: Array<{ text: string; field: string }> = [];
+  if (counterparty) items.push({ text: `對象:${counterparty}`, field: "counterparty" });
+  if (itemName) items.push({ text: `品項:${itemName}`, field: "itemName" });
+  if (items.length === 0) return null;
+  return (
+    <Fragment>
+      {items.map((item, index) => (
+        <Fragment key={item.field}>
+          {index > 0 ? " · " : null}
+          <InferredSpan inferred={isInferred(input, item.field)}>{item.text}</InferredSpan>
+        </Fragment>
+      ))}
+    </Fragment>
+  );
 }
 
 // Stable React key for a suggestion card: prefers resolved draft fields, and

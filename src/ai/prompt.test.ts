@@ -36,4 +36,10 @@ describe("buildLedgerSystemPrompt", () => {
     const prompt = buildLedgerSystemPrompt(context);
     expect(prompt).toContain("只能回傳 JSON");
   });
+
+  test("asks the model to report which fields the user explicitly mentioned", () => {
+    const prompt = buildLedgerSystemPrompt(context);
+    expect(prompt).toContain("explicit");
+    expect(prompt).toContain("明確說出");
+  });
 });

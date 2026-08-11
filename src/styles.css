@@ -1946,6 +1946,14 @@ h2 {
   line-height: 1.35;
 }
 
+/* AI-inferred suggestion fields: dotted underline distinguishes values the
+   model guessed from values the user explicitly said. */
+.inferred-field {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
 .draft-amount {
   justify-items: end;
   text-align: right;

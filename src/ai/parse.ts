@@ -14,6 +14,10 @@ export type AiSuggestionInput = {
   transferAccount?: unknown;
   transferAmount?: unknown;
   note?: unknown;
+  // Field names the user explicitly mentioned; fields not listed here were
+  // inferred by the model. Absent (not an array) means no provenance was
+  // reported, which the suggestion card treats as "no marking".
+  explicit?: unknown;
 };
 
 export type AiDraftSuggestion = {

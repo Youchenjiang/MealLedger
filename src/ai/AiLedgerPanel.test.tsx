@@ -163,4 +163,33 @@ describe("AiLedgerPanel", () => {
     expect(screen.getByText(/品項:牛肉麵/u)).toBeInTheDocument();
     expect(screen.queryByText(/Merchant unavailable/u)).not.toBeInTheDocument();
   });
+
+  test("marks inferred fields and leaves explicitly stated ones unmarked", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", counterparty: "麵店", itemName: "牛肉麵", amount: 480, currency: "TWD", explicit: ["date", "counterparty", "itemName", "amount"] }] },
+    });
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 中午吃牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    const confirm = await screen.findByRole("button", { name: "確認寫入" });
+    const card = confirm.closest("article");
+    expect(card).not.toBeNull();
+
+    const marked = Array.from(card!.querySelectorAll(".inferred-field"));
+    // kind, currency, the derived year, account, and category were inferred.
+    expect(marked.some((element) => element.textContent === "支出")).toBe(true);
+    expect(marked.some((element) => element.textContent === "TWD")).toBe(true);
+    expect(marked.some((element) => element.textContent === "2026")).toBe(true);
+    expect(marked.some((element) => element.textContent === "Daily wallet")).toBe(true);
+    expect(marked.some((element) => element.textContent === "午餐")).toBe(true);
+    // The amount the user actually stated stays unmarked.
+    expect(marked.every((element) => element.textContent !== "480")).toBe(true);
+    // The card explains the marking.
+    expect(screen.getByText(/底線欄位是 AI 推論/u)).toBeInTheDocument();
+  });
 });

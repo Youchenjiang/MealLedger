@@ -10,7 +10,7 @@ export function buildLedgerSystemPrompt(context: AiLedgerContext): string {
   return [
     "你是記帳助理。把使用者的記帳描述轉成結構化 JSON。",
     "只能回傳 JSON,不要任何其他文字或 markdown。",
-    '- 回傳格式: {"items":[{"kind":"expense","date":"YYYY-MM-DD","account":"帳戶名","category":"類別名","counterparty":"店家/對象","itemName":"品項","amount":123,"currency":"TWD","note":"補充"}]}',
+    '- 回傳格式: {"items":[{"kind":"expense","date":"YYYY-MM-DD","account":"帳戶名","category":"類別名","counterparty":"店家/對象","itemName":"品項","amount":123,"currency":"TWD","note":"補充","explicit":["kind","date","counterparty","amount"]}]}',
     "規則:",
     "- kind 只能是 expense(支出)、income(收入)、transfer(轉帳),不確定就用 expense。",
     `- account 只能從這些帳戶選:${accountList}。`,
@@ -20,6 +20,7 @@ export function buildLedgerSystemPrompt(context: AiLedgerContext): string {
     "- currency 用三位代碼(TWD/USD/JPY…),若帳戶已定則填帳戶幣別。",
     "- transfer 需另給 transferAccount(帳戶名)與 transferAmount(轉出金額),transferAmount 也用數字。",
     "- 不確定的欄位填空字串,不要編造;counterparty/itemName 不知道就留空。",
+    "- explicit 是使用者「明確說出」的欄位名稱陣列(可為空陣列),只能含 kind、date、account、category、counterparty、itemName、amount、currency、note;沒列到的欄位一律視為 AI 推論。",
     "- 若描述含多筆交易,全部列在 items。",
   ].join("\n");
 }

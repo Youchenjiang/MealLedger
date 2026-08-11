@@ -133,6 +133,15 @@ describe("parseDraftSuggestions", () => {
     expect(suggestions[1].ok).toBe(false);
   });
 
+  test("carries the explicit field list through to the suggestion", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", itemName: "牛肉麵", amount: 480, currency: "TWD", explicit: ["date", "itemName", "amount"] }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.input.explicit).toEqual(["date", "itemName", "amount"]);
+  });
+
   test("ignores non-array payloads", () => {
     expect(parseDraftSuggestions({ foo: 1 }, accounts, categories, today)).toEqual([]);
   });
