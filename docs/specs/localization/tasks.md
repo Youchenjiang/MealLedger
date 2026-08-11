@@ -16,7 +16,7 @@ Move app-shell user-facing copy into locale dictionaries.
 Expected verification:
 
 - Navigation labels render from dictionary values.
-- Overview, Ledger, Capture, and Settings copy renders from dictionary values.
+- Navigation labels (概覽, 明細, 新增, 專區, 設定) render from dictionary values.
 - Missing `zh-TW` keys fall back to `en-US`.
 
 ## Task 3: Language Control
