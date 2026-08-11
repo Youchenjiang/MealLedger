@@ -73,6 +73,25 @@ describe("parseDraftSuggestions", () => {
     expect(suggestion.issues.join(" ")).toContain("不支援的類型");
   });
 
+  test("canonicalizes a case-insensitive transfer destination", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "transfer", account: "Bank", transferAccount: "daily wallet", amount: 1000 }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(true);
+    expect(suggestion.issues).toEqual([]);
+    expect(suggestion.draft?.transferAccount).toBe("Daily wallet");
+  });
+
+  test("rejects a transfer to the same account even with different casing", () => {
+    const [suggestion] = parseDraftSuggestions({
+      items: [{ kind: "transfer", account: "Bank", transferAccount: "BANK", amount: 1000 }],
+    }, accounts, categories, today);
+
+    expect(suggestion.ok).toBe(false);
+    expect(suggestion.issues.join(" ")).toContain("轉帳來源與目標帳戶相同");
+  });
+
   test("accepts a transfer that provides transferAmount without amount", () => {
     const [suggestion] = parseDraftSuggestions({
       items: [{ kind: "transfer", account: "Bank", transferAccount: "Daily wallet", transferAmount: 2000 }],

@@ -75,7 +75,7 @@ function matchCategory(value: unknown, categories: string[]): string {
   return categories.find((category) => category.toLocaleLowerCase() === normalized) ?? "";
 }
 
-function buildForm(input: AiSuggestionInput, account: { name: string; currency: string }, categories: string[], today: string): DraftForm {
+function buildForm(input: AiSuggestionInput, account: { name: string; currency: string }, accounts: AiLedgerAccounts, categories: string[], today: string): DraftForm {
   const kind = normalizeKind(input.kind) ?? "expense";
   const category = matchCategory(input.category, categories);
   const amount = parseAmount(input.amount);
@@ -119,7 +119,10 @@ function buildForm(input: AiSuggestionInput, account: { name: string; currency: 
   };
 
   if (kind === "transfer") {
-    form.transferAccount = asText(input.transferAccount);
+    // Resolve to the matched account name so the draft validator's exact
+    // name lookup accepts case-insensitive input from the model, and so the
+    // same-account check compares canonical names.
+    form.transferAccount = matchAccount(input.transferAccount, accounts)?.name ?? asText(input.transferAccount);
     const transferAmount = parseAmount(input.transferAmount);
     if (transferAmount) {
       form.transferMode = "same-currency";
@@ -141,7 +144,7 @@ export function buildPrefillForm(
   today: string,
 ): DraftForm {
   const account = matchAccount(input.account, accounts) ?? { name: "", currency: "TWD" };
-  const form = buildForm(input, account, categories, today);
+  const form = buildForm(input, account, accounts, categories, today);
   // The manual ledger form uses account selectors, so the destination must be
   // a matched account name; an unknown destination stays blank for the user
   // to pick manually.
@@ -197,7 +200,7 @@ export function parseDraftSuggestions(
       return { input, draft: null, ok: false, issues };
     }
 
-    const form = buildForm(input, account, categories, today);
+    const form = buildForm(input, account, accounts, categories, today);
     if (kind !== "transfer" && !form.category) {
       issues.push(`類別「${asText(input.category) || "(空白)"}」不存在。`);
     }
