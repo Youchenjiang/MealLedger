@@ -231,8 +231,8 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
                   {suggestion.draft ? `${suggestion.draft.date} · ${suggestion.draft.account}` : (asShortText(suggestion.input) || "無法辨識的項目")}
                   {suggestion.draft?.category ? ` · ${suggestion.draft.category}` : ""}
                 </span>
-                {suggestion.draft?.counterparty && suggestion.draft.counterparty !== "Merchant unavailable" ? (
-                  <span>對象:{suggestion.draft.counterparty}{suggestion.draft?.itemName && suggestion.draft.itemName !== "Item unavailable" ? ` · ${suggestion.draft.itemName}` : ""}</span>
+                {suggestion.draft && merchantLineText(suggestion.draft) ? (
+                  <span>{merchantLineText(suggestion.draft)}</span>
                 ) : null}
               </div>
               {suggestion.ok && suggestion.draft ? (
@@ -299,6 +299,16 @@ function localToday(): string {
 function asShortText(input: AiDraftSuggestion["input"]): string {
   const parts = [input.counterparty, input.itemName, input.amount].map((value) => typeof value === "string" ? value.trim() : value).filter(Boolean);
   return parts.join(" ");
+}
+
+// Renders the merchant/item line of a suggestion card. Counterparty and item
+// name are shown independently so an item name is never hidden behind a
+// missing counterparty (the parser fills a placeholder when a field is
+// absent, so those placeholders are suppressed here).
+function merchantLineText(draft: TransactionDraft): string {
+  const counterparty = draft.counterparty && draft.counterparty !== "Merchant unavailable" ? draft.counterparty : "";
+  const itemName = draft.itemName && draft.itemName !== "Item unavailable" ? draft.itemName : "";
+  return [counterparty && `對象:${counterparty}`, itemName && `品項:${itemName}`].filter(Boolean).join(" · ");
 }
 
 // Stable React key for a suggestion card: prefers resolved draft fields, and

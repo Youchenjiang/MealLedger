@@ -146,4 +146,21 @@ describe("AiLedgerPanel", () => {
 
     expect(onApplyToForm).toHaveBeenCalledTimes(1);
   });
+
+  test("shows the item name even when the model omits the counterparty", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", itemName: "牛肉麵", amount: 480, currency: "TWD" }] },
+    });
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 中午吃牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    expect(await screen.findByRole("button", { name: "確認寫入" })).toBeInTheDocument();
+    expect(screen.getByText(/品項:牛肉麵/u)).toBeInTheDocument();
+    expect(screen.queryByText(/Merchant unavailable/u)).not.toBeInTheDocument();
+  });
 });
