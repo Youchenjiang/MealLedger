@@ -9,6 +9,11 @@ export type AiParseEnv = {
   aiVisionModel: string;
   allowedOrigin: string;
   maxBodyBytes: number;
+  // Whether the proxy must reject requests without a valid user session.
+  // Production keeps this true so the shared provider key cannot be used by
+  // unauthenticated callers; local development can disable it with
+  // AI_REQUIRE_AUTH=false so the AI panel works without signing in.
+  requireAuth: boolean;
 };
 
 export type AiParseDeps = {
@@ -150,13 +155,15 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
   }
 
   const authHeader = request.headers.get("authorization");
-  if (!authHeader) {
-    return json({ error: "missing_authorization" }, 401, env.allowedOrigin);
-  }
+  if (env.requireAuth) {
+    if (!authHeader) {
+      return json({ error: "missing_authorization" }, 401, env.allowedOrigin);
+    }
 
-  const { data: userData, error: userError } = await getUser(authHeader.replace(/^Bearer\s+/i, ""));
-  if (userError || !userData?.user) {
-    return json({ error: "invalid_user" }, 401, env.allowedOrigin);
+    const { data: userData, error: userError } = await getUser(authHeader.replace(/^Bearer\s+/i, ""));
+    if (userError || !userData?.user) {
+      return json({ error: "invalid_user" }, 401, env.allowedOrigin);
+    }
   }
 
   const rawBody = await readBodyWithLimit(request, env.maxBodyBytes);

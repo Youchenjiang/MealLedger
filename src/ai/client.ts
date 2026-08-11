@@ -21,6 +21,14 @@ async function currentAccessToken(): Promise<string> {
   return data.session?.access_token ?? "";
 }
 
+// The Supabase API gateway requires the publishable (anon) key on
+// /functions/v1/* routes before a request reaches the function body.
+function publicApiKey(): string {
+  const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
+    ?? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
+  return key?.trim() ?? "";
+}
+
 const REQUEST_TIMEOUT_MS = 90_000;
 
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
@@ -35,14 +43,12 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit): Pr
 
 async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequest): Promise<unknown> {
   const token = await currentAccessToken();
-  if (!token) {
-    throw new Error("AI 補帳需要先登入:請到 Cloud & account 登入後,才能透過 AI 代理產生草稿。");
-  }
   const response = await fetchWithTimeout(edgeFunctionUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...(publicApiKey() ? { apikey: publicApiKey() } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
       system: request.system,
@@ -51,11 +57,14 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
     }),
   });
   if (!response.ok) {
-    // 401 means the proxy rejected the bearer token: the local session is
-    // stale or belongs to a different Supabase instance. Ask for a fresh
-    // login instead of surfacing a bare HTTP status.
+    // 401 means the proxy (or its gateway) rejected the request. Without a
+    // session it wants a sign-in; with a session the stored token was
+    // rejected (stale, or issued by a different Supabase instance). Give an
+    // actionable message instead of a bare HTTP status.
     if (response.status === 401) {
-      throw new Error("登入狀態已失效,請重新登入後再試。");
+      throw new Error(token
+        ? "登入狀態已失效,請重新登入後再試。"
+        : "AI 補帳需要先登入:請到 Cloud & account 登入後,才能透過 AI 代理產生草稿。");
     }
     throw new Error(`AI request failed (${response.status}).`);
   }

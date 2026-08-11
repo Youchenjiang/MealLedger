@@ -85,12 +85,13 @@ form whether or not it passed validation.
   the call is proxied server-side. Gemini accepts browser calls.
 - Verified live (2026-08): NVIDIA NIM (`integrate.api.nvidia.com`) also rejects
   browser CORS (`Failed to fetch` in Chromium). Browser direct calls therefore
-  require the edge-function proxy.
-- Production route is the `ai-parse` Supabase Edge Function proxy: the key
+  require the edge-function proxy.- Production route is the `ai-parse` Supabase Edge Function proxy: the key
   stays server-side, CORS is handled, the model is server-controlled, bodies
-  are capped at 4 MB, and the caller must present a valid auth token. The
-  client posts to `AI_EDGE_FUNCTION_URL` when set; direct calls remain only as
-  a local-development fallback.
+  are capped at 4 MB, and the caller must present a valid auth token by
+  default. The client posts to `AI_EDGE_FUNCTION_URL` when set; direct calls
+  remain only as a local-development fallback. Local development can disable
+  the auth gate with `AI_REQUIRE_AUTH=false` so signed-out (local-only)
+  workspaces can still use the AI panel; production keeps the gate on.
 - Receipt photos are downscaled to 1600 px on the client before sending to
   keep base64 payloads under the edge-function body limit.
 - Text parsing uses `AI_MODEL`; image requests use `AI_VISION_MODEL` when set.

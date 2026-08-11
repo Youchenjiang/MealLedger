@@ -37,8 +37,9 @@ describe("requestAiJson", () => {
   });
 
   describe("edge function proxy (production route)", () => {
-    test("calls the configured ai-parse edge function and parses the returned data", async () => {
+    test("calls the configured ai-parse edge function with the gateway key and session token", async () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
+      vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "test-public-key");
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,
         json: () => ({ data: { items: [] } }),
@@ -49,6 +50,9 @@ describe("requestAiJson", () => {
 
       expect(result.ok).toBe(true);
       expect(fetchMock.mock.calls[0][0]).toBe(EDGE_FUNCTION_URL);
+      const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+      expect(headers.apikey).toBe("test-public-key");
+      expect(headers.Authorization).toBe("Bearer edge-test-token");
       const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
       expect(body.system).toBe("sys");
       expect(body.user).toBe("usr");
@@ -101,17 +105,35 @@ describe("requestAiJson", () => {
       if (!result.ok) expect(result.message).toContain("登入狀態已失效");
     });
 
-    test("asks for a sign-in instead of calling the proxy when the session is missing", async () => {
+    test("asks for a sign-in when a signed-out request is rejected with 401", async () => {
       authMock.hasSession = false;
       vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
-      const fetchMock = vi.fn();
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401 });
       vi.stubGlobal("fetch", fetchMock);
 
       const result = await requestAiJson({ system: "s", user: "u" });
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.message).toContain("需要先登入");
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("lets a signed-out request through when the proxy allows anonymous use", async () => {
+      authMock.hasSession = false;
+      vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
+      vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "test-public-key");
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => ({ data: { items: [] } }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await requestAiJson({ system: "s", user: "u" });
+
+      expect(result.ok).toBe(true);
+      const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+      expect(headers.apikey).toBe("test-public-key");
+      expect(headers.Authorization).toBeUndefined();
     });
 
     test("surfaces edge function error payloads", async () => {

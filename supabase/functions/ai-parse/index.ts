@@ -6,6 +6,9 @@ const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 // Default to "*" so browsers work out of the box; auth is enforced via the
 // bearer token so an open origin does not weaken the endpoint.
 const ALLOWED_ORIGIN = Deno.env.get("APP_ORIGIN") ?? "*";
+// Require a valid user session by default; local development can opt out with
+// AI_REQUIRE_AUTH=false so signed-out users can still use the AI panel.
+const REQUIRE_AUTH = Deno.env.get("AI_REQUIRE_AUTH") !== "false";
 // Reject oversized bodies before proxying; base64 images inflate ~33%.
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
@@ -38,6 +41,7 @@ const deps: AiParseDeps = {
     aiVisionModel: AI_VISION_MODEL,
     allowedOrigin: ALLOWED_ORIGIN,
     maxBodyBytes: MAX_BODY_BYTES,
+    requireAuth: REQUIRE_AUTH,
   },
   getUser: (token) => supabase.auth.getUser(token),
   fetchImpl: fetch,
