@@ -80,6 +80,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Localization design (planned)](specs/localization/design.md)
 - [Localization tasks (planned)](specs/localization/tasks.md)
 - [Localization test plan (planned)](specs/localization/test-plan.md)
+- [Offline AI requirements (planned)](specs/offline-ai/requirements.md)
+- [Offline AI design (planned)](specs/offline-ai/design.md)
+- [Offline AI tasks (planned)](specs/offline-ai/tasks.md)
+- [Offline AI test plan (planned)](specs/offline-ai/test-plan.md)
 
 ## Suggested Review Order
 
