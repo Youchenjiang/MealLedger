@@ -13,7 +13,7 @@ MealLedger uses lightweight agile planning with risk-driven testing. The long-te
 
 - Build a Vite + React + TypeScript PWA.
 - Add Supabase Auth login.
-- Provide core navigation: Overview, Ledger, Meals, Photos, Imports.
+- Provide a fixed bottom navigation bar — 概覽, 明細, 新增 (center +), 專區, 設定 — and a placeholder 專區 tab (see [ADR 0006](../decisions/0006-unified-bottom-navigation.md)).
 - Verify with production build, browser smoke test, and clean console logs.
 
 ## Phase 2: Manual Ledger + Clean Export

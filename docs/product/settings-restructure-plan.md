@@ -1,6 +1,6 @@
 # 設定分區計畫（Phase 4）
 
-狀態：**計畫，尚未實作**（分支 `feature/settings-restructure`，預期獨立 PR）。本文件為[版面重構計畫](navigation-restructure-plan.md)中設定頁（Phase 4）的拆分細節。
+狀態：**計畫，尚未實作**（分支 `feature/settings-restructure`，預期獨立 PR）。本文件為版面重構（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）中設定頁（Phase 4）的拆分細節。
 
 ---
 
@@ -32,8 +32,8 @@
 - 「Cloud & account」併入設定的「登入」區，移除獨立 `/account` tab（Phase 1 已把 `/account` 移出底部導覽，本階段完成合併）。
 - **預設深色主題**，可在設定切換「深色 / 淺色 / 跟隨系統」。
 - **帳戶管理**留在設定的「相關設定」；概覽只做快速新增與檢視。
-- **刪除行為可設定**：預設作廢，可在設定改為真正刪除。
-- **可編輯帳戶的負餘額政策可設定**：設定「相關設定」提供選項；**預設不開啟**（維持「允許負餘額」模型，與 [docs/v1/accounting-rules.md](../v1/accounting-rules.md) 一致）；開啟後可編輯帳戶餘額不得為負（支出或餘額調整不得使餘額低於 0）。
+- **刪除行為可設定**：預設作廢，可在設定改為真正刪除（決策已寫入 [ADR 0007](../decisions/0007-ledger-record-delete-void-or-hard-delete.md)）。
+- **可編輯帳戶的負餘額政策可設定**：設定「相關設定」提供選項；**預設不開啟**（維持「允許負餘額」模型，與 [docs/v1/accounting-rules.md](../v1/accounting-rules.md) 一致）；開啟後可編輯帳戶餘額不得為負（支出或餘額調整不得使餘額低於 0）（決策已寫入 [ADR 0008](../decisions/0008-configurable-negative-balance-policy.md)）。
 
 ## 4. 驗證
 

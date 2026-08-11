@@ -1,6 +1,6 @@
 # 明細列緊湊化計畫（Phase 2）
 
-狀態：**計畫，尚未實作**（分支 `feature/ledger-row-compact`，預期獨立 PR）。本文件為[版面重構計畫](navigation-restructure-plan.md)中明細頁（Phase 2）的拆分細節。
+狀態：**計畫，尚未實作**（分支 `feature/ledger-row-compact`，預期獨立 PR）。本文件為版面重構（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）中明細頁（Phase 2）的拆分細節。
 
 ---
 
@@ -32,7 +32,7 @@
 ## 5. 已定案
 
 - 明細列固定一行，同一行三個圖示：修改、刪除、更多（⋯，展開復發控制與補齊資料）。
-- 刪除行為可設定：預設作廢，可在設定改為真正刪除。
+- 刪除行為可設定：預設作廢，可在設定改為真正刪除（決策已寫入 [ADR 0007](../decisions/0007-ledger-record-delete-void-or-hard-delete.md)）。
 
 ## 6. 驗證
 
