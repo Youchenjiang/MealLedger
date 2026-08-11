@@ -33,7 +33,7 @@ Use lowercase kebab-case for `<feature-name>`, such as:
 docs/specs/app-shell/
 docs/specs/manual-ledger/
 docs/specs/import-export/
-docs/specs/media-capture/
+docs/specs/capture-media/
 ```
 
 ## Requirements
@@ -129,6 +129,6 @@ The first recommended feature specs are:
 1. `docs/specs/app-shell/`
 2. `docs/specs/manual-ledger/`
 3. `docs/specs/import-export/`
-4. `docs/specs/media-capture/`
+4. `docs/specs/capture-media/`
 
 Start with app shell only if the workflow and documentation index are already settled.
