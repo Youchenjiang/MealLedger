@@ -27,7 +27,7 @@ a {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -521,28 +521,15 @@ a {
   }
 }
 
-.sidebar {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  height: 100vh;
-  padding: 24px 18px;
-  border-right: 1px solid #ddd6ca;
-  background: #ece6dc;
-}
-
-.sidebar-navigation {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.sidebar-settings-nav {
-  margin-top: auto;
+.bottom-nav {
+  position: fixed;
+  z-index: 40;
+  inset: auto 0 0 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  height: 68px;
+  border-top: 1px solid #ddd6ca;
+  background: #f6f1e7;
 }
 
 .brand {
@@ -589,24 +576,27 @@ a {
   line-height: 1.35;
 }
 
-.nav-list {
-  display: grid;
-  gap: 6px;
-}
-
 .nav-item {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 12px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 3px;
+  padding: 6px 4px 8px;
   border: 0;
-  border-radius: 8px;
   color: #433e37;
   background: transparent;
   cursor: pointer;
-  text-align: left;
+  font-size: 12px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.nav-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
 }
 
 .visually-hidden {
@@ -623,12 +613,15 @@ a {
 }
 
 .nav-badge {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  margin-left: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  margin-left: auto;
   padding: 0 5px;
   border-radius: 999px;
   color: #fff;
@@ -642,15 +635,41 @@ a {
 .nav-item:hover,
 .nav-item:focus-visible {
   color: #173f36;
-  background: #d8e5de;
   outline: none;
+}
+
+.nav-item.active .nav-icon {
+  color: #2f5d50;
+}
+
+.nav-create {
+  padding-top: 18px;
+}
+
+.nav-create .nav-icon {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  border-radius: 50%;
+  color: #fff;
+  background: #2f5d50;
+  box-shadow: 0 3px 8px rgba(47, 93, 80, 0.35);
+}
+
+.nav-create.active .nav-icon,
+.nav-create:hover .nav-icon,
+.nav-create:focus-visible .nav-icon {
+  background: #173f36;
 }
 
 .workspace {
   display: grid;
   align-content: start;
   gap: 20px;
-  padding: 28px;
+  padding: 28px 28px 96px;
 }
 
 .page-header {
@@ -2220,44 +2239,8 @@ button.action-card.unavailable {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    align-self: start;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    height: auto;
-    padding: 16px 20px;
-    border-right: 0;
-    border-bottom: 1px solid #ddd6ca;
-  }
-
-  .sidebar-navigation {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: center;
-    gap: 6px;
-  }
-
-  .sidebar-navigation > .nav-list,
-  .sidebar-navigation > .sidebar-settings-nav {
-    display: contents;
-  }
-
-  .sidebar-settings-nav {
-    margin-top: 0;
-  }
-
-  .nav-item {
-    justify-content: center;
-    min-height: 44px;
-    padding: 0 10px;
-  }
-
   .workspace {
-    padding: 20px;
+    padding: 20px 20px 92px;
   }
 
   .topbar,
@@ -2274,19 +2257,24 @@ button.action-card.unavailable {
 }
 
 @media (max-width: 760px) {
-  .sidebar {
-    display: block;
-    padding: 6px 8px;
+  .bottom-nav {
+    height: 60px;
   }
 
-  .sidebar-navigation {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
+  .nav-item {
+    font-size: 11px;
+    padding: 4px 2px 6px;
   }
 
-  .sidebar-navigation > .nav-list,
-  .sidebar-navigation > .sidebar-settings-nav {
-    display: contents;
+  .nav-create {
+    padding-top: 14px;
+  }
+
+  .nav-create .nav-icon {
+    top: -12px;
+    width: 42px;
+    height: 42px;
+    margin-left: -21px;
   }
 
   .draft-form,
@@ -2302,33 +2290,6 @@ button.action-card.unavailable {
     grid-template-columns: 1fr;
     max-height: calc(100dvh - 20px);
     padding: 16px;
-  }
-
-  .sidebar .brand {
-    display: none;
-  }
-
-  .nav-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
-  }
-
-  .nav-item {
-    display: grid;
-    min-height: 48px;
-    justify-items: center;
-    gap: 1px;
-    padding: 4px 4px;
-    font-size: 12px;
-    line-height: 1.1;
-    text-align: center;
-  }
-
-  .nav-badge {
-    position: absolute;
-    top: 2px;
-    right: 3px;
-    margin-left: 0;
   }
 
   .report-row {
@@ -2396,7 +2357,7 @@ button.action-card.unavailable {
 
   .workspace {
     gap: 8px;
-    padding-bottom: 12px;
+    padding-bottom: 76px;
   }
 
   .page-header,

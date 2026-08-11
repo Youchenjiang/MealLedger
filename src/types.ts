@@ -4,6 +4,7 @@ export type AppRoute =
   | "overview"
   | "ledger"
   | "capture"
+  | "zone"
   | "settings"
   | "account"
   | "not-found";

@@ -30,6 +30,11 @@ async function renderRemoteApp(authMock = createAuthMock()) {
   return { authMock, view: render(<App />) };
 }
 
+async function openAccountPage(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "設定" }));
+  await user.click(screen.getByRole("button", { name: "Manage cloud access" }));
+}
+
 describe("app auth boundary", () => {
   beforeEach(() => {
     vi.stubGlobal("scrollTo", vi.fn());
@@ -55,7 +60,7 @@ describe("app auth boundary", () => {
     const user = userEvent.setup();
     const { authMock } = await renderRemoteApp();
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     expect(screen.getByRole("heading", { name: "Optional cloud sync" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/account");
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
@@ -78,7 +83,7 @@ describe("app auth boundary", () => {
     const user = userEvent.setup();
     await renderRemoteApp();
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     await user.type(screen.getByLabelText("Email"), "user@example.com");
     await user.type(screen.getByLabelText("Password"), "secret");
     await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -108,7 +113,7 @@ describe("app auth boundary", () => {
     });
     await renderRemoteApp(authMock);
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     await user.type(screen.getByLabelText("Email"), "user@example.com");
     await user.type(screen.getByLabelText("Password"), "secret");
     await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -139,7 +144,7 @@ describe("app auth boundary", () => {
     });
     await renderRemoteApp(authMock);
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     act(() => authListener("PASSWORD_RECOVERY", { user: { id: "remote-user" } }));
 
     expect(screen.getByLabelText("New password")).toBeInTheDocument();
@@ -174,7 +179,7 @@ describe("app auth boundary", () => {
     const user = userEvent.setup();
     await renderRemoteApp();
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
 
     const passwordInput = screen.getByLabelText("Password");
     expect(passwordInput).toHaveAttribute("type", "password");
@@ -200,7 +205,7 @@ describe("app auth boundary", () => {
     });
     await renderRemoteApp(authMock);
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     act(() => authListener("PASSWORD_RECOVERY", { user: { id: "remote-user" } }));
 
     const newPasswordInput = screen.getByLabelText("New password");
@@ -222,7 +227,7 @@ describe("app auth boundary", () => {
     const { authMock } = await renderRemoteApp();
     authMock.signUp = vi.fn().mockResolvedValue({ data: { session: { user: { id: "new-user" } } }, error: null });
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     await user.click(screen.getByRole("radio", { name: "Create account" }));
 
     expect(screen.getByLabelText("Confirm password")).toBeInTheDocument();
@@ -239,7 +244,7 @@ describe("app auth boundary", () => {
     const { authMock } = await renderRemoteApp();
     authMock.signUp = vi.fn().mockResolvedValue({ data: null, error: new Error("User already registered") });
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     await user.click(screen.getByRole("radio", { name: "Create account" }));
     await user.type(screen.getByLabelText("Email"), "dup@example.com");
     await user.type(screen.getByLabelText("Password"), "secret");
@@ -256,7 +261,7 @@ describe("app auth boundary", () => {
     const user = userEvent.setup();
     const { authMock } = await renderRemoteApp();
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     await user.click(screen.getByRole("radio", { name: "Create account" }));
     await user.type(screen.getByLabelText("Email"), "new@example.com");
     await user.type(screen.getByLabelText("Password"), "secret");
@@ -272,7 +277,7 @@ describe("app auth boundary", () => {
     const { authMock } = await renderRemoteApp();
     authMock.resetPasswordForEmail = vi.fn().mockResolvedValue({ error: null });
 
-    await user.click(screen.getByRole("button", { name: "Cloud & account" }));
+    await openAccountPage(user);
     await user.click(screen.getByRole("button", { name: "Forgot password?" }));
 
     expect(screen.getByRole("button", { name: "Send reset link" })).toBeInTheDocument();

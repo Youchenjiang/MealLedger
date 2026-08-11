@@ -12,6 +12,7 @@ import {
   Home,
   ImagePlus,
   KeyRound,
+  LayoutGrid,
   LogIn,
   LogOut,
   Plus,
@@ -56,14 +57,13 @@ import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel } from "./ai/AiLedgerPanel";
 
 const navItems: NavItem[] = [
-  { route: "overview", label: "Overview", path: "/", icon: Home },
-  { route: "ledger", label: "Ledger", path: "/ledger", icon: Banknote },
-  { route: "capture", label: "Capture", path: "/capture", icon: Camera },
-  { route: "settings", label: "Workspace", path: "/settings", icon: Settings },
-  { route: "account", label: "Cloud & account", path: "/account", icon: UserRound },
+  { route: "overview", label: "概覽", path: "/", icon: Home },
+  { route: "ledger", label: "明細", path: "/ledger", icon: Banknote },
+  { route: "capture", label: "新增", path: "/capture", icon: Plus },
+  { route: "zone", label: "專區", path: "/zone", icon: LayoutGrid },
+  { route: "settings", label: "設定", path: "/settings", icon: Settings },
 ];
-const primaryNavItems = navItems.filter((item) => item.route !== "settings" && item.route !== "account");
-const utilityNavItems = navItems.filter((item) => item.route === "settings" || item.route === "account");
+const accountNavItem: NavItem = { route: "account", label: "Cloud & account", path: "/account", icon: UserRound };
 
 type RouteDefinition = {
   segments: string[];
@@ -86,6 +86,7 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["ledger"], route: "ledger" },
   { segments: ["ledger", "draft", ":draftId"], route: "ledger" },
   { segments: ["capture"], route: "capture" },
+  { segments: ["zone"], route: "zone" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
   { segments: ["account"], route: "account" },
@@ -525,39 +526,6 @@ function readStoredDrafts(): TransactionDraft[] {
   }
 }
 
-function PrimaryNav({ items, route, reviewCount, navigate, className = "nav-list" }: Readonly<{
-  items: NavItem[];
-  route: AppRoute;
-  reviewCount: number;
-  navigate: (item: NavItem) => void;
-  className?: string;
-}>) {
-  return (
-    <nav className={className}>
-      {items.map((item) => {
-        const Icon = item.icon;
-        return (
-          <button
-            className={`nav-item ${route === item.route ? "active" : ""}`}
-            key={item.route}
-            type="button"
-            aria-current={route === item.route ? "page" : undefined}
-            onClick={() => navigate(item)}
-          >
-            <Icon size={18} aria-hidden="true" />
-            <span>{item.label}</span>
-            {item.route === "ledger" && reviewCount > 0 ? (
-              <>
-                <span className="nav-badge" aria-hidden="true">{reviewCount}</span>
-                <span className="visually-hidden">, {reviewCount} item{reviewCount === 1 ? "" : "s"} to review</span>
-              </>
-            ) : null}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
 
 type StatusItem = { label: string; detail: string; tone: string; icon: LucideIcon; hideInShell?: boolean };
 type HandoffCounts = { accounts: number; records: number; drafts: number; meals: number; media: number };
@@ -810,19 +778,35 @@ function Brand({ caption, large = false }: Readonly<{ caption: string; large?: b
   );
 }
 
-function Sidebar({ route, reviewCount, navigate }: Readonly<{
+function BottomNav({ route, reviewCount, navigate }: Readonly<{
   route: AppRoute;
   reviewCount: number;
   navigate: (item: NavItem) => void;
 }>) {
   return (
-    <aside className="sidebar" aria-label="MealLedger navigation">
-      <Brand caption="Personal ledger with optional meal notes" />
-      <div className="sidebar-navigation">
-        <PrimaryNav items={primaryNavItems} route={route} reviewCount={reviewCount} navigate={navigate} />
-        <PrimaryNav items={utilityNavItems} className="sidebar-settings-nav" route={route} reviewCount={reviewCount} navigate={navigate} />
-      </div>
-    </aside>
+    <nav className="bottom-nav" aria-label="MealLedger navigation">
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            className={`nav-item ${route === item.route ? "active" : ""} ${item.route === "capture" ? "nav-create" : ""}`}
+            key={item.route}
+            type="button"
+            aria-current={route === item.route ? "page" : undefined}
+            onClick={() => navigate(item)}
+          >
+            <span className="nav-icon" aria-hidden="true"><Icon size={20} /></span>
+            <span>{item.label}</span>
+            {item.route === "ledger" && reviewCount > 0 ? (
+              <>
+                <span className="nav-badge" aria-hidden="true">{reviewCount}</span>
+                <span className="visually-hidden">, {reviewCount} item{reviewCount === 1 ? "" : "s"} to review</span>
+              </>
+            ) : null}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -1258,7 +1242,7 @@ function AuthenticatedApp() {
 
   return (
     <main className="app-shell">
-      <Sidebar
+      <BottomNav
         route={route}
         reviewCount={reviewCount}
         navigate={navigate}
@@ -1683,7 +1667,7 @@ function renderRoute({
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
           onReopenOnboarding={onReopenOnboarding}
-          onOpenAccount={() => navigate(navItemFor("account"))}
+          onOpenAccount={() => navigate(accountNavItem)}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
@@ -1703,6 +1687,8 @@ function renderRoute({
           }}
         />
       );
+    case "zone":
+      return <ZonePage />;
     case "account":
       return (
         <AccountPage
@@ -4361,6 +4347,18 @@ function SettingsPage({
   );
 }
 
+function ZonePage() {
+  return (
+    <section className="zone-page">
+      <div className="panel zone-placeholder">
+        <p className="eyebrow">Zone</p>
+        <h2>此區尚未開放</h2>
+        <p className="panel-copy">這個專區正在規劃中，之後會在這裡放上新功能。</p>
+      </div>
+    </section>
+  );
+}
+
 function PasswordInput({ id, value, autoComplete, visible, onValueChange, onToggleVisible }: Readonly<{
   id: string;
   value: string;
@@ -4867,6 +4865,8 @@ function routeTitle(route: AppRoute) {
       return "Ledger";
     case "capture":
       return "Capture";
+    case "zone":
+      return "Zone";
     case "settings":
       return "Settings";
     case "account":
