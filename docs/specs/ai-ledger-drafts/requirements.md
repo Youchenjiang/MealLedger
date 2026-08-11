@@ -34,9 +34,39 @@ official-record boundary.
 WHEN a suggestion is valid but the user does not want to confirm it yet
 THE SYSTEM SHALL let the user save it into the local draft review queue.
 
+WHEN the user applies a suggestion to the ledger form
+THE SYSTEM SHALL fill the manual ledger form with the fields the model
+identified (date, kind, amount, currency, counterparty, item name, note, and
+any matched account, category, or transfer account), leaving unknown accounts
+and categories blank for manual completion.
+
+WHEN the user applies a suggestion to the ledger form
+THE SYSTEM SHALL not create an official record or draft by itself; the record
+is written only when the user saves through the manual ledger form.
+
+WHEN the user applies a valid suggestion to the ledger form
+THE SYSTEM SHALL let the user review and adjust the prefilled fields before
+saving.
+
 WHEN AI credentials are not configured
 THE SYSTEM SHALL show a setup message and keep the entry usable for manual
 input.
+
+## Apply to Form Design Notes
+
+Every suggestion card offers an apply-to-form action alongside confirm and
+save-draft, so the user can complete an AI suggestion in the manual ledger
+form whether or not it passed validation.
+
+- Account, category, and transfer destination are filled only when they
+  match an existing account or category; the manual form's account selectors
+  otherwise stay blank so the user chooses explicitly.
+- Date is normalized to `YYYY-MM-DD`, amounts to a decimal string, and the
+  currency defaults from the matched account (TWD when unknown).
+- Applying switches the capture view to the manual ledger form and never
+  writes an official record or draft by itself; saving goes through the
+  manual ledger form boundary. The AI panel is left behind, so unconfirmed
+  suggestions from the current AI session are not carried over.
 
 ## Boundaries
 

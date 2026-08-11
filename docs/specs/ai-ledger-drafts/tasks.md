@@ -10,3 +10,9 @@
 - [x] Route production AI calls through the `ai-parse` Edge Function proxy.
 - [x] Strengthen the receipt prompt (line items, unit confusion, 總計).
 - [x] Downscale receipt photos before sending.
+- [x] Let the user apply any suggestion (valid or invalid) back to the manual
+      ledger form to complete missing fields manually.
+- [x] Resolve the transfer destination account for prefill so the form's
+      account selectors receive matched names.
+- [x] Cover the apply-to-form path at the parser, panel, and app-integration
+      levels.
