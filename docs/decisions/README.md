@@ -31,4 +31,5 @@ Use specs for feature behavior. Use ADRs for why the project chose one direction
 - [0010: Mode B defaults to AI field correction with an offline fallback](0010-mode-b-defaults-to-ai-correction.md)
 - [0011: Offline AI as an optional capability with independent per-feature paths](0011-offline-ai-optional-per-feature-paths.md)
 - [0012: AI capture entity policy is configurable per entity type](0012-ai-capture-entity-policy-configurable.md)
+- [0013: Direct audio-to-ledger parsing coexists with browser transcription](0013-direct-audio-parse-coexists-with-browser-asr.md)
 - [Template](template.md)
