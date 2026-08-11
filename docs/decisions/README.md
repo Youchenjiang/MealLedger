@@ -30,4 +30,5 @@ Use specs for feature behavior. Use ADRs for why the project chose one direction
 - [0009: Voice capture as the primary capture flow with two modes](0009-voice-capture-two-modes.md)
 - [0010: Mode B defaults to AI field correction with an offline fallback](0010-mode-b-defaults-to-ai-correction.md)
 - [0011: Offline AI as an optional capability with independent per-feature paths](0011-offline-ai-optional-per-feature-paths.md)
+- [0012: AI capture entity policy is configurable per entity type](0012-ai-capture-entity-policy-configurable.md)
 - [Template](template.md)
