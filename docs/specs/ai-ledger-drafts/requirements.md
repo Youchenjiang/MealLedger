@@ -95,10 +95,13 @@ form whether or not it passed validation.
 - Receipt photos are downscaled to 1600 px on the client before sending to
   keep base64 payloads under the edge-function body limit.
 - Text parsing uses `AI_MODEL`; image requests use `AI_VISION_MODEL` when set.
-  Verified with NVIDIA: `deepseek-ai/deepseek-v4-flash-0731` parses text
-  reliably; `meta/llama-3.2-11b-vision-instruct` splits a synthetic receipt into
-  line items summing to the 總計 (small-text OCR errors remain, so confirmation
-  matters). The 90b vision model times out on the free tier.
+  Verified with NVIDIA: `deepseek-ai/deepseek-v4-flash-0731` parsed text
+  reliably until 2026-08, when its endpoint began hanging without responding;
+  `meta/llama-3.1-8b-instruct` is the current verified text model (HTTP 200 in
+  ~1s through the local proxy). `meta/llama-3.2-11b-vision-instruct` splits a
+  synthetic receipt into line items summing to the 總計 (small-text OCR errors
+  remain, so confirmation matters). The 90b vision model times out on the free
+  tier.
 - Verified live with a real two-receipt photo: `meta/llama-3.2-11b-vision-
   instruct` is unreliable on dense small-text receipts (repetition loops and
   fabricated amounts), even upscaled 3x. Taiwan invoices come in two forms:
