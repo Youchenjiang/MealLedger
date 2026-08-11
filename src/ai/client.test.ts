@@ -3,7 +3,25 @@ import { requestAiJson } from "./client";
 
 const EDGE_FUNCTION_URL = "http://127.0.0.1:54321/functions/v1/ai-parse";
 
+// Controllable stand-in for the Supabase auth client so edge-proxy tests can
+// exercise both the signed-in and signed-out paths without a real session.
+const authMock = vi.hoisted(() => ({ hasSession: true }));
+
+vi.mock("../lib/supabase", () => ({
+  supabase: {
+    auth: {
+      getUser: async () => authMock.hasSession
+        ? { data: { user: { id: "user-1" } }, error: null }
+        : { data: { user: null }, error: new Error("session missing") },
+      getSession: async () => authMock.hasSession
+        ? { data: { session: { access_token: "edge-test-token" } }, error: null }
+        : { data: { session: null }, error: null },
+    },
+  },
+}));
+
 afterEach(() => {
+  authMock.hasSession = true;
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -73,14 +91,27 @@ describe("requestAiJson", () => {
       expect(fetchMock.mock.calls[0][0]).toBe(EDGE_FUNCTION_URL);
     });
 
-    test("surfaces edge function HTTP errors", async () => {
+    test("explains an edge function 401 as an expired login", async () => {
       vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
       const result = await requestAiJson({ system: "s", user: "u" });
 
       expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.message).toContain("401");
+      if (!result.ok) expect(result.message).toContain("登入狀態已失效");
+    });
+
+    test("asks for a sign-in instead of calling the proxy when the session is missing", async () => {
+      authMock.hasSession = false;
+      vi.stubEnv("AI_EDGE_FUNCTION_URL", EDGE_FUNCTION_URL);
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await requestAiJson({ system: "s", user: "u" });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.message).toContain("需要先登入");
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     test("surfaces edge function error payloads", async () => {

@@ -9,8 +9,14 @@ export type AiRequest = {
 
 export type AiResult = { ok: true; data: unknown } | { ok: false; message: string };
 
+// Returns a fresh access token for the edge-function proxy, or an empty
+// string when the user has no usable session. getUser validates the stored
+// session against the auth server and refreshes the access token when it has
+// expired, so the proxy never receives a stale bearer token.
 async function currentAccessToken(): Promise<string> {
   if (!supabase) return "";
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return "";
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? "";
 }
@@ -29,11 +35,14 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit): Pr
 
 async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequest): Promise<unknown> {
   const token = await currentAccessToken();
+  if (!token) {
+    throw new Error("AI 補帳需要先登入:請到 Cloud & account 登入後,才能透過 AI 代理產生草稿。");
+  }
   const response = await fetchWithTimeout(edgeFunctionUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       system: request.system,
@@ -42,6 +51,12 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
     }),
   });
   if (!response.ok) {
+    // 401 means the proxy rejected the bearer token: the local session is
+    // stale or belongs to a different Supabase instance. Ask for a fresh
+    // login instead of surfacing a bare HTTP status.
+    if (response.status === 401) {
+      throw new Error("登入狀態已失效,請重新登入後再試。");
+    }
     throw new Error(`AI request failed (${response.status}).`);
   }
   const payload = (await response.json()) as { data?: unknown; error?: string };
