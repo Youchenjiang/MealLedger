@@ -8,21 +8,27 @@ The shell reserves product space for future ledger features while avoiding fake 
 
 ## Navigation
 
-Primary navigation:
+Primary navigation is a fixed bottom bar used at every viewport width (see
+[ADR 0006](../../decisions/0006-unified-bottom-navigation.md)):
 
-- Overview
-- Ledger
-- Capture
-- Settings
+- 概覽 (Overview) — `/`
+- 明細 (Ledger) — `/ledger`
+- 新增 (Add) — `/capture`, rendered as the center raised circular "+" button
+- 專區 (Zone) — `/zone`, empty-state placeholder until its content is defined
+- 設定 (Settings) — `/settings`
 
-Mobile should use a bottom navigation or compact app rail. Desktop can use a sidebar. The same route names should work in both layouts.
+Desktop keeps the same bottom bar and caps the content area at a readable max
+width instead of switching to a sidebar. Mobile and desktop use the same
+layout with the same route names.
 
 Route paths:
 
 - `/` (Overview; legacy `/overview` redirects here)
-- `/ledger`
+- `/ledger` (draft review at `/ledger/draft/:draftId`)
 - `/capture`
-- `/settings`
+- `/zone`
+- `/settings` (localization preferences at `/settings/localization`)
+- `/account` — account verification; not in the primary navigation, reached from Settings
 
 Meals and Imports are later product areas. They remain covered by their own specs and should not appear as primary app-shell navigation until their first usable workflow exists.
 

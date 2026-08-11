@@ -14,7 +14,7 @@ Expected verification:
 
 Status: Complete
 
-Overview, Ledger, Capture, and Settings render from the shell. Unknown paths show a recovery page.
+概覽, 明細, 新增, 專區, and 設定 render from the shell; /account is reachable from Settings. Unknown paths show a recovery page.
 
 Expected verification:
 
@@ -24,7 +24,7 @@ Expected verification:
 
 Status: Complete
 
-Primary navigation adapts from a sidebar to a compact mobile navigation row.
+Primary navigation renders as a fixed bottom bar at every viewport width; desktop caps the content area at a readable max width.
 
 Expected verification:
 

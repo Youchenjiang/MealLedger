@@ -1,6 +1,6 @@
 # 口說新增計畫（Phase 3）
 
-狀態：**計畫，尚未實作**（分支 `feature/voice-capture`，預期獨立 PR）。本文件為[版面重構計畫](navigation-restructure-plan.md)中新增頁（Phase 3）的拆分細節。
+狀態：**計畫，尚未實作**（分支 `feature/voice-capture`，預期獨立 PR）。本文件為版面重構（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）中新增頁（Phase 3）的拆分細節。
 
 ---
 
