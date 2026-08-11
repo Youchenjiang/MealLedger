@@ -28,6 +28,7 @@ This sequence turns the current specs into a practical implementation order. It 
     hardcoded Traditional Chinese UI copy into a `zh-TW` dictionary, add an
     `en-US` fallback, and re-review the spec against the shipped
     hardcoded-Chinese baseline before starting.
+12. AI ledger drafts — Complete.
 
 All implementation tracks except the deferred invoice import spike and the
 planned localization work are merged into `main`; deferred V2 items are
@@ -274,6 +275,38 @@ Exit criteria:
 - Cloud sync stays blocked until the handoff is accepted.
 - Provider decision recorded; LINE Login and Magic Link deferred.
 - Unit, coverage, E2E, remote persistence, and build gates pass.
+
+## 12. AI Ledger Drafts
+
+Spec:
+
+- [AI ledger drafts](../specs/ai-ledger-drafts/requirements.md)
+
+Goal:
+
+- Let the user record transactions by typing, speaking, or photographing a
+  receipt, with AI turning the input into prefilled drafts the user confirms
+  before anything becomes an official record.
+
+Deliverables:
+
+- AI capture panel with text, speech, and receipt-photo input paths.
+- Provider-neutral AI client supporting the OpenAI and Gemini request shapes.
+- `ai-parse` Supabase Edge Function proxy with an auth gate and a 4 MB body
+  cap as the production route.
+- Draft-suggestion parsing with case-insensitive account/category matching,
+  transfer handling, and human-readable issues.
+- Confirm-to-record, save-to-review-queue, and apply-to-form flows.
+
+Exit criteria:
+
+- AI output stays draft-only until the user confirms it (ADR 0003).
+- Unknown accounts, unknown categories, and unparseable amounts produce
+  readable issues instead of records.
+- Production calls route through the edge-function proxy; direct provider
+  calls remain a local-development fallback only.
+- Receipt photos are downscaled before sending and keys stay server-side in
+  production.
 
 ## Deferred Until V2 Or Spike
 
