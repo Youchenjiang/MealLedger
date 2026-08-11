@@ -18,6 +18,12 @@ THE SYSTEM SHALL parse it into prefilled ledger drafts for confirmation.
 WHEN a user speaks a description (browser speech recognition is available)
 THE SYSTEM SHALL transcribe it into the same text-input path.
 
+WHEN a user chooses the direct audio path and speaks a description
+THE SYSTEM SHALL send the audio itself to the configured AI provider, which
+transcribes and field-parses it into the same prefilled draft suggestions, and
+keep the browser transcription path available as a fallback when the audio
+call fails (see [ADR 0013](../../decisions/0013-direct-audio-parse-coexists-with-browser-asr.md)).
+
 WHEN a user selects a receipt or invoice photo
 THE SYSTEM SHALL send the image to the configured AI provider and produce the
 same prefilled draft suggestions.

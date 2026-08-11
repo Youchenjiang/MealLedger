@@ -16,6 +16,7 @@ degrades gracefully when the offline model is missing:
 - **Mode B (逐步口說 / per-field normalization):** normalize each field's speech
   transcript into the field's required format offline.
 - **Receipt/invoice OCR:** extract line items from a photo offline.
+- **Direct audio parse (V2+):** the cloud direct-audio path ([ADR 0013](../../decisions/0013-direct-audio-parse-coexists-with-browser-asr.md)) gets its own offline audio-model path; until then, offline voice capture keeps using browser transcription.
 
 Each path is independent: running one offline must not depend on another, and
 none may block manual ledger entry (existing product rule: AI/OCR failure,
