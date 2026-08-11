@@ -12,9 +12,29 @@ Medium or high-risk product work should follow the [Spec-Driven Workflow](spec-d
    - `fix/<short-name>` for bug fixes
    - `docs/<short-name>` for documentation or process
    - `chore/<short-name>` for tooling and maintenance
-3. Keep each PR focused on one concern.
+3. Keep every commit atomic and make each PR one independently deliverable
+   increment (see [Commit and PR Granularity](#commit-and-pr-granularity)).
 4. Rebase on `main` if the branch becomes stale.
 5. Merge only after checks pass and review threads are resolved.
+
+## Commit and PR Granularity
+
+Granularity lives at two levels:
+
+- **Commit — the atomic unit.** One commit makes exactly one logical change
+  (one concern). Unrelated changes belong in separate commits; the local
+  hook's atomic-commit nudge suggests a split when staged files span
+  unrelated areas (see [commit-policy.mjs](../../scripts/commit-policy.mjs)).
+- **PR — the deliverable unit.** A PR is the smallest increment that can be
+  reviewed, merged, and reverted on its own: one vertical slice, feature,
+  fix, or coherent docs change. It contains one or more atomic commits that
+  together deliver that increment.
+
+Do not ship one PR per commit just because the commits are atomic. When
+several atomic commits belong to the same deliverable (for example three
+ADRs plus their index update), group them in one PR. Split a PR only when it
+is too large to review in one pass or when its parts can ship independently.
+A one-commit PR is fine when that commit is itself a complete deliverable.
 
 ## Frontend Stack
 
