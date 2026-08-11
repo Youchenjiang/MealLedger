@@ -16,7 +16,7 @@ This spec covers:
 
 This spec does not implement confirmed ledger CRUD, account/category CRUD, balance calculation, import parsing, media upload, AI/OCR, or Supabase schema. Those features get separate specs.
 
-This spec does not implement localization. It must avoid layouts that break with longer Traditional Chinese labels, while the localization spec defines language selection, copy dictionaries, and formatting.
+This spec does not implement localization. It must avoid layouts that break with longer Traditional Chinese labels, while the [localization spec](../localization/requirements.md) defines language selection, copy dictionaries, and formatting.
 
 ## Requirements
 

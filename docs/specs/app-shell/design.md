@@ -94,7 +94,7 @@ Icon buttons need accessible labels or tooltips.
 
 Text must fit on mobile and desktop without overlap.
 
-The shell may keep inline English copy until the localization spec is implemented. Layout and component sizing should still tolerate longer Traditional Chinese labels.
+The shell may keep inline English copy until the [localization spec](../localization/requirements.md) is implemented. Layout and component sizing should still tolerate longer Traditional Chinese labels.
 
 ## Boundaries
 
