@@ -56,6 +56,38 @@ describe("AiLedgerPanel", () => {
     expect(onSaveDraft).toHaveBeenCalledTimes(1);
   });
 
+  test("uses a guidance heading when every suggestion is invalid", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ account: "消失的帳戶", amount: 100 }] },
+    });
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "測試 100");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    expect(await screen.findByText(/項目有問題:可用「填入表單」補齊欄位/u)).toBeInTheDocument();
+    expect(screen.queryByText("確認後寫入正式記錄")).not.toBeInTheDocument();
+  });
+
+  test("does not mislabel an unsupported kind as expense", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "refund", account: "Daily wallet", category: "午餐", amount: 100 }] },
+    });
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "退款 100");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    expect(await screen.findByText(/未知類型 · 無法辨識/u)).toBeInTheDocument();
+    expect(screen.queryByText(/支出 · 無法辨識/u)).not.toBeInTheDocument();
+  });
+
   test("shows issues instead of confirm buttons for invalid suggestions", async () => {
     vi.mocked(requestAiJson).mockResolvedValue({
       ok: true,

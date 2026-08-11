@@ -53,6 +53,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const configured = isAiConfigured();
+  const hasValidSuggestion = suggestions.some((item) => item.ok);
 
   // Stop any in-flight speech session when the panel unmounts so the
   // recognition instance and its callbacks do not outlive the component.
@@ -216,7 +217,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
           <div className="draft-list-heading">
             <div>
               <p className="eyebrow">AI 補帳</p>
-              <h3>確認後寫入{suggestions.some((item) => item.ok) ? "正式記錄" : ""}</h3>
+              <h3>{hasValidSuggestion ? "確認後寫入正式記錄" : "項目有問題:可用「填入表單」補齊欄位"}</h3>
             </div>
             <span>{suggestions.length} 筆</span>
           </div>
@@ -224,7 +225,7 @@ export function AiLedgerPanel({ accounts, categories, onSaveRecord, onSaveDraft,
             <article className="draft-card" key={suggestionKey(suggestion)}>
               <div>
                 <strong>
-                  {kindLabel[suggestion.input.kind as string] ?? "支出"} · {suggestion.draft ? `${suggestion.draft.currency} ${suggestion.draft.amount}` : "無法辨識"}
+                  {kindLabel[suggestion.input.kind as string] ?? "未知類型"} · {suggestion.draft ? `${suggestion.draft.currency} ${suggestion.draft.amount}` : "無法辨識"}
                 </strong>
                 <span>
                   {suggestion.draft ? `${suggestion.draft.date} · ${suggestion.draft.account}` : (asShortText(suggestion.input) || "無法辨識的項目")}
