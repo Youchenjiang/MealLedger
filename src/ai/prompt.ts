@@ -34,6 +34,9 @@ export function buildLedgerSystemPrompt(context: AiLedgerContext): string {
     "- currency 用三位代碼(TWD/USD/JPY…),若帳戶已定則填帳戶幣別。",
     "- transfer 需另給 transferAccount(帳戶名)與 transferAmount(轉出金額),transferAmount 也用數字。",
     "- 不確定的欄位填空字串,不要編造;counterparty/itemName 不知道就留空。",
+    "- 除非使用者明確說出金額,否則 amount 留空,不要猜數字;「7/25」「25號」是日期,不是金額。",
+    "- 「中午」「下午」「晚上」是時間,不是類別、店家或品項;別填進 category/counterparty/itemName。",
+    "- counterparty 是店家或同行的人(如「同事」「麵店」),itemName 是買的物品(如「便當」「牛肉麵」);使用者只說其一時,另一個留空。",
     "- explicit 是使用者「明確說出」的欄位名稱陣列(可為空陣列),只能含 kind、date、account、category、counterparty、itemName、amount、currency、note;沒列到的欄位一律視為 AI 推論。",
     "- 若描述含多筆交易,全部列在 items。",
   ].join("\n");

@@ -88,6 +88,23 @@ describe("AiLedgerPanel", () => {
     expect(screen.queryByText(/支出 · 無法辨識/u)).not.toBeInTheDocument();
   });
 
+  test("shows what the model recognized even when the draft is rejected", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", counterparty: "同事", itemName: "便當", amount: 480 }] },
+    });
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 中午和同事吃便當 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    expect(await screen.findByText(/7\/25 · 同事 · 便當 · 480/u)).toBeInTheDocument();
+    expect(screen.getByText(/欄位不完整/u)).toBeInTheDocument();
+    expect(screen.getByText(/帳戶.*不存在/u)).toBeInTheDocument();
+  });
+
   test("shows issues instead of confirm buttons for invalid suggestions", async () => {
     vi.mocked(requestAiJson).mockResolvedValue({
       ok: true,

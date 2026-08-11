@@ -312,6 +312,8 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
                         {" "}
                         <InferredSpan inferred={inferred("amount")}>{suggestion.draft.amount}</InferredSpan>
                       </>
+                    ) : kindLabel[suggestion.input.kind as string] ? (
+                      " · 欄位不完整"
                     ) : (
                       " · 無法辨識"
                     )}
@@ -325,7 +327,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
                         {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
                       </>
                     ) : (
-                      asShortText(suggestion.input) || "無法辨識的項目"
+                      partialLine(suggestion.input) || "無法辨識的項目"
                     )}
                     {suggestion.draft?.category ? (
                       <>
@@ -399,9 +401,22 @@ function localToday(): string {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 }
 
-function asShortText(input: AiDraftSuggestion["input"]): string {
-  const parts = [input.counterparty, input.itemName, input.amount].map((value) => typeof value === "string" ? value.trim() : value).filter(Boolean);
-  return parts.join(" ");
+// Shows what the model did recognize on a card whose draft was rejected
+// (missing account/category/amount), so a failed item is not reduced to a
+// cryptic snippet. Inferred marking still applies from the explicit list.
+function partialLine(input: AiSuggestionInput): React.ReactNode {
+  const parts: Array<{ text: string; field: string }> = [];
+  if (typeof input.date === "string" && input.date.trim()) parts.push({ text: input.date.trim(), field: "date" });
+  if (typeof input.counterparty === "string" && input.counterparty.trim()) parts.push({ text: input.counterparty.trim(), field: "counterparty" });
+  if (typeof input.itemName === "string" && input.itemName.trim()) parts.push({ text: input.itemName.trim(), field: "itemName" });
+  if (input.amount !== undefined && input.amount !== null && String(input.amount).trim()) parts.push({ text: String(input.amount), field: "amount" });
+  if (parts.length === 0) return null;
+  return parts.map((part, index) => (
+    <Fragment key={part.field}>
+      {index > 0 ? " · " : null}
+      <InferredSpan inferred={isInferred(input, part.field)}>{part.text}</InferredSpan>
+    </Fragment>
+  ));
 }
 
 // Fields the model reports the user explicitly mentioned. An absent or

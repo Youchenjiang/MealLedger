@@ -61,4 +61,12 @@ describe("buildLedgerSystemPrompt", () => {
     expect(prompt).toContain("現有帳戶:現金");
     expect(prompt).toContain("現有類別:飲食、交通");
   });
+
+  test("tells the model not to invent amounts and to keep times out of entity fields", () => {
+    const prompt = buildLedgerSystemPrompt(context);
+    expect(prompt).toContain("不要猜數字");
+    expect(prompt).toContain("「7/25」「25號」是日期,不是金額");
+    expect(prompt).toContain("「中午」「下午」「晚上」是時間");
+    expect(prompt).toContain("counterparty 是店家或同行的人");
+  });
 });
