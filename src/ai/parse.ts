@@ -243,6 +243,48 @@ function syntheticAccountsFor(newEntities: NewEntityFlags): AiLedgerAccounts {
   return syntheticAccounts;
 }
 
+// Resolves the account, category, and (for transfers) destination the model
+// mentioned against the existing lists, carrying not-yet-existing names as
+// new-entity flags per the policy (ADR 0012).
+function resolveEntitiesFor(
+  input: AiSuggestionInput,
+  accounts: AiLedgerAccounts,
+  categories: string[],
+  policy: AiEntityPolicy,
+  kind: AiDraftKind | null,
+): { issues: string[]; newEntities: NewEntityFlags; account: { name: string; currency: string } | null; category: string } {
+  const issues: string[] = [];
+  const newEntities: NewEntityFlags = {};
+
+  const resolvedAccount = resolveAccount(input.account, accounts, policy);
+  if (resolvedAccount.issue) {
+    issues.push(resolvedAccount.issue);
+  }
+  if (resolvedAccount.newAccount) {
+    newEntities.newAccount = resolvedAccount.newAccount;
+  }
+
+  const resolvedCategory = resolveCategory(input.category, categories, policy, kind);
+  if (resolvedCategory.issue) {
+    issues.push(resolvedCategory.issue);
+  }
+  if (resolvedCategory.newCategory) {
+    newEntities.newCategory = resolvedCategory.newCategory;
+  }
+
+  if (kind === "transfer") {
+    const resolvedTransfer = resolveTransferDestination(input.transferAccount, accounts, policy);
+    if (resolvedTransfer.issue) {
+      issues.push(resolvedTransfer.issue);
+    }
+    if (resolvedTransfer.newTransferAccount) {
+      newEntities.newTransferAccount = resolvedTransfer.newTransferAccount;
+    }
+  }
+
+  return { issues, newEntities, account: resolvedAccount.account, category: resolvedCategory.category };
+}
+
 export function parseDraftSuggestions(
   payload: unknown,
   accounts: AiLedgerAccounts,
@@ -262,28 +304,14 @@ export function parseDraftSuggestions(
   return items.map((item): AiDraftSuggestion => {
     const input = (item && typeof item === "object" ? item : {}) as AiSuggestionInput;
     const issues: string[] = [];
-    const newEntities: NewEntityFlags = {};
 
     const kind = normalizeKind(input.kind);
     if (!kind) {
       issues.push(`不支援的類型「${asText(input.kind) || "(空白)"}」。`);
     }
 
-    const resolvedAccount = resolveAccount(input.account, accounts, policy);
-    if (resolvedAccount.issue) {
-      issues.push(resolvedAccount.issue);
-    }
-    if (resolvedAccount.newAccount) {
-      newEntities.newAccount = resolvedAccount.newAccount;
-    }
-
-    const resolvedCategory = resolveCategory(input.category, categories, policy, kind);
-    if (resolvedCategory.issue) {
-      issues.push(resolvedCategory.issue);
-    }
-    if (resolvedCategory.newCategory) {
-      newEntities.newCategory = resolvedCategory.newCategory;
-    }
+    const { issues: entityIssues, newEntities, account, category } = resolveEntitiesFor(input, accounts, categories, policy, kind);
+    issues.push(...entityIssues);
 
     const amount = parseAmount(input.amount);
     const transferAmount = parseAmount(input.transferAmount);
@@ -294,21 +322,11 @@ export function parseDraftSuggestions(
       issues.push("金額無法辨識。");
     }
 
-    if (kind === "transfer") {
-      const resolvedTransfer = resolveTransferDestination(input.transferAccount, accounts, policy);
-      if (resolvedTransfer.issue) {
-        issues.push(resolvedTransfer.issue);
-      }
-      if (resolvedTransfer.newTransferAccount) {
-        newEntities.newTransferAccount = resolvedTransfer.newTransferAccount;
-      }
-    }
-
-    if (!kind || !resolvedAccount.account || !effectiveAmount) {
+    if (!kind || !account || !effectiveAmount) {
       return { input, draft: null, ok: false, issues, ...newEntities };
     }
 
-    const form = buildForm(input, resolvedAccount.account, accounts, today, resolvedCategory.category);
+    const form = buildForm(input, account, accounts, today, category);
     // buildForm already canonicalizes a matched destination (and keeps the raw
     // name when the policy allows a new one); only the same-account check is
     // left here.
