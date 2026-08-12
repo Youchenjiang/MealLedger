@@ -10,12 +10,12 @@ const authMock = vi.hoisted(() => ({ hasSession: true }));
 vi.mock("../lib/supabase", () => ({
   supabase: {
     auth: {
-      getUser: async () => authMock.hasSession
-        ? { data: { user: { id: "user-1" } }, error: null }
-        : { data: { user: null }, error: new Error("session missing") },
-      getSession: async () => authMock.hasSession
-        ? { data: { session: { access_token: "edge-test-token" } }, error: null }
-        : { data: { session: null }, error: null },
+      getUser: () => (authMock.hasSession
+        ? Promise.resolve({ data: { user: { id: "user-1" } }, error: null })
+        : Promise.resolve({ data: { user: null }, error: new Error("session missing") })),
+      getSession: () => (authMock.hasSession
+        ? Promise.resolve({ data: { session: { access_token: "edge-test-token" } }, error: null })
+        : Promise.resolve({ data: { session: null }, error: null })),
     },
   },
 }));

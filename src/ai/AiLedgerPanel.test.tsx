@@ -275,7 +275,7 @@ describe("AiLedgerPanel", () => {
     const card = confirm.closest("article");
     expect(card).not.toBeNull();
 
-    const marked = Array.from(card!.querySelectorAll(".inferred-field"));
+    const marked = Array.from(card ? card.querySelectorAll(".inferred-field") : []);
     // kind, currency, the derived year, account, and category were inferred.
     expect(marked.some((element) => element.textContent === "支出")).toBe(true);
     expect(marked.some((element) => element.textContent === "TWD")).toBe(true);

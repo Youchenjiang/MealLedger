@@ -65,7 +65,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
 
   const configured = isAiConfigured();
   const hasValidSuggestion = suggestions.some((item) => item.ok);
-  const anyInferred = suggestions.some((suggestion) => suggestion.draft && hasInferredField(suggestion.input, suggestion.draft));
+  const anyInferred = suggestions.some((suggestion) => suggestion.draft && hasInferredField(suggestion.input));
 
   // Stop any in-flight speech session when the panel unmounts so the
   // recognition instance and its callbacks do not outlive the component.
@@ -164,17 +164,6 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     );
   };
 
-  const confirmSuggestion = (suggestion: AiDraftSuggestion) => {
-    if (!suggestion.draft) return;
-    setError("");
-    setMessage("");
-    if (needsNewEntityAsk(suggestion)) {
-      setPendingNewEntities(suggestion);
-      return;
-    }
-    resolveAndPersist(suggestion);
-  };
-
   // Creates any new entities the policy allows (auto, or the approved ask
   // flow), then writes the official record. Creation never happens as a side
   // effect of the AI call itself; only of the user's confirmed write.
@@ -198,6 +187,17 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     }
     setSuggestions((current) => current.filter((item) => item !== suggestion));
     setMessage("已確認並寫入正式記錄。");
+  };
+
+  const confirmSuggestion = (suggestion: AiDraftSuggestion) => {
+    if (!suggestion.draft) return;
+    setError("");
+    setMessage("");
+    if (needsNewEntityAsk(suggestion)) {
+      setPendingNewEntities(suggestion);
+      return;
+    }
+    resolveAndPersist(suggestion);
   };
 
   const approveNewEntities = () => {
@@ -446,17 +446,17 @@ function isDerivedYear(inputDate: unknown): boolean {
 }
 
 // Whether the suggestion card shows any inferred marking (used for the hint).
-function hasInferredField(input: AiSuggestionInput, draft: TransactionDraft): boolean {
+function hasInferredField(input: AiSuggestionInput): boolean {
   if (isDerivedYear(input.date)) return true;
   const explicit = explicitFieldNames(input);
   if (explicit.size === 0) return false;
   return ["kind", "date", "account", "category", "counterparty", "itemName", "amount", "currency"].some((field) => !explicit.has(field));
 }
 
-function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; children: React.ReactNode }>): React.ReactElement {
+function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; children: React.ReactNode }>): React.ReactNode {
   return inferred
     ? <span className="inferred-field" title="AI 推論的欄位,請確認">{children}</span>
-    : <Fragment>{children}</Fragment>;
+    : children;
 }
 
 // Marks an account/category the user mentioned that does not exist yet; it is
