@@ -2590,3 +2590,131 @@ button.action-card.unavailable {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* Mode B step-by-step capture (voice-capture branch). */
+
+.ai-mode-switch {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border: 1px solid #ebe4d8;
+  border-radius: 8px;
+  background: #f5f2ec;
+}
+
+.ai-mode-tab {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  color: #75582e;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ai-mode-tab.active {
+  color: #242321;
+  background: #fffdf8;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.mode-b-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.mode-b-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mode-b-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px dashed #d8d0c0;
+  border-radius: 8px;
+  background: #faf7f0;
+}
+
+.mode-b-field.current {
+  border: 1px solid #8db9a4;
+  border-left: 4px solid #4c8f77;
+  background: #f4faf6;
+}
+
+.mode-b-field.filled {
+  border-style: solid;
+  border-color: #e2dbc9;
+  background: #fffdf8;
+}
+
+.mode-b-field-label {
+  color: #75582e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode-b-field-value {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.mode-b-field-placeholder {
+  color: #a89c88;
+  font-size: 13px;
+}
+
+.mode-b-prompt {
+  margin: 0;
+  font-weight: 600;
+}
+
+.mode-b-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d8d0c0;
+  border-radius: 8px;
+  background: #fffdf8;
+  line-height: 1.5;
+}
+
+.mode-b-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.mode-b-summary h3 {
+  margin: 0;
+}
+
+.mode-b-summary-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.mode-b-summary-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0ead9;
+}
+
+.mode-b-summary-list dt {
+  color: #75582e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode-b-summary-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
