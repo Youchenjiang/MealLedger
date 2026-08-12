@@ -5,6 +5,7 @@ import {
   buildModeBDraft,
   modeBStepsFor,
   parseFieldCorrection,
+  parseSpokenDate,
   type ModeBField,
 } from "./modeB";
 
@@ -69,6 +70,38 @@ describe("per-field correction prompt", () => {
   });
 });
 
+describe("parseSpokenDate", () => {
+  test("keeps a canonical ISO date padded", () => {
+    expect(parseSpokenDate("2026-07-05", today)).toBe("2026-07-05");
+    expect(parseSpokenDate("2026/7/5", today)).toBe("2026-07-05");
+  });
+
+  test("adds the current year to short slash dates", () => {
+    expect(parseSpokenDate("7/25", today)).toBe("2026-07-25");
+    expect(parseSpokenDate("7-5", today)).toBe("2026-07-05");
+  });
+
+  test("resolves Chinese-numeral dates", () => {
+    expect(parseSpokenDate("七月二十五", today)).toBe("2026-07-25");
+    expect(parseSpokenDate("7月25日", today)).toBe("2026-07-25");
+    expect(parseSpokenDate("十二月三", today)).toBe("2026-12-03");
+  });
+
+  test("resolves relative dates", () => {
+    expect(parseSpokenDate("今天", today)).toBe("2026-07-25");
+    expect(parseSpokenDate("昨天", today)).toBe("2026-07-24");
+    expect(parseSpokenDate("前天", today)).toBe("2026-07-23");
+    expect(parseSpokenDate("明天", today)).toBe("2026-07-26");
+  });
+
+  test("returns null for unresolvable input", () => {
+    expect(parseSpokenDate("", today)).toBeNull();
+    expect(parseSpokenDate("   ", today)).toBeNull();
+    expect(parseSpokenDate("下週二", today)).toBeNull();
+    expect(parseSpokenDate("隨便", today)).toBeNull();
+  });
+});
+
 describe("parseFieldCorrection", () => {
   test("extracts and trims a string value", () => {
     expect(parseFieldCorrection({ value: "  250  " })).toBe("250");
@@ -99,6 +132,24 @@ describe("buildModeBDraft", () => {
     const result = buildModeBDraft({ ...fullValues, amount: "" }, accounts, categories, today, DEFAULT_AI_ENTITY_POLICY);
     expect(result.draft).toBeNull();
     expect(result.issues).toContain("金額為空白。");
+  });
+
+  test("parses a typed spoken date into YYYY-MM-DD", () => {
+    const result = buildModeBDraft({ ...fullValues, date: "七月二十五" }, accounts, categories, today, DEFAULT_AI_ENTITY_POLICY);
+    expect(result.issues).toEqual([]);
+    expect(result.draft?.date).toBe("2026-07-25");
+  });
+
+  test("adds the current year to a typed short date", () => {
+    const result = buildModeBDraft({ ...fullValues, date: "7/25" }, accounts, categories, today, DEFAULT_AI_ENTITY_POLICY);
+    expect(result.issues).toEqual([]);
+    expect(result.draft?.date).toBe("2026-07-25");
+  });
+
+  test("rejects an unresolvable typed date instead of writing it raw", () => {
+    const result = buildModeBDraft({ ...fullValues, date: "下週二" }, accounts, categories, today, DEFAULT_AI_ENTITY_POLICY);
+    expect(result.draft).toBeNull();
+    expect(result.issues.some((issue) => issue.includes("日期") && issue.includes("下週二"))).toBe(true);
   });
 
   test("rejects an unknown account under the existing-only policy", () => {

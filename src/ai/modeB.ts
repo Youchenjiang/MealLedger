@@ -148,6 +148,66 @@ function matchCategoryName(value: string, categories: string[]): string {
   return categories.find((category) => category.toLocaleLowerCase() === normalized) ?? "";
 }
 
+// Parses a locally typed or (offline) spoken date into YYYY-MM-DD, covering
+// the formats the mode B date prompt suggests plus the canonical form:
+//   "2026-07-25" / "2026/7/5"  → kept as-is (padded)
+//   "7/25", "7-25"            → this year
+//   "七月二十五", "7月25日"      → this year, Chinese numerals resolved
+//   "今天/昨天/前天/明天"        → relative to today
+// Returns null when the value cannot be resolved, so the caller rejects the
+// draft instead of writing a non-ISO date into the official record.
+export function parseSpokenDate(value: string, today: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/[./]/g, "-");
+  const full = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(normalized);
+  if (full) {
+    return `${full[1]}-${full[2].padStart(2, "0")}-${full[3].padStart(2, "0")}`;
+  }
+
+  const short = /^(\d{1,2})-(\d{1,2})$/.exec(normalized);
+  if (short) {
+    return `${today.slice(0, 4)}-${short[1].padStart(2, "0")}-${short[2].padStart(2, "0")}`;
+  }
+
+  // Chinese numerals: 七月二十五 / 七月25日 / 7月25日.
+  const chinese = /^(\d{1,2}|[一二三四五六七八九十]{1,2})月(\d{1,2}|[一二三四五六七八九十]{1,3})日?$/.exec(raw);
+  if (chinese) {
+    const month = chineseNumeral(chinese[1]);
+    const day = chineseNumeral(chinese[2]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${today.slice(0, 4)}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+
+  const relative: Record<string, number> = { 今天: 0, 昨天: -1, 前天: -2, 明天: 1 };
+  if (raw in relative) {
+    return shiftDate(today, relative[raw]);
+  }
+
+  return null;
+}
+
+function chineseNumeral(text: string): number {
+  if (/^\d+$/.test(text)) return Number.parseInt(text, 10);
+  const digits: Record<string, number> = { 零: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if (text === "十") return 10;
+  const tens = /^([一二两三四五六七八九])?十([一二三四五六七八九])?$/.exec(text);
+  if (tens) {
+    return (tens[1] ? digits[tens[1]] : 1) * 10 + (tens[2] ? digits[tens[2]] : 0);
+  }
+  return digits[text] ?? 0;
+}
+
+// Shifts a local YYYY-MM-DD by a signed number of days without the UTC
+// off-by-one that a bare toISOString would introduce.
+function shiftDate(today: string, days: number): string {
+  const date = new Date(`${today}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
 // Assembles the confirmed mode B field values into a validated draft. The
 // account/category resolution follows the entity policy (ADR 0012): a
 // not-yet-existing name is carried as a new-entity flag under ask/auto and
@@ -209,9 +269,12 @@ export function buildModeBDraft(
   if (!amount) {
     issues.push("金額為空白。");
   }
-  const date = values.date?.trim() ?? "";
-  if (!date) {
+  const rawDate = values.date?.trim() ?? "";
+  const date = parseSpokenDate(rawDate, today) ?? "";
+  if (!rawDate) {
     issues.push("日期為空白。");
+  } else if (!date) {
+    issues.push(`日期「${rawDate}」無法辨識,請用 YYYY-MM-DD、7/25、七月二十五或今天/昨天等說法。`);
   }
 
   if (issues.length > 0) {
