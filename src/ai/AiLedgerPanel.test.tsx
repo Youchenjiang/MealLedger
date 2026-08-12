@@ -16,6 +16,16 @@ beforeEach(() => {
 });
 
 describe("AiLedgerPanel", () => {
+  test("switches to the step-by-step mode B panel", async () => {
+    const user = userEvent.setup();
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.click(screen.getByRole("tab", { name: "逐步口說" }));
+
+    expect(screen.getByText(/欄位會一個一個亮起/u)).toBeInTheDocument();
+    expect(screen.getByLabelText("日期")).toBeInTheDocument();
+  });
+
   test("turns typed text into a confirmable draft and saves it", async () => {
     vi.mocked(requestAiJson).mockResolvedValue({
       ok: true,

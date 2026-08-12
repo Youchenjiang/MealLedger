@@ -5,27 +5,10 @@ import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
+import { ModeBPanel } from "./ModeBPanel";
 import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
-import { parseDraftSuggestions, type AiDraftSuggestion, type AiSuggestionInput } from "./parse";
-
-type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  onresult: ((event: { results: ReadonlyArray<ReadonlyArray<{ transcript: string }>> }) => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-function speechRecognition(): SpeechRecognitionCtor | null {
-  const globalWindow = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
-  return globalWindow.SpeechRecognition ?? globalWindow.webkitSpeechRecognition ?? null;
-}
+import { parseDraftSuggestions, type AiDraftSuggestion, type AiSuggestionInput, type NewEntityCarrier } from "./parse";
+import { speechRecognition, type SpeechRecognitionLike } from "./speech";
 
 const kindLabel: Record<string, string> = {
   expense: "支出",
@@ -45,7 +28,7 @@ export type AiLedgerPanelProps = Readonly<{
   // categories). Called only for ask/auto policies, right before the confirmed
   // write. Returns the created accounts (empty when none were needed), or
   // false when creation fails.
-  onResolveNewEntities?: (suggestion: AiDraftSuggestion) => LocalAccount[] | false;
+  onResolveNewEntities?: (suggestion: NewEntityCarrier) => LocalAccount[] | false;
   // Writes the official record. extraAccounts carries the accounts that were
   // just created for this write, so validation and balance tracking see them
   // even though the caller's accounts state has not re-rendered yet.
@@ -57,6 +40,7 @@ export type AiLedgerPanelProps = Readonly<{
 }>;
 
 export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_ENTITY_POLICY, onResolveNewEntities, onSaveRecord, onSaveDraft, onApplyToForm }: AiLedgerPanelProps) {
+  const [mode, setMode] = useState<"a" | "b">("a");
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -230,6 +214,21 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
 
   return (
     <div className="ai-ledger-panel">
+      <div className="ai-mode-switch" role="tablist" aria-label="口說模式">
+        <button className={`ai-mode-tab ${mode === "a" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "a"} onClick={() => setMode("a")}>整段口說</button>
+        <button className={`ai-mode-tab ${mode === "b" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "b"} onClick={() => setMode("b")}>逐步口說</button>
+      </div>
+      {mode === "b" ? (
+        <ModeBPanel
+          accounts={accounts}
+          categories={categories}
+          entityPolicy={entityPolicy}
+          onResolveNewEntities={onResolveNewEntities}
+          onSaveRecord={onSaveRecord}
+          onSaveDraft={onSaveDraft}
+        />
+      ) : (
+        <>
       <form className="ai-ledger-form" onSubmit={handleSubmit}>
         <p className="field-help">
           用說的、打字,或拍發票/收據,AI 會幫你把欄位填好,確認後才寫入正式記錄。
@@ -306,6 +305,8 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
           ))}
         </section>
       ) : null}
+        </>
+      )}
     </div>
   );
 }
