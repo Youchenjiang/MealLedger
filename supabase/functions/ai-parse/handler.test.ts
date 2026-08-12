@@ -105,7 +105,7 @@ Deno.test("skips the auth gate when requireAuth is disabled", async () => {
   let getUserCalled = false;
   const deps = makeDeps({
     env: { requireAuth: false },
-    getUser: (token) => {
+    getUser: () => {
       getUserCalled = true;
       return Promise.resolve({ data: null, error: new Error("should not be called") });
     },
