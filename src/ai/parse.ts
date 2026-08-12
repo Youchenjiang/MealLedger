@@ -37,6 +37,10 @@ export type AiDraftSuggestion = {
 
 export type AiLedgerAccounts = Array<{ name: string; currency: string }>;
 
+// The not-yet-existing entities a capture flow may carry (see ADR 0012).
+// Shared by the suggestion parser and the mode B panel's confirm flow.
+export type NewEntityCarrier = Pick<AiDraftSuggestion, "newAccount" | "newCategory" | "newTransferAccount">;
+
 function asText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number") return String(value);
@@ -226,13 +230,11 @@ function resolveTransferDestination(
   return { newTransferAccount: raw };
 }
 
-type NewEntityFlags = Pick<AiDraftSuggestion, "newAccount" | "newCategory" | "newTransferAccount">;
-
 // A new account (or transfer destination) must be visible to the draft
 // validator's exact-name account lookup; synthesize it with TWD, the same
 // default the default wallet uses, so the draft passes validation before the
 // user confirms and the entity is really created.
-function syntheticAccountsFor(newEntities: NewEntityFlags): AiLedgerAccounts {
+function syntheticAccountsFor(newEntities: NewEntityCarrier): AiLedgerAccounts {
   const syntheticAccounts: AiLedgerAccounts = [];
   if (newEntities.newAccount) {
     syntheticAccounts.push({ name: newEntities.newAccount, currency: "TWD" });
@@ -252,9 +254,9 @@ function resolveEntitiesFor(
   categories: string[],
   policy: AiEntityPolicy,
   kind: AiDraftKind | null,
-): { issues: string[]; newEntities: NewEntityFlags; account: { name: string; currency: string } | null; category: string } {
+): { issues: string[]; newEntities: NewEntityCarrier; account: { name: string; currency: string } | null; category: string } {
   const issues: string[] = [];
-  const newEntities: NewEntityFlags = {};
+  const newEntities: NewEntityCarrier = {};
 
   const resolvedAccount = resolveAccount(input.account, accounts, policy);
   if (resolvedAccount.issue) {
