@@ -139,6 +139,44 @@ async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: str
   }
 }
 
+// Returns an error Response when the request must be rejected, or null when
+// the caller may continue. When requireAuth is off (local dev), no auth is
+// required at all.
+async function authenticateRequest(request: Request, env: AiParseEnv, getUser: AiParseDeps["getUser"]): Promise<Response | null> {
+  if (!env.requireAuth) {
+    return null;
+  }
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader) {
+    return json({ error: "missing_authorization" }, 401, env.allowedOrigin);
+  }
+  const { data: userData, error: userError } = await getUser(authHeader.replace(/^Bearer\s+/i, ""));
+  if (userError || !userData?.user) {
+    return json({ error: "invalid_user" }, 401, env.allowedOrigin);
+  }
+  return null;
+}
+
+type ParsedAiBody = { ok: true; body: AiParseRequest } | { ok: false; status: 400 | 413; error: "invalid_body" | "request_too_large" };
+
+// Reads and parses the JSON body while enforcing the byte limit, so an
+// oversized or malformed payload is rejected before any provider call.
+async function parseAiBody(request: Request, maxBytes: number): Promise<ParsedAiBody> {
+  const rawBody = await readBodyWithLimit(request, maxBytes);
+  if (rawBody === null) {
+    return { ok: false, status: 413, error: "request_too_large" };
+  }
+  try {
+    const body: unknown = JSON.parse(rawBody);
+    if (!isAiParseRequest(body)) {
+      return { ok: false, status: 400, error: "invalid_body" };
+    }
+    return { ok: true, body };
+  } catch {
+    return { ok: false, status: 400, error: "invalid_body" };
+  }
+}
+
 export async function handleAiParseRequest(request: Request, deps: AiParseDeps): Promise<Response> {
   const { env, getUser, fetchImpl } = deps;
 
@@ -154,31 +192,16 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
     return json({ error: "request_too_large" }, 413, env.allowedOrigin);
   }
 
-  const authHeader = request.headers.get("authorization");
-  if (env.requireAuth) {
-    if (!authHeader) {
-      return json({ error: "missing_authorization" }, 401, env.allowedOrigin);
-    }
-
-    const { data: userData, error: userError } = await getUser(authHeader.replace(/^Bearer\s+/i, ""));
-    if (userError || !userData?.user) {
-      return json({ error: "invalid_user" }, 401, env.allowedOrigin);
-    }
+  const authError = await authenticateRequest(request, env, getUser);
+  if (authError) {
+    return authError;
   }
 
-  const rawBody = await readBodyWithLimit(request, env.maxBodyBytes);
-  if (rawBody === null) {
-    return json({ error: "request_too_large" }, 413, env.allowedOrigin);
+  const parsed = await parseAiBody(request, env.maxBodyBytes);
+  if (!parsed.ok) {
+    return json({ error: parsed.error }, parsed.status, env.allowedOrigin);
   }
-  let body: unknown;
-  try {
-    body = JSON.parse(rawBody);
-  } catch {
-    body = null;
-  }
-  if (!isAiParseRequest(body)) {
-    return json({ error: "invalid_body" }, 400, env.allowedOrigin);
-  }
+  const body = parsed.body;
 
   const system = typeof body.system === "string" ? body.system.slice(0, MAX_TEXT_CHARS) : "";
   const user = typeof body.user === "string" ? body.user.slice(0, MAX_TEXT_CHARS) : "";
