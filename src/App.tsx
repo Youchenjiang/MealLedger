@@ -56,7 +56,7 @@ import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChang
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel } from "./ai/AiLedgerPanel";
 import { readAiEntityPolicy, writeAiEntityPolicy, type AiEntityPolicy, type AiEntityPolicyOption } from "./ai/entityPolicy";
-import { buildPrefillForm, type AiDraftSuggestion } from "./ai/parse";
+import { buildPrefillForm, type AiDraftSuggestion, type NewEntityCarrier } from "./ai/parse";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "概覽", path: "/", icon: Home },
@@ -3388,7 +3388,7 @@ function CapturePage({
   // default-wallet convention (name as spoken, currency TWD), categories join
   // the custom categories; the user can edit or delete either later in
   // account/category management.
-  const resolveNewEntities = (suggestion: AiDraftSuggestion): LocalAccount[] | false => {
+  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false => {
     const created: LocalAccount[] = [];
     const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
     for (const name of newAccountNames) {
