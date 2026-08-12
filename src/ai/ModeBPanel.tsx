@@ -14,6 +14,7 @@ import {
   MODE_B_FIELD_PROMPTS,
   modeBStepsFor,
   parseFieldCorrection,
+  parseSpokenDate,
   type ModeBField,
 } from "./modeB";
 import type { NewEntityCarrier } from "./parse";
@@ -65,14 +66,24 @@ export function ModeBPanel({
     };
   }, []);
 
+  // The date field is a native date picker that only accepts YYYY-MM-DD, so a
+  // spoken date (or a typed one in the offline fallback) must be resolved
+  // locally before it can be filled. Other fields accept the raw value.
+  const resolveFieldValue = (field: ModeBField, corrected: string, raw: string): string => {
+    if (corrected) return corrected;
+    if (field === "date") return parseSpokenDate(raw, localToday()) ?? "";
+    return raw;
+  };
+
   // Applies the raw transcript of the current field, correcting it through a
   // single-field AI prompt when AI is configured (ADR 0010) and falling back
   // to the raw result otherwise.
   const applyTranscript = (field: ModeBField, raw: string) => {
     setTranscript(raw);
     if (!configured) {
-      setInputValue(raw);
-      setCorrected(raw);
+      const value = resolveFieldValue(field, "", raw);
+      setInputValue(value);
+      setCorrected(value || raw);
       return;
     }
     setCorrecting(true);
@@ -82,9 +93,10 @@ export function ModeBPanel({
       user: raw,
     })
       .then((result) => {
-        const value = result.ok ? parseFieldCorrection(result.data) : "";
+        const corrected = result.ok ? parseFieldCorrection(result.data) : "";
+        const value = resolveFieldValue(field, corrected, raw);
         setCorrected(value || raw);
-        setInputValue(value || raw);
+        setInputValue(value);
       })
       .finally(() => setCorrecting(false));
   };
@@ -237,9 +249,10 @@ export function ModeBPanel({
           <input
             id="mode-b-input"
             className="mode-b-input"
+            type={currentField === "date" ? "date" : "text"}
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
-            placeholder="可直接打字,或按下「用說的」"
+            placeholder={currentField === "date" ? undefined : "可直接打字,或按下「用說的」"}
           />
           {correcting ? <p className="field-help">AI 校對中…</p> : null}
           {corrected !== null && corrected !== transcript && transcript ? (

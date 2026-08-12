@@ -100,6 +100,31 @@ describe("ModeBPanel", () => {
     expect(screen.getByText(/尚未設定 AI 金鑰/u)).toBeInTheDocument();
   });
 
+  test("resolves an offline spoken Chinese date into the date picker", async () => {
+    vi.mocked(isAiConfigured).mockReturnValue(false);
+    nextTranscript = "七月二十五";
+    vi.stubGlobal("SpeechRecognition", FakeRecognition);
+    const user = userEvent.setup();
+    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "用說的" }));
+
+    await waitFor(() => expect(screen.getByLabelText("日期")).toHaveValue("2026-07-25"));
+    expect(requestAiJson).not.toHaveBeenCalled();
+  });
+
+  test("shows a date picker for the date field and keeps the raw value for others", async () => {
+    const user = userEvent.setup();
+    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+
+    expect(screen.getByLabelText("日期")).toHaveAttribute("type", "date");
+    await user.type(screen.getByLabelText("日期"), "2026-07-25");
+    await user.click(screen.getByRole("button", { name: "填入此欄" }));
+
+    await user.type(screen.getByLabelText("類型"), "expense");
+    expect(screen.getByLabelText("類型")).toHaveAttribute("type", "text");
+  });
+
   test("inserts a transfer destination step for transfers", async () => {
     const user = userEvent.setup();
     render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
