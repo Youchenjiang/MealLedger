@@ -5,6 +5,7 @@ import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
+import { FieldBlocks } from "./fieldBlocks";
 import {
   buildFieldCorrectionSystemPrompt,
   buildModeBDraft,
@@ -212,21 +213,14 @@ export function ModeBPanel({
       {!configured ? (
         <output className="inline-message">尚未設定 AI 金鑰:將直接使用語音辨識的原始結果。</output>
       ) : null}
-      <ol className="mode-b-fields">
-        {steps.map((field, index) => (
-          <li
-            key={field}
-            className={`mode-b-field ${index < step ? "filled" : ""} ${index === step ? "current" : ""}`}
-          >
-            <span className="mode-b-field-label">{MODE_B_FIELD_LABELS[field]}</span>
-            {index < step ? (
-              <span className="mode-b-field-value">{values[field]}</span>
-            ) : (
-              <span className="mode-b-field-placeholder">{index === step ? (inputValue || "待填") : "待填"}</span>
-            )}
-          </li>
-        ))}
-      </ol>
+      <FieldBlocks
+        items={steps.map((field, index) => ({
+          field,
+          label: MODE_B_FIELD_LABELS[field],
+          value: index < step ? (values[field] ?? "") : index === step ? inputValue : "",
+          state: index < step ? "filled" : index === step ? "current" : "pending",
+        }))}
+      />
       {!isComplete ? (
         <div className="mode-b-current">
           <p className="mode-b-prompt">{MODE_B_FIELD_PROMPTS[currentField]}</p>

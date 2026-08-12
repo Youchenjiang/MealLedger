@@ -1,13 +1,15 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Sparkles } from "lucide-react";
-import type { TransactionDraft } from "../appShell/drafts";
+import { missingCounterpartyLabel, missingItemNameLabel, type TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
+import { FieldBlocks, InferredSpan, NewEntityTag, type FieldBlockItem } from "./fieldBlocks";
 import { ModeBPanel } from "./ModeBPanel";
+import { MODE_B_FIELD_LABELS, modeBStepsFor } from "./modeB";
 import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
-import { parseDraftSuggestions, type AiDraftSuggestion, type AiSuggestionInput, type NewEntityCarrier } from "./parse";
+import { parseDraftSuggestions, type AiDraftSuggestion, type AiLedgerAccounts, type AiSuggestionInput, type NewEntityCarrier } from "./parse";
 import { speechRecognition, type SpeechRecognitionLike } from "./speech";
 
 const kindLabel: Record<string, string> = {
@@ -41,6 +43,10 @@ export type AiLedgerPanelProps = Readonly<{
 
 export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_ENTITY_POLICY, onResolveNewEntities, onSaveRecord, onSaveDraft, onApplyToForm }: AiLedgerPanelProps) {
   const [mode, setMode] = useState<"a" | "b">("a");
+  // Which suggestion field is being edited in place for mode A. Index-based:
+  // the suggestion key embeds mutable draft fields (amount, counterparty…), so
+  // it would change mid-edit and the update would stop matching.
+  const [editing, setEditing] = useState<{ index: number; field: string } | null>(null);
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,6 +218,78 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     setMessage("已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。");
   };
 
+  // Maps a draft field to its raw value, used to decide whether a suggestion
+  // is complete and to feed the in-place editor.
+  const fieldValueFor = (draft: TransactionDraft, field: string): string => {
+    switch (field) {
+      case "date": return draft.date;
+      case "kind": return kindLabel[draft.kind as string] ?? draft.kind;
+      case "account": return draft.account;
+      case "transferAccount": return draft.transferAccount;
+      case "category": return draft.category;
+      case "counterparty": return draft.counterparty;
+      case "itemName": return draft.itemName;
+      case "amount": return draft.amount;
+      default: return "";
+    }
+  };
+
+  // The display value in the blocks: the parser fills placeholder text for
+  // a missing counterparty/item name, which is suppressed here so the block
+  // reads as 待填 instead of leaking the placeholder.
+  const displayValueFor = (draft: TransactionDraft, field: string): string => {
+    if (field === "counterparty" && draft.counterparty === missingCounterpartyLabel) return "";
+    if (field === "itemName" && draft.itemName === missingItemNameLabel) return "";
+    return fieldValueFor(draft, field);
+  };
+
+  const badgeFor = (suggestion: AiDraftSuggestion, field: string): string | undefined => {
+    if (field === "account" && suggestion.newAccount) return "帳戶尚不存在";
+    if (field === "category" && suggestion.newCategory) return "類別尚不存在";
+    if (field === "transferAccount" && suggestion.newTransferAccount) return "帳戶尚不存在";
+    return undefined;
+  };
+
+  // The field-block items for a valid suggestion, in the same order both
+  // modes use (ADR 0009), with inferred marking and new-entity badges.
+  const blockItemsFor = (suggestion: AiDraftSuggestion): FieldBlockItem[] => {
+    const draft = suggestion.draft;
+    if (!draft) return [];
+    return modeBStepsFor(draft.kind).map((field) => ({
+      field,
+      label: MODE_B_FIELD_LABELS[field],
+      value: displayValueFor(draft, field),
+      state: "filled" as const,
+      inferred: isInferred(suggestion.input, field),
+      badge: badgeFor(suggestion, field),
+      ...(field === "date"
+        ? { valueContent: <DateDisplay inputDate={suggestion.input.date} date={draft.date} inferred={isInferred(suggestion.input, "date")} /> }
+        : {}),
+    }));
+  };
+
+  // Live-updates the edited field on the draft; the block input stays
+  // controlled from the draft value. Index-based so the update keeps matching
+  // even while the edited field (and thus any derived key) changes.
+  const handleFieldEdit = (index: number, field: string, value: string) => {
+    setSuggestions((current) => current.map((suggestion, i) =>
+      i === index && suggestion.draft
+        ? { ...suggestion, draft: { ...suggestion.draft, [field]: value } as TransactionDraft }
+        : suggestion,
+    ));
+  };
+
+  // Finishes editing a field: keeps the new-entity flags consistent with the
+  // edited value so the badge and the confirmed write stay truthful.
+  const handleFieldConfirm = (index: number, field: string) => {
+    setSuggestions((current) => current.map((suggestion, i) => {
+      if (i !== index || !suggestion.draft) return suggestion;
+      const value = suggestion.draft[field as keyof TransactionDraft];
+      return syncEntityFlagsAfterEdit(suggestion, field, typeof value === "string" ? value : "", accounts, categories, entityPolicy);
+    }));
+    setEditing(null);
+  };
+
   return (
     <div className="ai-ledger-panel">
       <div className="ai-mode-switch" role="tablist" aria-label="口說模式">
@@ -294,122 +372,75 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
             <span>{suggestions.length} 筆</span>
           </div>
           {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
-          {suggestions.map((suggestion) => (
-            <SuggestionCard
-              key={suggestionKey(suggestion)}
-              suggestion={suggestion}
-              onConfirm={confirmSuggestion}
-              onSaveDraft={saveSuggestionAsDraft}
-              onApplyToForm={onApplyToForm}
-            />
-          ))}
+          {suggestions.map((suggestion, index) => {
+            const blocks = blockItemsFor(suggestion);
+            const complete = suggestion.draft
+              ? modeBStepsFor(suggestion.draft.kind).every((field) => fieldValueFor(suggestion.draft as TransactionDraft, field) !== "")
+              : false;
+            return (
+              <div className="field-block-group" key={index}>
+                <div className="field-block-group-heading">
+                  <strong>
+                    {suggestions.length > 1 ? `第 ${index + 1} 筆 · ` : ""}
+                    {suggestion.draft ? (
+                      <>
+                        <InferredSpan inferred={isInferred(suggestion.input, "kind")}>{kindLabel[suggestion.draft.kind as string] ?? "未知類型"}</InferredSpan>
+                        {" · "}
+                        <InferredSpan inferred={isInferred(suggestion.input, "currency")}>{suggestion.draft.currency}</InferredSpan>
+                        {" "}
+                        <InferredSpan inferred={isInferred(suggestion.input, "amount")}>{suggestion.draft.amount}</InferredSpan>
+                      </>
+                    ) : (
+                      suggestionHeading(suggestion)
+                    )}
+                  </strong>
+                </div>
+                {suggestion.draft ? (
+                  <FieldBlocks
+                    items={blocks}
+                    editingField={editing?.index === index ? editing.field : null}
+                    onEditField={(field) => setEditing({ index, field })}
+                    onFieldChange={(field, value) => handleFieldEdit(index, field, value)}
+                    onFieldConfirm={(field) => handleFieldConfirm(index, field)}
+                  />
+                ) : (
+                  <p className="field-help">{partialLine(suggestion.input) || "無法辨識的項目"}</p>
+                )}
+                {suggestion.draft && !complete ? <p className="field-help">尚有欄位待填,填完才能確認寫入。</p> : null}
+                {suggestion.ok && suggestion.draft && complete ? (
+                  <div className="record-actions">
+                    <button className="primary-action" type="button" onClick={() => confirmSuggestion(suggestion)}>
+                      確認寫入
+                    </button>
+                    <button className="secondary-action" type="button" onClick={() => saveSuggestionAsDraft(suggestion)}>
+                      存草稿
+                    </button>
+                    <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+                      填入表單
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {suggestion.issues.length > 0 ? (
+                      <ul className="ai-issues">
+                        {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                      </ul>
+                    ) : null}
+                    <div className="record-actions">
+                      <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+                        填入表單
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </section>
       ) : null}
         </>
       )}
     </div>
-  );
-}
-
-// The title suffix after the kind label: the currency and amount for a
-// valid draft, otherwise a short note explaining why the card is not
-// confirmable.
-function statusSuffixFor(suggestion: AiDraftSuggestion, inferred: (field: string) => boolean): React.ReactNode {
-  if (suggestion.draft) {
-    return (
-      <>
-        {" · "}
-        <InferredSpan inferred={inferred("currency")}>{suggestion.draft.currency}</InferredSpan>
-        {" "}
-        <InferredSpan inferred={inferred("amount")}>{suggestion.draft.amount}</InferredSpan>
-      </>
-    );
-  }
-  if (kindLabel[suggestion.input.kind as string]) {
-    return " · 欄位不完整";
-  }
-  return " · 無法辨識";
-}
-
-function SuggestionCard({
-  suggestion,
-  onConfirm,
-  onSaveDraft,
-  onApplyToForm,
-}: Readonly<{
-  suggestion: AiDraftSuggestion;
-  onConfirm: (suggestion: AiDraftSuggestion) => void;
-  onSaveDraft: (suggestion: AiDraftSuggestion) => void;
-  onApplyToForm: (suggestion: AiDraftSuggestion) => void;
-}>) {
-  const merchant = suggestion.draft ? merchantLine(suggestion.draft, suggestion.input) : null;
-  const inferred = (field: string) => isInferred(suggestion.input, field);
-  return (
-    <article className="draft-card">
-      <div>
-        <strong>
-          <InferredSpan inferred={inferred("kind")}>{kindLabel[suggestion.input.kind as string] ?? "未知類型"}</InferredSpan>
-          {statusSuffixFor(suggestion, inferred)}
-        </strong>
-        <SuggestionDetails suggestion={suggestion} inferred={inferred} />
-        {merchant ? <span>{merchant}</span> : null}
-      </div>
-      {suggestion.ok && suggestion.draft ? (
-        <div className="record-actions">
-          <button className="primary-action" type="button" onClick={() => onConfirm(suggestion)}>
-            確認寫入
-          </button>
-          <button className="secondary-action" type="button" onClick={() => onSaveDraft(suggestion)}>
-            存草稿
-          </button>
-          <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-            填入表單
-          </button>
-        </div>
-      ) : (
-        <>
-          <ul className="ai-issues">
-            {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
-          </ul>
-          <div className="record-actions">
-            <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-              填入表單
-            </button>
-          </div>
-        </>
-      )}
-    </article>
-  );
-}
-
-function SuggestionDetails({ suggestion, inferred }: Readonly<{ suggestion: AiDraftSuggestion; inferred: (field: string) => boolean }>): React.ReactNode {
-  return (
-    <span>
-      {suggestion.draft ? (
-        <>
-          <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
-          {" · "}
-          <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
-          {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
-          {suggestion.draft.kind === "transfer" && suggestion.draft.transferAccount ? (
-            <>
-              {" → "}
-              <InferredSpan inferred={inferred("transferAccount")}>{suggestion.draft.transferAccount}</InferredSpan>
-              {suggestion.newTransferAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
-            </>
-          ) : null}
-        </>
-      ) : (
-        partialLine(suggestion.input) || "無法辨識的項目"
-      )}
-      {suggestion.draft?.category ? (
-        <>
-          {" · "}
-          <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
-          {suggestion.newCategory ? <NewEntityTag label="類別尚不存在" /> : null}
-        </>
-      ) : null}
-    </span>
   );
 }
 
@@ -529,16 +560,51 @@ function hasInferredField(input: AiSuggestionInput): boolean {
   return ["kind", "date", "account", "category", "counterparty", "itemName", "amount", "currency", "transferAccount"].some((field) => !explicit.has(field));
 }
 
-function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; children: React.ReactNode }>): React.ReactNode {
-  return inferred
-    ? <span className="inferred-field" title="AI 推論的欄位,請確認">{children}</span>
-    : children;
-}
-
-// Marks an account/category the user mentioned that does not exist yet; it is
-// created only when the user confirms the write (see ADR 0012).
-function NewEntityTag({ label }: Readonly<{ label: string }>): React.ReactElement {
-  return <span className="new-entity-badge" title={label}>{label}</span>;
+// After the user edits a field in place, keep the new-entity flags consistent
+// with the edited value: matching an existing entity clears the flag, a new
+// name carries the flag under ask/auto, and the existing-only policy turns
+// the suggestion invalid with a clear issue (mirroring the parser).
+function syncEntityFlagsAfterEdit(
+  suggestion: AiDraftSuggestion,
+  field: string,
+  value: string,
+  accounts: AiLedgerAccounts,
+  categories: string[],
+  policy: AiEntityPolicy,
+): AiDraftSuggestion {
+  const next = { ...suggestion };
+  const trimmed = value.trim();
+  const existingAccount = accounts.some((account) => account.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase());
+  const existingCategory = categories.some((category) => category.toLocaleLowerCase() === trimmed.toLocaleLowerCase());
+  if (field === "account") {
+    if (existingAccount) {
+      delete next.newAccount;
+    } else if (policy.account === "existing") {
+      next.ok = false;
+      next.issues = [...next.issues, `帳戶「${trimmed}」不存在。`];
+    } else {
+      next.newAccount = trimmed;
+    }
+  } else if (field === "transferAccount") {
+    if (existingAccount) {
+      delete next.newTransferAccount;
+    } else if (policy.account === "existing") {
+      next.ok = false;
+      next.issues = [...next.issues, `轉帳目標帳戶「${trimmed}」不存在。`];
+    } else {
+      next.newTransferAccount = trimmed;
+    }
+  } else if (field === "category") {
+    if (existingCategory) {
+      delete next.newCategory;
+    } else if (policy.category === "existing") {
+      next.ok = false;
+      next.issues = [...next.issues, `類別「${trimmed}」不存在。`];
+    } else {
+      next.newCategory = trimmed;
+    }
+  }
+  return next;
 }
 
 // Renders the draft date, marking the year as inferred when the parser derived
@@ -557,34 +623,11 @@ function DateDisplay({ inputDate, date, inferred }: Readonly<{ inputDate: unknow
   );
 }
 
-// Renders the merchant/item line of a suggestion card. Counterparty and item
-// name are shown independently so an item name is never hidden behind a
-// missing counterparty (the parser fills a placeholder when a field is
-// absent, so those placeholders are suppressed here).
-function merchantLine(draft: TransactionDraft, input: AiSuggestionInput): React.ReactNode {
-  const counterparty = draft.counterparty && draft.counterparty !== "Merchant unavailable" ? draft.counterparty : "";
-  const itemName = draft.itemName && draft.itemName !== "Item unavailable" ? draft.itemName : "";
-  const items: Array<{ text: string; field: string }> = [];
-  if (counterparty) items.push({ text: `對象:${counterparty}`, field: "counterparty" });
-  if (itemName) items.push({ text: `品項:${itemName}`, field: "itemName" });
-  if (items.length === 0) return null;
-  return (
-    <Fragment>
-      {items.map((item, index) => (
-        <Fragment key={item.field}>
-          {index > 0 ? " · " : null}
-          <InferredSpan inferred={isInferred(input, item.field)}>{item.text}</InferredSpan>
-        </Fragment>
-      ))}
-    </Fragment>
-  );
-}
-
-// Stable React key for a suggestion card: prefers resolved draft fields, and
-// falls back to the raw AI input for suggestions that failed to parse.
-function suggestionKey(suggestion: AiDraftSuggestion): string {
-  if (suggestion.draft) {
-    return [suggestion.draft.date, suggestion.draft.account, suggestion.draft.kind, suggestion.draft.amount, suggestion.draft.counterparty, suggestion.draft.itemName].join("|");
+// The group heading for a rejected suggestion: kind plus a short note
+// explaining why it is not confirmable.
+function suggestionHeading(suggestion: AiDraftSuggestion): string {
+  if (kindLabel[suggestion.input.kind as string]) {
+    return `${kindLabel[suggestion.input.kind as string]} · 欄位不完整`;
   }
-  return JSON.stringify(suggestion.input);
+  return "未知類型 · 無法辨識";
 }

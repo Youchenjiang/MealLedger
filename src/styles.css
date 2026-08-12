@@ -2623,7 +2623,7 @@ button.action-card.unavailable {
   gap: 12px;
 }
 
-.mode-b-fields {
+.field-blocks {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -2631,7 +2631,7 @@ button.action-card.unavailable {
   list-style: none;
 }
 
-.mode-b-field {
+.field-block {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2642,32 +2642,63 @@ button.action-card.unavailable {
   background: #faf7f0;
 }
 
-.mode-b-field.current {
+.field-block.current {
   border: 1px solid #8db9a4;
   border-left: 4px solid #4c8f77;
   background: #f4faf6;
 }
 
-.mode-b-field.filled {
+.field-block.filled {
   border-style: solid;
   border-color: #e2dbc9;
   background: #fffdf8;
 }
 
-.mode-b-field-label {
+.field-block.editable {
+  cursor: pointer;
+}
+
+.field-block.editing {
+  cursor: auto;
+}
+
+.field-block-label {
   color: #75582e;
   font-size: 13px;
   font-weight: 700;
 }
 
-.mode-b-field-value {
+.field-block-value {
   overflow-wrap: anywhere;
   text-align: right;
 }
 
-.mode-b-field-placeholder {
+.field-block-placeholder {
   color: #a89c88;
   font-size: 13px;
+}
+
+.field-block-input {
+  min-width: 0;
+  width: 60%;
+  padding: 6px 8px;
+  border: 1px solid #d8d0c0;
+  border-radius: 6px;
+  background: #fffdf8;
+  line-height: 1.4;
+}
+
+.field-block-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #ebe4d8;
+  border-radius: 8px;
+  background: #fcfaf5;
+}
+
+.field-block-group-heading strong {
+  font-size: 15px;
 }
 
 .mode-b-prompt {
