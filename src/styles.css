@@ -1972,6 +1972,9 @@ h2 {
 /* Inline confirmation shown before writing a draft that carries
    not-yet-existing accounts/categories under the ask policy. */
 .ask-new-entities {
+  position: static;
+  width: 100%;
+  max-width: none;
   margin: 8px 0;
   padding: 12px 14px;
   border: 1px solid #c8ddd2;

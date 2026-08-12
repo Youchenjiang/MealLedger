@@ -278,25 +278,11 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
       {message ? <output className="inline-message">{message}</output> : null}
 
       {pendingNewEntities ? (
-        <div className="ask-new-entities" role="dialog" aria-label="確認新增帳戶或類別">
-          <p>
-            這筆記錄提到尚未建立的
-            {[
-              pendingNewEntities.newAccount ? `帳戶「${pendingNewEntities.newAccount}」` : "",
-              pendingNewEntities.newTransferAccount ? `帳戶「${pendingNewEntities.newTransferAccount}」` : "",
-              pendingNewEntities.newCategory ? `類別「${pendingNewEntities.newCategory}」` : "",
-            ].filter(Boolean).join("與")}
-            ,是否要新增?
-          </p>
-          <div className="record-actions">
-            <button className="primary-action" type="button" onClick={approveNewEntities}>
-              新增並寫入
-            </button>
-            <button className="secondary-action" type="button" onClick={cancelNewEntities}>
-              取消
-            </button>
-          </div>
-        </div>
+        <AskNewEntitiesDialog
+          suggestion={pendingNewEntities}
+          onApprove={approveNewEntities}
+          onCancel={cancelNewEntities}
+        />
       ) : null}
 
       {suggestions.length > 0 ? (
@@ -309,85 +295,146 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
             <span>{suggestions.length} 筆</span>
           </div>
           {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
-          {suggestions.map((suggestion) => {
-            const merchant = suggestion.draft ? merchantLine(suggestion.draft, suggestion.input) : null;
-            const inferred = (field: string) => isInferred(suggestion.input, field);
-            return (
-              <article className="draft-card" key={suggestionKey(suggestion)}>
-                <div>
-                  <strong>
-                    <InferredSpan inferred={inferred("kind")}>{kindLabel[suggestion.input.kind as string] ?? "未知類型"}</InferredSpan>
-                    {suggestion.draft ? (
-                      <>
-                        {" · "}
-                        <InferredSpan inferred={inferred("currency")}>{suggestion.draft.currency}</InferredSpan>
-                        {" "}
-                        <InferredSpan inferred={inferred("amount")}>{suggestion.draft.amount}</InferredSpan>
-                      </>
-                    ) : kindLabel[suggestion.input.kind as string] ? (
-                      " · 欄位不完整"
-                    ) : (
-                      " · 無法辨識"
-                    )}
-                  </strong>
-                  <span>
-                    {suggestion.draft ? (
-                      <>
-                        <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
-                        {" · "}
-                        <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
-                        {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
-                        {suggestion.draft.kind === "transfer" && suggestion.draft.transferAccount ? (
-                          <>
-                            {" → "}
-                            <InferredSpan inferred={inferred("transferAccount")}>{suggestion.draft.transferAccount}</InferredSpan>
-                            {suggestion.newTransferAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
-                          </>
-                        ) : null}
-                      </>
-                    ) : (
-                      partialLine(suggestion.input) || "無法辨識的項目"
-                    )}
-                    {suggestion.draft?.category ? (
-                      <>
-                        {" · "}
-                        <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
-                        {suggestion.newCategory ? <NewEntityTag label="類別尚不存在" /> : null}
-                      </>
-                    ) : null}
-                  </span>
-                  {merchant ? <span>{merchant}</span> : null}
-                </div>
-              {suggestion.ok && suggestion.draft ? (
-                <div className="record-actions">
-                  <button className="primary-action" type="button" onClick={() => confirmSuggestion(suggestion)}>
-                    確認寫入
-                  </button>
-                  <button className="secondary-action" type="button" onClick={() => saveSuggestionAsDraft(suggestion)}>
-                    存草稿
-                  </button>
-                  <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                    填入表單
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <ul className="ai-issues">
-                    {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
-                  </ul>
-                  <div className="record-actions">
-                    <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                      填入表單
-                    </button>
-                  </div>
-                </>
-              )}
-              </article>
-            );
-          })}
+          {suggestions.map((suggestion) => (
+            <SuggestionCard
+              key={suggestionKey(suggestion)}
+              suggestion={suggestion}
+              onConfirm={confirmSuggestion}
+              onSaveDraft={saveSuggestionAsDraft}
+              onApplyToForm={onApplyToForm}
+            />
+          ))}
         </section>
       ) : null}
     </div>
+  );
+}
+
+// The title suffix after the kind label: the currency and amount for a
+// valid draft, otherwise a short note explaining why the card is not
+// confirmable.
+function statusSuffixFor(suggestion: AiDraftSuggestion, inferred: (field: string) => boolean): React.ReactNode {
+  if (suggestion.draft) {
+    return (
+      <>
+        {" · "}
+        <InferredSpan inferred={inferred("currency")}>{suggestion.draft.currency}</InferredSpan>
+        {" "}
+        <InferredSpan inferred={inferred("amount")}>{suggestion.draft.amount}</InferredSpan>
+      </>
+    );
+  }
+  if (kindLabel[suggestion.input.kind as string]) {
+    return " · 欄位不完整";
+  }
+  return " · 無法辨識";
+}
+
+function SuggestionCard({
+  suggestion,
+  onConfirm,
+  onSaveDraft,
+  onApplyToForm,
+}: Readonly<{
+  suggestion: AiDraftSuggestion;
+  onConfirm: (suggestion: AiDraftSuggestion) => void;
+  onSaveDraft: (suggestion: AiDraftSuggestion) => void;
+  onApplyToForm: (suggestion: AiDraftSuggestion) => void;
+}>) {
+  const merchant = suggestion.draft ? merchantLine(suggestion.draft, suggestion.input) : null;
+  const inferred = (field: string) => isInferred(suggestion.input, field);
+  return (
+    <article className="draft-card">
+      <div>
+        <strong>
+          <InferredSpan inferred={inferred("kind")}>{kindLabel[suggestion.input.kind as string] ?? "未知類型"}</InferredSpan>
+          {statusSuffixFor(suggestion, inferred)}
+        </strong>
+        <span>
+          {suggestion.draft ? (
+            <>
+              <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
+              {" · "}
+              <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
+              {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
+              {suggestion.draft.kind === "transfer" && suggestion.draft.transferAccount ? (
+                <>
+                  {" → "}
+                  <InferredSpan inferred={inferred("transferAccount")}>{suggestion.draft.transferAccount}</InferredSpan>
+                  {suggestion.newTransferAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
+                </>
+              ) : null}
+            </>
+          ) : (
+            partialLine(suggestion.input) || "無法辨識的項目"
+          )}
+          {suggestion.draft?.category ? (
+            <>
+              {" · "}
+              <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
+              {suggestion.newCategory ? <NewEntityTag label="類別尚不存在" /> : null}
+            </>
+          ) : null}
+        </span>
+        {merchant ? <span>{merchant}</span> : null}
+      </div>
+      {suggestion.ok && suggestion.draft ? (
+        <div className="record-actions">
+          <button className="primary-action" type="button" onClick={() => onConfirm(suggestion)}>
+            確認寫入
+          </button>
+          <button className="secondary-action" type="button" onClick={() => onSaveDraft(suggestion)}>
+            存草稿
+          </button>
+          <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+            填入表單
+          </button>
+        </div>
+      ) : (
+        <>
+          <ul className="ai-issues">
+            {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
+          </ul>
+          <div className="record-actions">
+            <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+              填入表單
+            </button>
+          </div>
+        </>
+      )}
+    </article>
+  );
+}
+
+function AskNewEntitiesDialog({
+  suggestion,
+  onApprove,
+  onCancel,
+}: Readonly<{
+  suggestion: AiDraftSuggestion;
+  onApprove: () => void;
+  onCancel: () => void;
+}>) {
+  return (
+    <dialog className="ask-new-entities" open aria-label="確認新增帳戶或類別">
+      <p>
+        這筆記錄提到尚未建立的
+        {[
+          suggestion.newAccount ? `帳戶「${suggestion.newAccount}」` : "",
+          suggestion.newTransferAccount ? `帳戶「${suggestion.newTransferAccount}」` : "",
+          suggestion.newCategory ? `類別「${suggestion.newCategory}」` : "",
+        ].filter(Boolean).join("與")}
+        ,是否要新增?
+      </p>
+      <div className="record-actions">
+        <button className="primary-action" type="button" onClick={onApprove}>
+          新增並寫入
+        </button>
+        <button className="secondary-action" type="button" onClick={onCancel}>
+          取消
+        </button>
+      </div>
+    </dialog>
   );
 }
 
@@ -428,7 +475,10 @@ function partialLine(input: AiSuggestionInput): React.ReactNode {
   if (typeof input.date === "string" && input.date.trim()) parts.push({ text: input.date.trim(), field: "date" });
   if (typeof input.counterparty === "string" && input.counterparty.trim()) parts.push({ text: input.counterparty.trim(), field: "counterparty" });
   if (typeof input.itemName === "string" && input.itemName.trim()) parts.push({ text: input.itemName.trim(), field: "itemName" });
-  if (input.amount !== undefined && input.amount !== null && String(input.amount).trim()) parts.push({ text: String(input.amount), field: "amount" });
+  if (typeof input.amount === "string" || typeof input.amount === "number") {
+    const rawAmount = String(input.amount).trim();
+    if (rawAmount) parts.push({ text: rawAmount, field: "amount" });
+  }
   if (parts.length === 0) return null;
   return parts.map((part, index) => (
     <Fragment key={part.field}>
