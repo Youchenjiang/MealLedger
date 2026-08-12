@@ -1661,7 +1661,7 @@ function renderRoute({
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`)}
-          onSaveRecord={(draft) => saveOfficialRecord(draft, accounts, `manual:${draft.id}`)}
+          onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
           onSaveMeal={onSaveMeal}
           scans={scans}
@@ -3253,7 +3253,7 @@ function CapturePage({
   onFinishDraftEdit: () => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onSaveRecord: (draft: TransactionDraft) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
   onSaveMeal: (meal: MealEntry) => void;
   scans: TemporaryScan[];
@@ -3383,7 +3383,8 @@ function CapturePage({
   // default-wallet convention (name as spoken, currency TWD), categories join
   // the custom categories; the user can edit or delete either later in
   // account/category management.
-  const resolveNewEntities = (suggestion: AiDraftSuggestion): boolean => {
+  const resolveNewEntities = (suggestion: AiDraftSuggestion): LocalAccount[] | false => {
+    const created: LocalAccount[] = [];
     const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
     for (const name of newAccountNames) {
       if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
@@ -3393,13 +3394,14 @@ function CapturePage({
       if (!account) {
         return false;
       }
+      created.push(account);
       onAddAccount(account);
     }
     const newCategory = suggestion.newCategory;
     if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
       setCustomCategories((current) => [...current, newCategory]);
     }
-    return true;
+    return created;
   };
   const sourceOptions = useMemo(
     () => [...new Set([...customSources, ...records.filter((record) => record.kind === "income" || record.kind === "fund-addition").map((record) => record.counterparty).filter(Boolean)])],

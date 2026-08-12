@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ImagePlus, Mic, Sparkles } from "lucide-react";
 import type { TransactionDraft } from "../appShell/drafts";
+import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
@@ -42,9 +43,13 @@ export type AiLedgerPanelProps = Readonly<{
   // Creates the not-yet-existing accounts/categories a suggestion carries
   // (account with TWD like the default wallet, category appended to custom
   // categories). Called only for ask/auto policies, right before the confirmed
-  // write. Returns false when creation fails.
-  onResolveNewEntities?: (suggestion: AiDraftSuggestion) => boolean;
-  onSaveRecord: (draft: TransactionDraft) => boolean;
+  // write. Returns the created accounts (empty when none were needed), or
+  // false when creation fails.
+  onResolveNewEntities?: (suggestion: AiDraftSuggestion) => LocalAccount[] | false;
+  // Writes the official record. extraAccounts carries the accounts that were
+  // just created for this write, so validation and balance tracking see them
+  // even though the caller's accounts state has not re-rendered yet.
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
   onSaveDraft: (draft: TransactionDraft) => void;
   // Prefills the ledger form with the fields the AI could identify so the
   // user can complete the remaining ones (account, category, …) manually.
@@ -160,6 +165,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
   const needsNewEntityAsk = (suggestion: AiDraftSuggestion): boolean => {
     return Boolean(
       (suggestion.newAccount && entityPolicy.account === "ask")
+      || (suggestion.newTransferAccount && entityPolicy.account === "ask")
       || (suggestion.newCategory && entityPolicy.category === "ask"),
     );
   };
@@ -169,18 +175,21 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
   // effect of the AI call itself; only of the user's confirmed write.
   const resolveAndPersist = (suggestion: AiDraftSuggestion) => {
     if (!suggestion.draft) return;
-    const needsCreation = Boolean(suggestion.newAccount || suggestion.newCategory);
+    const needsCreation = Boolean(suggestion.newAccount || suggestion.newCategory || suggestion.newTransferAccount);
+    let created: LocalAccount[] = [];
     if (needsCreation) {
       if (!onResolveNewEntities) {
         setError("需要先建立新的帳戶/類別才能寫入,請改用「填入表單」或先在設定中建立。");
         return;
       }
-      if (!onResolveNewEntities(suggestion)) {
+      const resolved = onResolveNewEntities(suggestion);
+      if (resolved === false) {
         setError("新的帳戶/類別無法建立,請手動檢查。");
         return;
       }
+      created = resolved;
     }
-    const saved = onSaveRecord(suggestion.draft);
+    const saved = onSaveRecord(suggestion.draft, created);
     if (!saved) {
       setError("這筆記錄無法建立,請檢查帳戶與欄位後手動新增。");
       return;
@@ -272,8 +281,11 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
         <div className="ask-new-entities" role="dialog" aria-label="確認新增帳戶或類別">
           <p>
             這筆記錄提到尚未建立的
-            {pendingNewEntities.newAccount ? `帳戶「${pendingNewEntities.newAccount}」` : ""}
-            {pendingNewEntities.newCategory ? `${pendingNewEntities.newAccount ? "與" : ""}類別「${pendingNewEntities.newCategory}」` : ""}
+            {[
+              pendingNewEntities.newAccount ? `帳戶「${pendingNewEntities.newAccount}」` : "",
+              pendingNewEntities.newTransferAccount ? `帳戶「${pendingNewEntities.newTransferAccount}」` : "",
+              pendingNewEntities.newCategory ? `類別「${pendingNewEntities.newCategory}」` : "",
+            ].filter(Boolean).join("與")}
             ,是否要新增?
           </p>
           <div className="record-actions">
@@ -325,6 +337,13 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
                         {" · "}
                         <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
                         {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
+                        {suggestion.draft.kind === "transfer" && suggestion.draft.transferAccount ? (
+                          <>
+                            {" → "}
+                            <InferredSpan inferred={inferred("transferAccount")}>{suggestion.draft.transferAccount}</InferredSpan>
+                            {suggestion.newTransferAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
+                          </>
+                        ) : null}
                       </>
                     ) : (
                       partialLine(suggestion.input) || "無法辨識的項目"
@@ -450,7 +469,7 @@ function hasInferredField(input: AiSuggestionInput): boolean {
   if (isDerivedYear(input.date)) return true;
   const explicit = explicitFieldNames(input);
   if (explicit.size === 0) return false;
-  return ["kind", "date", "account", "category", "counterparty", "itemName", "amount", "currency"].some((field) => !explicit.has(field));
+  return ["kind", "date", "account", "category", "counterparty", "itemName", "amount", "currency", "transferAccount"].some((field) => !explicit.has(field));
 }
 
 function InferredSpan({ inferred, children }: Readonly<{ inferred: boolean; children: React.ReactNode }>): React.ReactNode {

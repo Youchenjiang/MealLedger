@@ -187,7 +187,7 @@ describe("AiLedgerPanel", () => {
       data: { items: [{ kind: "expense", date: "7/25", account: "新錢包", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
     });
     const autoPolicy = { account: "auto", category: "auto" } as const;
-    const onResolveNewEntities = vi.fn(() => true);
+    const onResolveNewEntities = vi.fn(() => []);
     const onSaveRecord = vi.fn(() => true);
     const user = userEvent.setup();
 
@@ -213,7 +213,7 @@ describe("AiLedgerPanel", () => {
       data: { items: [{ kind: "expense", date: "7/25", account: "新錢包", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
     });
     const askPolicy = { account: "ask", category: "ask" } as const;
-    const onResolveNewEntities = vi.fn(() => true);
+    const onResolveNewEntities = vi.fn(() => []);
     const onSaveRecord = vi.fn(() => true);
     const user = userEvent.setup();
 
@@ -236,13 +236,74 @@ describe("AiLedgerPanel", () => {
     expect(screen.getByText(/已確認/u)).toBeInTheDocument();
   });
 
+  test("auto-creates a not-yet-existing transfer destination and writes with it", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "transfer", date: "7/25", account: "Daily wallet", transferAccount: "新儲蓄戶", amount: 100, currency: "TWD" }] },
+    });
+    const autoPolicy = { account: "auto", category: "auto" } as const;
+    const onResolveNewEntities = vi.fn(() => []);
+    const onSaveRecord = vi.fn(() => true);
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 錢包轉 100 到新儲蓄戶");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    const confirm = await screen.findByRole("button", { name: "確認寫入" });
+    // The card shows the destination (beyond the input field) and marks it
+    // as not existing yet.
+    expect(screen.getAllByText(/新儲蓄戶/u).length).toBeGreaterThan(1);
+    expect(screen.getAllByText("帳戶尚不存在").length).toBeGreaterThan(0);
+
+    await user.click(confirm);
+
+    expect(onResolveNewEntities).toHaveBeenCalledTimes(1);
+    expect(onResolveNewEntities).toHaveBeenCalledWith(expect.objectContaining({ newTransferAccount: "新儲蓄戶" }));
+    expect(onSaveRecord).toHaveBeenCalledTimes(1);
+    expect(onSaveRecord).toHaveBeenCalledWith(expect.objectContaining({ transferAccount: "新儲蓄戶" }), []);
+    expect(screen.getByText(/已確認/u)).toBeInTheDocument();
+  });
+
+  test("asks before creating a new transfer destination under the ask policy", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "transfer", date: "7/25", account: "Daily wallet", transferAccount: "新儲蓄戶", amount: 100, currency: "TWD" }] },
+    });
+    const askPolicy = { account: "ask", category: "ask" } as const;
+    const onResolveNewEntities = vi.fn(() => []);
+    const onSaveRecord = vi.fn(() => true);
+    const user = userEvent.setup();
+
+    render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 錢包轉 100 到新儲蓄戶");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    await user.click(await screen.findByRole("button", { name: "確認寫入" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/帳戶「新儲蓄戶」/u);
+    expect(onSaveRecord).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "新增並寫入" }));
+
+    expect(onResolveNewEntities).toHaveBeenCalledTimes(1);
+    expect(onResolveNewEntities).toHaveBeenCalledWith(expect.objectContaining({ newTransferAccount: "新儲蓄戶" }));
+    expect(onSaveRecord).toHaveBeenCalledTimes(1);
+    expect(onSaveRecord).toHaveBeenCalledWith(expect.objectContaining({ transferAccount: "新儲蓄戶" }), []);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(/已確認/u)).toBeInTheDocument();
+  });
+
   test("keeps the suggestion unconfirmed when the ask dialog is cancelled", async () => {
     vi.mocked(requestAiJson).mockResolvedValue({
       ok: true,
       data: { items: [{ kind: "expense", date: "7/25", account: "新錢包", category: "午餐", itemName: "牛肉麵", amount: 480 }] },
     });
     const askPolicy = { account: "ask", category: "ask" } as const;
-    const onResolveNewEntities = vi.fn(() => true);
+    const onResolveNewEntities = vi.fn(() => []);
     const onSaveRecord = vi.fn(() => true);
     const user = userEvent.setup();
 
