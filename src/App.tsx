@@ -4374,6 +4374,41 @@ function SettingsPage({
 }: Readonly<SettingsPageProps>) {
   const [section, setSection] = useState<"ledger-accounts" | "portability" | "ai-capture">("ledger-accounts");
 
+  const renderSection = () => {
+    if (section === "ledger-accounts") {
+      return (
+        <LedgerAccountsPanel
+          accounts={accounts}
+          onAddAccount={onAddAccount}
+          onSaveInitialFunding={onSaveInitialFunding}
+          onReopenOnboarding={onReopenOnboarding}
+        />
+      );
+    }
+    if (section === "ai-capture") {
+      return (
+        <section className="settings-ai-policy" aria-labelledby="ai-capture-title">
+          <p className="eyebrow">Spoken capture</p>
+          <h2 id="ai-capture-title">Voice &amp; AI</h2>
+          <p className="panel-copy">
+            口說記帳時可否提到尚未建立的帳戶或類別;新帳戶以 TWD 建立(如同預設錢包),事後可在帳戶/類別管理修改。
+          </p>
+          <EntityPolicyRow
+            label="帳戶 Accounts"
+            value={entityPolicy.account}
+            onChange={(value) => onEntityPolicyChange({ ...entityPolicy, account: value })}
+          />
+          <EntityPolicyRow
+            label="類別 Categories"
+            value={entityPolicy.category}
+            onChange={(value) => onEntityPolicyChange({ ...entityPolicy, category: value })}
+          />
+        </section>
+      );
+    }
+    return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
+  };
+
   return (
     <section className="settings-page">
       <section className="settings-account-entry" aria-labelledby="cloud-account-title">
@@ -4392,34 +4427,7 @@ function SettingsPage({
         <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
         <button className={`settings-tab ${section === "ai-capture" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ai-capture"} onClick={() => setSection("ai-capture")}>Voice &amp; AI</button>
       </div>
-      {section === "ledger-accounts" ? (
-        <LedgerAccountsPanel
-          accounts={accounts}
-          onAddAccount={onAddAccount}
-          onSaveInitialFunding={onSaveInitialFunding}
-          onReopenOnboarding={onReopenOnboarding}
-        />
-      ) : section === "ai-capture" ? (
-        <section className="settings-ai-policy" aria-labelledby="ai-capture-title">
-          <p className="eyebrow">Spoken capture</p>
-          <h2 id="ai-capture-title">Voice &amp; AI</h2>
-          <p className="panel-copy">
-            口說記帳時可否提到尚未建立的帳戶或類別;新帳戶以 TWD 建立(如同預設錢包),事後可在帳戶/類別管理修改。
-          </p>
-          <EntityPolicyRow
-            label="帳戶 Accounts"
-            value={entityPolicy.account}
-            onChange={(value) => onEntityPolicyChange({ ...entityPolicy, account: value })}
-          />
-          <EntityPolicyRow
-            label="類別 Categories"
-            value={entityPolicy.category}
-            onChange={(value) => onEntityPolicyChange({ ...entityPolicy, category: value })}
-          />
-        </section>
-      ) : (
-        <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />
-      )}
+      {renderSection()}
     </section>
   );
 }
