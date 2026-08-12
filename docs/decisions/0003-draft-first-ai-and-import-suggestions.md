@@ -30,6 +30,7 @@ This decision reduces automation risk but may add review work for the user.
 
 ## References
 
+- [AI ledger drafts requirements](../specs/ai-ledger-drafts/requirements.md)
 - [Import export spec](../specs/import-export/requirements.md)
 - [Capture media spec](../specs/capture-media/requirements.md)
 - [Manual ledger spec](../specs/manual-ledger/requirements.md)

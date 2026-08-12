@@ -59,7 +59,7 @@ When a signed URL expires while a detail view is open, the client should request
 
 ## AI And OCR Boundary
 
-The PWA must not call paid AI/OCR providers directly. AI/OCR calls go through a server boundary such as Supabase Edge Functions.
+The PWA must not call paid AI/OCR providers directly. AI/OCR calls go through a server boundary such as Supabase Edge Functions; the AI ledger drafts feature uses the `ai-parse` function with an auth gate and a 4 MB body cap so provider keys stay server-side. Direct provider calls remain a local-development fallback only.
 
 The provider is an implementation choice, but the interface should record provider id, model or parser id, prompt/schema version when applicable, confidence, and failure reason.
 

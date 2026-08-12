@@ -33,3 +33,5 @@ Marketing or product copy must not promise durable multi-day offline capture in 
 - [Technical operations](../v1/technical-ops.md)
 - [Development workflow](../engineering/development-workflow.md)
 - [Implementation sequence](../engineering/implementation-sequence.md)
+- [V1 non-goals](../product/v1-non-goals.md)
+- [Product requirements](../product/product-requirements.md)

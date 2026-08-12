@@ -3,6 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
 
+vi.mock("./ai/client", () => ({ requestAiJson: vi.fn() }));
+
+import { requestAiJson } from "./ai/client";
+
 function renderWorkspace(path = "/") {
   window.history.pushState(null, "", path);
   return render(<App />);
@@ -87,6 +91,26 @@ describe("App shell draft flow", () => {
     expect(screen.getByText("1 account")).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.custom-categories") ?? "[]")).toEqual(expect.arrayContaining(["飲食", "AI"]));
     expect(JSON.parse(window.localStorage.getItem("mealledger.taxonomy.tags") ?? "[]")).toEqual(expect.arrayContaining(["訂閱"]));
+  });
+
+  test("stores the spoken-capture entity policy chosen in Settings", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "Voice & AI" }));
+    expect(screen.getByRole("heading", { name: "Voice & AI" })).toBeInTheDocument();
+
+    const accountRow = screen.getByRole("group", { name: "帳戶 Accounts" });
+    await user.click(within(accountRow).getByRole("radio", { name: "直接新增" }));
+
+    const categoryRow = screen.getByRole("group", { name: "類別 Categories" });
+    await user.click(within(categoryRow).getByRole("radio", { name: "詢問是否新增" }));
+
+    expect(JSON.parse(window.localStorage.getItem("mealledger.ai.entity-policy") ?? "{}")).toEqual({
+      account: "auto",
+      category: "ask",
+    });
   });
 
   test("records an entered starting balance as fund addition", async () => {
@@ -1300,5 +1324,47 @@ describe("App shell draft flow", () => {
     expect(screen.getByRole("group", { name: "Time precision" })).toBeInTheDocument();
     await user.click(screen.getByRole("radio", { name: "Month" }));
     expect(screen.getByLabelText("Month to record")).toBeInTheDocument();
+  });
+
+  test("applies an AI suggestion to the manual ledger form for completion", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", itemName: "牛肉麵", amount: 480 }] },
+    });
+    const user = userEvent.setup();
+
+    renderWorkspace();
+    await openWorkspace(user);
+    await addAccount(user, "Daily wallet");
+    await goToCapture(user);
+    await user.click(screen.getByRole("button", { name: "AI 補帳" }));
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+
+    await user.click(await screen.findByRole("button", { name: "填入表單" }));
+
+    // The manual ledger form opens in its account-first state; the unknown
+    // account stays blank for manual selection.
+    expect(screen.getByLabelText("Account")).toHaveValue("");
+
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+
+    // Once the account is chosen the remaining fields appear prefilled from
+    // the suggestion.
+    expect(screen.getByLabelText("Amount")).toHaveValue(480);
+    expect(screen.getByLabelText("Item name")).toHaveValue("牛肉麵");
+
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.click(screen.getByLabelText("Merchant unavailable"));
+    await user.clear(screen.getByLabelText("Merchant"));
+    await user.type(screen.getByLabelText("Merchant"), "全聯");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    const stored = JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]") as Array<{ amount: string; accountName: string; itemName: string }>;
+    expect(stored).toHaveLength(1);
+    expect(stored[0].amount).toBe("480");
+    expect(stored[0].accountName).toBe("Daily wallet");
+    expect(stored[0].itemName).toBe("牛肉麵");
   });
 });

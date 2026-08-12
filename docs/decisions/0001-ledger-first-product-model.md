@@ -32,4 +32,6 @@ Meal and media features should remain helpful, reversible, and optional.
 
 - [Product requirements](../product/product-requirements.md)
 - [Accounting rules](../v1/accounting-rules.md)
+- [Manual ledger requirements](../specs/manual-ledger/requirements.md)
+- [Import export requirements](../specs/import-export/requirements.md)
 - [Capture media spec](../specs/capture-media/requirements.md)

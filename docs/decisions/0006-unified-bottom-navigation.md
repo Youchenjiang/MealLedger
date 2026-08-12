@@ -55,5 +55,6 @@ Becomes harder:
 ## References
 
 - [App shell requirements](../specs/app-shell/requirements.md)
+- [Voice capture plan](../product/voice-capture-plan.md)
 - `src/App.tsx`
 - `src/styles.css`

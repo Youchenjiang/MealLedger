@@ -34,6 +34,7 @@ function makeDeps(overrides: {
     aiVisionModel: "gpt-4o",
     allowedOrigin: "*",
     maxBodyBytes: 4 * 1024 * 1024,
+    requireAuth: true,
   };
   Object.assign(env, overrides.env);
   return {
@@ -98,6 +99,34 @@ Deno.test("rejects requests whose bearer token does not resolve to a user", asyn
   assertEq(response.status, 401);
   const body = await jsonBody(response) as { error?: string };
   assertEq(body.error, "invalid_user");
+});
+
+Deno.test("skips the auth gate when requireAuth is disabled", async () => {
+  let getUserCalled = false;
+  const deps = makeDeps({
+    env: { requireAuth: false },
+    getUser: () => {
+      getUserCalled = true;
+      return Promise.resolve({ data: null, error: new Error("should not be called") });
+    },
+  });
+  const response = await handleAiParseRequest(
+    post({ system: "s", user: "u" }, { authorization: "" }),
+    deps,
+  );
+
+  assertEq(response.status, 200);
+  assertEq(getUserCalled, false);
+});
+
+Deno.test("still serves signed-in requests when requireAuth is disabled", async () => {
+  const deps = makeDeps({ env: { requireAuth: false } });
+  const response = await handleAiParseRequest(
+    post({ system: "s", user: "u" }, { authorization: "Bearer abc.def.ghi" }),
+    deps,
+  );
+
+  assertEq(response.status, 200);
 });
 
 Deno.test("passes the bare token to getUser and accepts a valid session", async () => {

@@ -6,6 +6,7 @@ Use this index as the starting point for review. The documentation is grouped by
 
 - [Product requirements notes](product/product-requirements.md)
 - [Meal, media, and ledger flows](product/flows.md)
+- [Voice capture plan](product/voice-capture-plan.md)
 - [Long-term roadmap](product/roadmap.md)
 - [V1 non-goals and known limitations](product/v1-non-goals.md)
 
@@ -38,6 +39,10 @@ Use this index as the starting point for review. The documentation is grouped by
 
 ## Feature Specs
 
+- [AI ledger drafts requirements](specs/ai-ledger-drafts/requirements.md)
+- [AI ledger drafts design](specs/ai-ledger-drafts/design.md)
+- [AI ledger drafts tasks](specs/ai-ledger-drafts/tasks.md)
+- [AI ledger drafts test plan](specs/ai-ledger-drafts/test-plan.md)
 - [App shell requirements](specs/app-shell/requirements.md)
 - [App shell design](specs/app-shell/design.md)
 - [App shell tasks](specs/app-shell/tasks.md)
@@ -75,6 +80,10 @@ Use this index as the starting point for review. The documentation is grouped by
 - [Localization design (planned)](specs/localization/design.md)
 - [Localization tasks (planned)](specs/localization/tasks.md)
 - [Localization test plan (planned)](specs/localization/test-plan.md)
+- [Offline AI requirements (planned)](specs/offline-ai/requirements.md)
+- [Offline AI design (planned)](specs/offline-ai/design.md)
+- [Offline AI tasks (planned)](specs/offline-ai/tasks.md)
+- [Offline AI test plan (planned)](specs/offline-ai/test-plan.md)
 
 ## Suggested Review Order
 

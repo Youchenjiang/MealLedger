@@ -9,10 +9,24 @@ export type AiRequest = {
 
 export type AiResult = { ok: true; data: unknown } | { ok: false; message: string };
 
+// Returns a fresh access token for the edge-function proxy, or an empty
+// string when the user has no usable session. getUser validates the stored
+// session against the auth server and refreshes the access token when it has
+// expired, so the proxy never receives a stale bearer token.
 async function currentAccessToken(): Promise<string> {
   if (!supabase) return "";
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return "";
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? "";
+}
+
+// The Supabase API gateway requires the publishable (anon) key on
+// /functions/v1/* routes before a request reaches the function body.
+function publicApiKey(): string {
+  const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
+    ?? (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
+  return key?.trim() ?? "";
 }
 
 const REQUEST_TIMEOUT_MS = 90_000;
@@ -33,6 +47,7 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(publicApiKey() ? { apikey: publicApiKey() } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
@@ -42,6 +57,15 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
     }),
   });
   if (!response.ok) {
+    // 401 means the proxy (or its gateway) rejected the request. Without a
+    // session it wants a sign-in; with a session the stored token was
+    // rejected (stale, or issued by a different Supabase instance). Give an
+    // actionable message instead of a bare HTTP status.
+    if (response.status === 401) {
+      throw new Error(token
+        ? "登入狀態已失效,請重新登入後再試。"
+        : "AI 補帳需要先登入:請到 Cloud & account 登入後,才能透過 AI 代理產生草稿。");
+    }
     throw new Error(`AI request failed (${response.status}).`);
   }
   const payload = (await response.json()) as { data?: unknown; error?: string };
