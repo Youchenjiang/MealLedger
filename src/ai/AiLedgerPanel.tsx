@@ -350,32 +350,7 @@ function SuggestionCard({
           <InferredSpan inferred={inferred("kind")}>{kindLabel[suggestion.input.kind as string] ?? "未知類型"}</InferredSpan>
           {statusSuffixFor(suggestion, inferred)}
         </strong>
-        <span>
-          {suggestion.draft ? (
-            <>
-              <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
-              {" · "}
-              <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
-              {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
-              {suggestion.draft.kind === "transfer" && suggestion.draft.transferAccount ? (
-                <>
-                  {" → "}
-                  <InferredSpan inferred={inferred("transferAccount")}>{suggestion.draft.transferAccount}</InferredSpan>
-                  {suggestion.newTransferAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
-                </>
-              ) : null}
-            </>
-          ) : (
-            partialLine(suggestion.input) || "無法辨識的項目"
-          )}
-          {suggestion.draft?.category ? (
-            <>
-              {" · "}
-              <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
-              {suggestion.newCategory ? <NewEntityTag label="類別尚不存在" /> : null}
-            </>
-          ) : null}
-        </span>
+        <SuggestionDetails suggestion={suggestion} inferred={inferred} />
         {merchant ? <span>{merchant}</span> : null}
       </div>
       {suggestion.ok && suggestion.draft ? (
@@ -403,6 +378,37 @@ function SuggestionCard({
         </>
       )}
     </article>
+  );
+}
+
+function SuggestionDetails({ suggestion, inferred }: Readonly<{ suggestion: AiDraftSuggestion; inferred: (field: string) => boolean }>): React.ReactNode {
+  return (
+    <span>
+      {suggestion.draft ? (
+        <>
+          <DateDisplay inputDate={suggestion.input.date} date={suggestion.draft.date} inferred={inferred("date")} />
+          {" · "}
+          <InferredSpan inferred={inferred("account")}>{suggestion.draft.account}</InferredSpan>
+          {suggestion.newAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
+          {suggestion.draft.kind === "transfer" && suggestion.draft.transferAccount ? (
+            <>
+              {" → "}
+              <InferredSpan inferred={inferred("transferAccount")}>{suggestion.draft.transferAccount}</InferredSpan>
+              {suggestion.newTransferAccount ? <NewEntityTag label="帳戶尚不存在" /> : null}
+            </>
+          ) : null}
+        </>
+      ) : (
+        partialLine(suggestion.input) || "無法辨識的項目"
+      )}
+      {suggestion.draft?.category ? (
+        <>
+          {" · "}
+          <InferredSpan inferred={inferred("category")}>{suggestion.draft.category}</InferredSpan>
+          {suggestion.newCategory ? <NewEntityTag label="類別尚不存在" /> : null}
+        </>
+      ) : null}
+    </span>
   );
 }
 
