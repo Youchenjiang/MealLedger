@@ -33,18 +33,31 @@ export type AiParseDeps = {
 const DEFAULT_IMAGE_USER_TEXT = "請辨識這張發票/收據。";
 const MAX_TEXT_CHARS = 8000;
 
-function corsHeaders(allowedOrigin: string): Record<string, string> {
+// CORS must allow the exact origin the browser runs on and every header the
+// app sends. APP_ORIGIN may list several frontend origins (comma-separated)
+// or "*"; the response echoes the matching request origin so each allowed
+// frontend works. `apikey` must be listed: the app sends the publishable anon
+// key on every call, and a missing allow-header blocks the browser even when
+// the origin matches.
+function corsHeaders(allowedOrigin: string, request: Request): Record<string, string> {
+  const origins = allowedOrigin.split(",").map((item) => item.trim()).filter(Boolean);
+  const requestOrigin = request.headers.get("origin");
+  const allowOrigin = origins.includes("*")
+    ? "*"
+    : requestOrigin && origins.includes(requestOrigin)
+      ? requestOrigin
+      : "";
   return {
-    "access-control-allow-origin": allowedOrigin,
-    "access-control-allow-headers": "authorization, content-type",
+    ...(allowOrigin ? { "access-control-allow-origin": allowOrigin } : {}),
+    "access-control-allow-headers": "authorization, apikey, content-type",
     "access-control-allow-methods": "POST, OPTIONS",
   };
 }
 
-function json(body: unknown, status: number, allowedOrigin: string): Response {
+function json(body: unknown, status: number, allowedOrigin: string, request: Request): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(allowedOrigin), "content-type": "application/json" },
+    headers: { ...corsHeaders(allowedOrigin, request), "content-type": "application/json" },
   });
 }
 
@@ -109,17 +122,17 @@ type ProviderResult =
   | { kind: "empty" }
   | { kind: "exception"; detail: string };
 
-function providerResultResponse(result: ProviderResult, allowedOrigin: string): Response {
+function providerResultResponse(result: ProviderResult, allowedOrigin: string, request: Request): Response {
   if (result.kind === "ok") {
-    return json({ data: result.data }, 200, allowedOrigin);
+    return json({ data: result.data }, 200, allowedOrigin, request);
   }
   if (result.kind === "http-error") {
-    return json({ error: `ai_request_failed:${result.status}`, detail: result.detail }, 502, allowedOrigin);
+    return json({ error: `ai_request_failed:${result.status}`, detail: result.detail }, 502, allowedOrigin, request);
   }
   if (result.kind === "empty") {
-    return json({ error: "ai_empty_response" }, 502, allowedOrigin);
+    return json({ error: "ai_empty_response" }, 502, allowedOrigin, request);
   }
-  return json({ error: "ai_request_failed", detail: result.detail }, 502, allowedOrigin);
+  return json({ error: "ai_request_failed", detail: result.detail }, 502, allowedOrigin, request);
 }
 
 // Provider errors worth retrying: rate limits and 5xx — including Anthropic's
@@ -195,11 +208,11 @@ async function authenticateRequest(request: Request, env: AiParseEnv, getUser: A
   }
   const authHeader = request.headers.get("authorization");
   if (!authHeader) {
-    return json({ error: "missing_authorization" }, 401, env.allowedOrigin);
+    return json({ error: "missing_authorization" }, 401, env.allowedOrigin, request);
   }
   const { data: userData, error: userError } = await getUser(authHeader.replace(/^Bearer\s+/i, ""));
   if (userError || !userData?.user) {
-    return json({ error: "invalid_user" }, 401, env.allowedOrigin);
+    return json({ error: "invalid_user" }, 401, env.allowedOrigin, request);
   }
   return null;
 }
@@ -228,15 +241,15 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
   const { env, getUser, fetchImpl } = deps;
 
   if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders(env.allowedOrigin) });
+    return new Response(null, { status: 204, headers: corsHeaders(env.allowedOrigin, request) });
   }
   if (request.method !== "POST") {
-    return json({ error: "method_not_allowed" }, 405, env.allowedOrigin);
+    return json({ error: "method_not_allowed" }, 405, env.allowedOrigin, request);
   }
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > env.maxBodyBytes) {
-    return json({ error: "request_too_large" }, 413, env.allowedOrigin);
+    return json({ error: "request_too_large" }, 413, env.allowedOrigin, request);
   }
 
   const authError = await authenticateRequest(request, env, getUser);
@@ -246,7 +259,7 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
 
   const parsed = await parseAiBody(request, env.maxBodyBytes);
   if (!parsed.ok) {
-    return json({ error: parsed.error }, parsed.status, env.allowedOrigin);
+    return json({ error: parsed.error }, parsed.status, env.allowedOrigin, request);
   }
   const body = parsed.body;
 
@@ -255,12 +268,12 @@ export async function handleAiParseRequest(request: Request, deps: AiParseDeps):
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
 
   if (!user.trim() && !imageDataUrl) {
-    return json({ error: "empty_input" }, 400, env.allowedOrigin);
+    return json({ error: "empty_input" }, 400, env.allowedOrigin, request);
   }
 
   // Model is server-controlled: the client can never pick a model, so the
   // shared key cannot be redirected to arbitrary provider models.
   const model = imageDataUrl ? env.aiVisionModel || env.aiModel : env.aiModel;
   const result = await callProvider(fetchImpl, env, model, buildMessages(system, user, imageDataUrl));
-  return providerResultResponse(result, env.allowedOrigin);
+  return providerResultResponse(result, env.allowedOrigin, request);
 }

@@ -372,12 +372,37 @@ Deno.test("surfaces a throwing provider fetch as a 502", async () => {
   assertIncludes(String(body.detail), "socket hang up");
 });
 
-Deno.test("answers OPTIONS preflight without auth", async () => {
+Deno.test("answers OPTIONS preflight without auth and allows the apikey header", async () => {
   const deps = makeDeps();
   const response = await handleAiParseRequest(new Request(BASE_URL, { method: "OPTIONS" }), deps);
 
   assertEq(response.status, 204);
   assertEq(response.headers.get("access-control-allow-methods"), "POST, OPTIONS");
+  // The app sends the publishable anon key in `apikey` on every call; it must
+  // be listed or the browser blocks the request even when the origin matches.
+  const allowHeaders = response.headers.get("access-control-allow-headers") ?? "";
+  assertIncludes(allowHeaders, "apikey");
+  assertIncludes(allowHeaders, "authorization");
+});
+
+Deno.test("echoes a matching request origin in CORS headers", async () => {
+  const deps = makeDeps({ env: { allowedOrigin: "https://app.example,http://127.0.0.1:4173" } });
+  const request = post({ system: "s", user: "u" });
+  request.headers.set("origin", "http://127.0.0.1:4173");
+  const response = await handleAiParseRequest(request, deps);
+
+  assertEq(response.status, 200);
+  assertEq(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:4173");
+});
+
+Deno.test("omits the CORS origin when the request origin is not allowed", async () => {
+  const deps = makeDeps({ env: { allowedOrigin: "https://app.example" } });
+  const request = post({ system: "s", user: "u" });
+  request.headers.set("origin", "http://evil.example");
+  const response = await handleAiParseRequest(request, deps);
+
+  assertEq(response.status, 200);
+  assertEq(response.headers.get("access-control-allow-origin"), null);
 });
 
 Deno.test("rejects non-POST methods", async () => {

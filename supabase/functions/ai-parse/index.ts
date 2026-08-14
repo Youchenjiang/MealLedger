@@ -4,7 +4,9 @@ import { handleAiParseRequest, type AiParseDeps } from "./handler.ts";
 const SUPABASE_URL = requireEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 // Default to "*" so browsers work out of the box; auth is enforced via the
-// bearer token so an open origin does not weaken the endpoint.
+// bearer token so an open origin does not weaken the endpoint. Production may
+// pin this to a comma-separated list of frontend origins; the handler echoes
+// the matching request origin so each allowed frontend works.
 const ALLOWED_ORIGIN = Deno.env.get("APP_ORIGIN") ?? "*";
 // Require a valid user session by default; local development can opt out with
 // AI_REQUIRE_AUTH=false so signed-out users can still use the AI panel.
