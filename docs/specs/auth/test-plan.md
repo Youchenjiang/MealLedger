@@ -5,7 +5,12 @@
 - `src/auth/authActions.test.ts` covers email/password validation, sign-in,
   sign-up, provider errors, missing sessions, and returned sessions.
 - Password-reset request and recovery-session tests cover invalid email,
-  provider failure, and successful password replacement.
+  provider failure, rate-limit messaging (2/hour cap with the Custom SMTP
+  hint), and successful password replacement.
+- Recovery-link tests cover both shapes: implicit-grant links redeem with
+  setSession and PKCE links redeem with `verifyOtp({ type: "recovery",
+  token_hash })`; a client without `verifyOtp` ignores the token_hash path;
+  invalid or expired tokens map to `auth-error` with the provider's message.
 - Google and Facebook OAuth tests cover redirect initiation, callback session
   validation, provider failure, and the unchanged local-data handoff boundary.
 - `src/auth/AuthProvider.test.tsx` covers local-dev sign-in/out, password
@@ -31,6 +36,13 @@
   confirm-password field, local rejection of mismatched passwords before any
   Supabase call, duplicate sign-up landing on the sign-in view with the email
   kept, and the dedicated forgot-password view sending the reset link.
+- Recovery-link landing tests verify that implicit and PKCE links switch to
+  the `password-recovery` state, strip the callback tokens from the URL, stay
+  on the new-password form when supabase-js emits a late stored session, and
+  land on `auth-error` for a failed token.
+- Paste-link rescue tests verify the collapsed action is hidden by default,
+  expands to the URL field, and finishes recovery from a pasted implicit link
+  and a pasted PKCE link through the same parser.
 - Identity link/unlink tests in `src/auth/authActions.test.ts` cover the
   provider redirect initiation, unlink calls, and error paths.
 - `src/App.auth.test.tsx` verifies the signed-in account lists sign-in
