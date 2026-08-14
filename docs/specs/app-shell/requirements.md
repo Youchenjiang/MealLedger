@@ -45,12 +45,12 @@ WHEN the user selects 明細 (Ledger)
 THE SYSTEM SHALL show an empty confirmed ledger state and any local drafts waiting for review.
 
 WHEN the user selects 新增 (Add)
-THE SYSTEM SHALL show capture choices for manual entry, scan receipt or invoice, meal photo, and attachment.
+THE SYSTEM SHALL show the voice-capture flow (mode A 整段口說 / mode B 逐欄口說) defined by the [voice capture spec](../voice-capture/requirements.md); manual entry, scan, meal, and attachment tools are not part of the 新增 page.
 
 WHEN the user selects 專區 (Zone)
-THE SYSTEM SHALL show an empty-state placeholder for the not-yet-opened section.
+THE SYSTEM SHALL show the capture tools page — manual entry, scan receipt or invoice, meal photo, and attachment — which moved here when 新增 became the voice-capture flow.
 
-WHEN the user selects manual entry from Capture
+WHEN the user selects manual entry from 專區 (Zone)
 THE SYSTEM SHALL provide an entry point into the Manual Ledger form surface.
 
 WHEN the minimal transaction draft form is shown
@@ -87,7 +87,7 @@ WHEN the app has local-only data
 THE SYSTEM SHALL show a local-only indicator until data is synced or discarded.
 
 WHEN the app has unresolved review items
-THE SYSTEM SHALL show the review count in the shell and a draft review entry point from Capture and Ledger.
+THE SYSTEM SHALL show the review count in the shell and a draft review entry point from Overview and Ledger.
 
 WHEN a section is not implemented yet
 THE SYSTEM SHALL show a useful empty state instead of a broken or hidden page.

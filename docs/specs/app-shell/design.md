@@ -14,7 +14,9 @@ Primary navigation is a fixed bottom bar used at every viewport width (see
 - 概覽 (Overview) — `/`
 - 明細 (Ledger) — `/ledger`
 - 新增 (Add) — `/capture`, rendered as the center raised circular "+" button
-- 專區 (Zone) — `/zone`, empty-state placeholder until its content is defined
+- 專區 (Zone) — `/zone`, hosts the capture tools (manual entry, scan, meal
+  photo, attachment) that moved off `/capture` when that became the
+  voice-capture flow; the content feed remains a roadmap item
 - 設定 (Settings) — `/settings`
 
 Desktop keeps the same bottom bar and caps the content area at a readable max
@@ -49,6 +51,11 @@ Ledger shows:
 
 Capture shows:
 
+- the voice-capture flow (mode A / mode B, per the
+  [voice capture spec](../voice-capture/requirements.md))
+
+Zone shows:
+
 - manual transaction draft form
 - scan receipt or invoice action
 - meal photo action
@@ -65,9 +72,10 @@ Settings shows:
 The app-shell spec includes one real, local-only path so the shell is not a dead end:
 
 1. The user opens Overview.
-2. The user selects Start a record.
-3. Capture shows a minimal manual transaction draft form.
-4. Capture hands the user into a local draft preview.
+2. The user selects Start a record, which lands on 新增 (/capture), the
+   voice-capture flow.
+3. Zone (專區) shows the minimal manual transaction draft form.
+4. Zone hands the user into a local draft preview.
 5. The submitted record appears as a local draft in the Ledger review queue.
 6. The user can discard a local draft from the Ledger review queue.
 7. The confirmed ledger table stays empty because confirmation and official ledger writes belong to later specs.

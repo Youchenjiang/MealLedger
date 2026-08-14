@@ -5,8 +5,8 @@
 Mode A and Mode B are implemented on branch `feature/voice-capture`:
 
 - The Capture page shows the two-mode header (整段口說 / 逐欄口說), Mode B
-  defaulting, and a collapsed "其他方式" area for manual form, scan, and
-  photos.
+  defaulting; the manual form, scan, meal, and attachment tools live on the
+  專區 (Zone) page.
 - Mode A reuses `AiLedgerPanel`: Web Speech API (`zh-TW`) or typed text →
   `requestAiJson` → `parseDraftSuggestions` → field-block group per draft →
   per-field review → confirmed write.

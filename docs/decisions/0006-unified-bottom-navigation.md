@@ -31,10 +31,11 @@ used at every viewport width:
   readable max width.
 - `/account` remains as a route but is removed from the navigation; it is
   reached from the Settings page.
-- 專區 is reserved as a tab but intentionally shows an empty-state placeholder
-  until its content (meals, photos, scan sources as a feed) is decided. The
-  content is tracked in the [roadmap](../product/roadmap.md) so the reserved
-  tab cannot be silently forgotten.
+- 專區 is reserved as a tab and initially showed an empty-state placeholder.
+  When 新增 became the voice-capture flow (voice capture spec), the capture
+  tools (manual entry, scan, meal photo, attachment) moved to 專區, so the
+  tab now has content; a future content feed (meals, photos, scan sources)
+  is still tracked in the [roadmap](../product/roadmap.md).
 
 ## Consequences
 

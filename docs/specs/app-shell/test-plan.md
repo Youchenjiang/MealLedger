@@ -109,9 +109,9 @@ Test each V1 section has a useful empty state.
 
 Test empty states do not claim that fake balances or fake records are real.
 
-Test Capture page shows a Manual Ledger entry point and local-draft preview.
+Test Zone page shows the Manual Ledger entry point and local-draft preview.
 
-Test Capture page shows scan, meal photo, and attachment actions as unavailable future entry points.
+Test Zone page shows scan, meal photo, and attachment actions; 新增 shows the voice-capture flow instead of the capture choices.
 
 ## Capture-To-Review Handoff
 

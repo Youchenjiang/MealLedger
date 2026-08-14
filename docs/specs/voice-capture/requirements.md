@@ -4,8 +4,9 @@
 
 Make the Capture page (`/capture`, the bottom-nav center 新增 button) a
 voice-first flow with two in-page modes plus a coexisting direct-audio input
-path. Voice capture is the primary capture surface; manual form, scan, and
-photos stay available as a collapsed "其他方式" area.
+path. Voice capture is the primary capture surface; manual form, scan, meal,
+and attachment tools moved to the 專區 (Zone) page when `/capture` became
+the voice flow.
 
 This spec is the behavior home for [ADR 0009](../../decisions/0009-voice-capture-two-modes.md)
 (two modes), [ADR 0010](../../decisions/0010-mode-b-defaults-to-ai-correction.md)
@@ -16,10 +17,10 @@ this spec covers the capture surface and the audio mechanics around them.
 
 ## Field Blocks
 
-WHEN the user opens the Capture page
-THE SYSTEM SHALL show the voice-first flow with the ledger fields as blocks in
-the fixed order `日期 → 類型 → 帳戶 → 類別 → 對象 → 品項 → 金額`, each block
-displaying its state: filled (shows the value) or pending (grey, empty).
+Ledger fields render as blocks in the fixed order
+`日期 → 類型 → 帳戶 → 類別 → 對象 → 品項 → 金額`, each block displaying its
+state: filled (shows the value) or pending (grey, empty). Mode B lights the
+blocks up one at a time; Mode A renders a full block group per parsed draft.
 
 WHEN a field value is inferred by AI rather than typed verbatim
 THE SYSTEM SHALL mark it visibly as inferred.

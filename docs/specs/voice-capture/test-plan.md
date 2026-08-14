@@ -50,9 +50,10 @@
 
 ## App Integration
 
-- The Capture page shows the two-mode switcher with Mode B default, the fixed
-  field-block order, and the collapsed 其他方式 area; the mode is preserved
-  across navigation within the session.
+- The Capture page shows the two-mode switcher with Mode B default and the
+  fixed field-block order; the manual/scan/meal/attachment tools are not on
+  the Capture page (they live on 專區); the mode is preserved across
+  navigation within the session.
 - Confirming either mode creates exactly one official record through the
   existing boundary; the record appears in the Ledger.
 
