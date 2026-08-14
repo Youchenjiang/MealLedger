@@ -209,7 +209,9 @@ describe("AiLedgerPanel", () => {
     const amountBlock = screen.getByText("金額").closest(".field-block");
     expect(amountBlock).not.toBeNull();
     if (!(amountBlock instanceof HTMLElement)) return;
-    await user.click(amountBlock);
+    // The editable block is a real button (keyboard-accessible), so the test
+    // clicks it by its accessible name instead of the wrapping list item.
+    await user.click(screen.getByRole("button", { name: "編輯 金額" }));
     const amountInput = within(amountBlock).getByRole("textbox");
     await user.clear(amountInput);
     await user.type(amountInput, "500");

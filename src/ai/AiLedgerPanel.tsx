@@ -61,42 +61,38 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
   const [internalMode, setInternalMode] = useState<"a" | "b">("a");
   const mode = controlledMode ?? internalMode;
   const setMode = onModeChange ?? setInternalMode;
-  // Which suggestion field is being edited in place for mode A. Index-based:
-  // the suggestion key embeds mutable draft fields (amount, counterparty…), so
-  // it would change mid-edit and the update would stop matching.
-  const [editing, setEditing] = useState<{ index: number; field: string } | null>(null);
   const [inputText, setInputText] = useState("");
-  const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<AiDraftSuggestion[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [pendingNewEntities, setPendingNewEntities] = useState<AiDraftSuggestion | null>(null);
-  const [listening, setListening] = useState(false);
-  // True from the click until the engine's onstart fires (the browser may
-  // take a few seconds to load the speech model / grant the microphone).
-  const [starting, setStarting] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const configured = isAiConfigured();
   const hasValidSuggestion = suggestions.some((item) => item.ok);
   const anyInferred = suggestions.some((suggestion) => suggestion.draft && hasInferredField(suggestion.input));
 
-  // Stop any in-flight speech session when the panel unmounts so the
-  // recognition instance and its callbacks do not outlive the component.
-  useEffect(() => {
-    return () => {
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
-    };
-  }, []);
+  const speech = useAiSpeech({
+    onTranscript: (text) => {
+      setInputText((current) => `${current}${current ? " " : ""}${text}`.trim());
+    },
+    onError: setError,
+  });
+  const { editing, setEditing, handleFieldEdit, handleFieldConfirm } = useSuggestionEditing({ setSuggestions, accounts, categories, entityPolicy });
+  const draftActions = useDraftActions({
+    entityPolicy,
+    onResolveNewEntities,
+    onSaveRecord,
+    onSaveDraft,
+    setSuggestions,
+    setMessage,
+    setError,
+  });
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // Parses the typed/said text (and optional photo) into draft suggestions.
+  const handleSubmit = async (text: string, imageDataUrl: string | undefined) => {
     setError("");
     setMessage("");
-    if (!inputText.trim() && !selectedImage) {
+    if (!text.trim() && !imageDataUrl) {
       setError("請輸入或念出記帳內容,或選擇發票/收據照片。");
       return;
     }
@@ -106,8 +102,8 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
       // always agree on the reference date, even across midnight.
       const today = localToday();
       const system = buildLedgerSystemPrompt({ accounts, categories, today, entityPolicy });
-      const user = buildUserPrompt(inputText, selectedImage?.dataUrl);
-      const result = await requestAiJson({ system, user, imageDataUrl: selectedImage?.dataUrl });
+      const user = buildUserPrompt(text, imageDataUrl);
+      const result = await requestAiJson({ system, user, imageDataUrl });
       if (!result.ok) {
         setError(result.message);
         return;
@@ -122,29 +118,105 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     }
   };
 
-  const handleImageSelection = (file: File | undefined) => {
-    setSelectedImage(null);
-    setError("");
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      // readAsDataURL always resolves to a string; guard the union type.
-      const result = reader.result;
-      if (typeof result !== "string") return;
-      // Downscale large photos so the request stays within the edge-function
-      // body limit (base64 inflates ~33%). downscaleImage never rejects, so
-      // the follow-up cannot fail silently.
-      downscaleImage(result, 1600, 0.82).then((scaled) => {
-        setSelectedImage({ name: file.name, dataUrl: scaled });
-      });
+  return (
+    <div className="ai-ledger-panel">
+      {!onModeChange ? <AiModeSwitch mode={mode} onModeChange={setMode} /> : null}
+      {mode === "b" ? (
+        <ModeBPanel
+          accounts={accounts}
+          categories={categories}
+          entityPolicy={entityPolicy}
+          onResolveNewEntities={onResolveNewEntities}
+          onSaveRecord={onSaveRecord}
+          onSaveDraft={onSaveDraft}
+        />
+      ) : (
+        <>
+          <AiCaptureForm
+            configured={configured}
+            loading={loading}
+            inputText={inputText}
+            onInputTextChange={setInputText}
+            onSubmit={handleSubmit}
+            onClearError={() => setError("")}
+            onToggleListening={speech.toggleListening}
+            listening={speech.listening}
+            starting={speech.starting}
+          />
+
+          {error ? <p className="auth-message" role="alert">{error}</p> : null}
+          {message ? <output className="inline-message">{message}</output> : null}
+
+          {draftActions.pendingNewEntities ? (
+            <AskNewEntitiesDialog
+              suggestion={draftActions.pendingNewEntities}
+              onApprove={draftActions.approveNewEntities}
+              onCancel={draftActions.cancelNewEntities}
+            />
+          ) : null}
+
+      {suggestions.length > 0 ? (
+        <section className="ai-suggestions" aria-label="AI 記帳草稿">
+          <div className="draft-list-heading">
+            <div>
+              <p className="eyebrow">AI 補帳</p>
+              <h3>{hasValidSuggestion ? "確認後寫入正式記錄" : "項目有問題:可用「填入表單」補齊欄位"}</h3>
+            </div>
+            <span>{suggestions.length} 筆</span>
+          </div>
+          {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
+          {suggestions.map((suggestion, index) => (
+            <SuggestionGroupCard
+              key={suggestion.id}
+              suggestion={suggestion}
+              index={index}
+              count={suggestions.length}
+              editing={editing}
+              onEditField={(targetIndex, field) => setEditing({ index: targetIndex, field })}
+              onFieldChange={handleFieldEdit}
+              onFieldConfirm={handleFieldConfirm}
+              onConfirm={draftActions.confirmSuggestion}
+              onSaveDraft={draftActions.saveSuggestionAsDraft}
+              onApplyToForm={onApplyToForm}
+            />
+          ))}
+        </section>
+      ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Mode A speech capture: toggles the microphone and streams the recognized
+// text to the caller. Kept separate from the panel so the recognition
+// instance and its callbacks do not outlive the component.
+function useAiSpeech({
+  onTranscript,
+  onError,
+}: Readonly<{
+  onTranscript: (text: string) => void;
+  onError: (message: string) => void;
+}>) {
+  const [listening, setListening] = useState(false);
+  // True from the click until the engine's onstart fires (the browser may
+  // take a few seconds to load the speech model / grant the microphone).
+  const [starting, setStarting] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  // Stop any in-flight speech session when the panel unmounts so the
+  // recognition instance and its callbacks do not outlive the component.
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
     };
-    reader.readAsDataURL(file);
-  };
+  }, []);
 
   const toggleListening = () => {
     const Ctor = speechRecognition();
     if (!Ctor) {
-      setError("此瀏覽器不支援語音輸入,請改用文字或照片。");
+      onError("此瀏覽器不支援語音輸入,請改用文字或照片。");
       return;
     }
     if (listening || starting) {
@@ -162,7 +234,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
       for (const result of event.results) {
         transcript += result[0].transcript;
       }
-      setInputText((current) => `${current}${current ? " " : ""}${transcript}`.trim());
+      onTranscript(transcript);
     };
     recognition.onend = () => {
       setListening(false);
@@ -171,7 +243,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     recognition.onerror = () => {
       setListening(false);
       setStarting(false);
-      setError("語音辨識失敗,請再試一次或改用文字輸入。");
+      onError("語音辨識失敗,請再試一次或改用文字輸入。");
     };
     recognitionRef.current = recognition;
     setListening(true);
@@ -191,19 +263,78 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     }
   };
 
-  // Whether confirming this suggestion must first ask the user to create the
-  // not-yet-existing entities, per the per-entity-type ask policy.
-  const needsNewEntityAsk = (suggestion: AiDraftSuggestion): boolean => {
-    return Boolean(
-      (suggestion.newAccount && entityPolicy.account === "ask")
-      || (suggestion.newTransferAccount && entityPolicy.account === "ask")
-      || (suggestion.newCategory && entityPolicy.category === "ask"),
-    );
+  return { listening, starting, toggleListening };
+}
+
+// In-place editing of a suggestion's fields (mode A): the editing index is
+// kept here so the block input stays controlled while the draft mutates.
+function useSuggestionEditing({
+  setSuggestions,
+  accounts,
+  categories,
+  entityPolicy,
+}: Readonly<{
+  setSuggestions: React.Dispatch<React.SetStateAction<AiDraftSuggestion[]>>;
+  accounts: AiLedgerAccounts;
+  categories: string[];
+  entityPolicy: AiEntityPolicy;
+}>) {
+  const [editing, setEditing] = useState<{ index: number; field: string } | null>(null);
+
+  const handleFieldEdit = (index: number, field: string, value: string) => {
+    setSuggestions((current) => current.map((suggestion, i) =>
+      i === index && suggestion.draft
+        ? { ...suggestion, draft: { ...suggestion.draft, [field]: value } as TransactionDraft }
+        : suggestion,
+    ));
   };
 
+  const handleFieldConfirm = (index: number, field: string) => {
+    setSuggestions((current) => current.map((suggestion, i) => {
+      if (i !== index || !suggestion.draft) return suggestion;
+      const value = suggestion.draft[field as keyof TransactionDraft];
+      return syncEntityFlagsAfterEdit(suggestion, field, typeof value === "string" ? value : "", accounts, categories, entityPolicy);
+    }));
+    setEditing(null);
+  };
+
+  return { editing, setEditing, handleFieldEdit, handleFieldConfirm };
+}
+
+// Whether confirming this suggestion must first ask the user to create the
+// not-yet-existing entities, per the per-entity-type ask policy.
+function needsNewEntityAsk(suggestion: AiDraftSuggestion, policy: AiEntityPolicy): boolean {
+  return Boolean(
+    (suggestion.newAccount && policy.account === "ask")
+    || (suggestion.newTransferAccount && policy.account === "ask")
+    || (suggestion.newCategory && policy.category === "ask"),
+  );
+}
+
+// The confirm/save flows for draft suggestions, including the new-entity
+// approval dialog (ADR 0012). Creation never happens as a side effect of the
+// AI call itself; only of the user's confirmed write.
+function useDraftActions({
+  entityPolicy,
+  onResolveNewEntities,
+  onSaveRecord,
+  onSaveDraft,
+  setSuggestions,
+  setMessage,
+  setError,
+}: Readonly<{
+  entityPolicy: AiEntityPolicy;
+  onResolveNewEntities?: AiLedgerPanelProps["onResolveNewEntities"];
+  onSaveRecord: AiLedgerPanelProps["onSaveRecord"];
+  onSaveDraft: AiLedgerPanelProps["onSaveDraft"];
+  setSuggestions: React.Dispatch<React.SetStateAction<AiDraftSuggestion[]>>;
+  setMessage: (message: string) => void;
+  setError: (message: string) => void;
+}>) {
+  const [pendingNewEntities, setPendingNewEntities] = useState<AiDraftSuggestion | null>(null);
+
   // Creates any new entities the policy allows (auto, or the approved ask
-  // flow), then writes the official record. Creation never happens as a side
-  // effect of the AI call itself; only of the user's confirmed write.
+  // flow), then writes the official record.
   const resolveAndPersist = (suggestion: AiDraftSuggestion) => {
     if (!suggestion.draft) return;
     const needsCreation = Boolean(suggestion.newAccount || suggestion.newCategory || suggestion.newTransferAccount);
@@ -233,7 +364,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     if (!suggestion.draft) return;
     setError("");
     setMessage("");
-    if (needsNewEntityAsk(suggestion)) {
+    if (needsNewEntityAsk(suggestion, entityPolicy)) {
       setPendingNewEntities(suggestion);
       return;
     }
@@ -259,127 +390,104 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     setMessage("已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。");
   };
 
-  // Live-updates the edited field on the draft; the block input stays
-  // controlled from the draft value. Index-based so the update keeps matching
-  // even while the edited field (and thus any derived key) changes.
-  const handleFieldEdit = (index: number, field: string, value: string) => {
-    setSuggestions((current) => current.map((suggestion, i) =>
-      i === index && suggestion.draft
-        ? { ...suggestion, draft: { ...suggestion.draft, [field]: value } as TransactionDraft }
-        : suggestion,
-    ));
-  };
+  return { pendingNewEntities, confirmSuggestion, approveNewEntities, cancelNewEntities, saveSuggestionAsDraft };
+}
 
-  // Finishes editing a field: keeps the new-entity flags consistent with the
-  // edited value so the badge and the confirmed write stay truthful.
-  const handleFieldConfirm = (index: number, field: string) => {
-    setSuggestions((current) => current.map((suggestion, i) => {
-      if (i !== index || !suggestion.draft) return suggestion;
-      const value = suggestion.draft[field as keyof TransactionDraft];
-      return syncEntityFlagsAfterEdit(suggestion, field, typeof value === "string" ? value : "", accounts, categories, entityPolicy);
-    }));
-    setEditing(null);
+// The mode A input form: text/speech/photo entry plus the parse submit. Owns
+// the photo selection (downscaled to the edge-function body limit).
+function AiCaptureForm({
+  configured,
+  loading,
+  inputText,
+  onInputTextChange,
+  onSubmit,
+  onClearError,
+  onToggleListening,
+  listening,
+  starting,
+}: Readonly<{
+  configured: boolean;
+  loading: boolean;
+  inputText: string;
+  onInputTextChange: (value: string) => void;
+  onSubmit: (text: string, imageDataUrl: string | undefined) => void;
+  onClearError: () => void;
+  onToggleListening: () => void;
+  listening: boolean;
+  starting: boolean;
+}>) {
+  const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelection = (file: File | undefined) => {
+    setSelectedImage(null);
+    onClearError();
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      // readAsDataURL always resolves to a string; guard the union type.
+      const result = reader.result;
+      if (typeof result !== "string") return;
+      // Downscale large photos so the request stays within the edge-function
+      // body limit (base64 inflates ~33%). downscaleImage never rejects, so
+      // the follow-up cannot fail silently.
+      downscaleImage(result, 1600, 0.82).then((scaled) => {
+        setSelectedImage({ name: file.name, dataUrl: scaled });
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
-    <div className="ai-ledger-panel">
-      {!onModeChange ? <AiModeSwitch mode={mode} onModeChange={setMode} /> : null}
-      {mode === "b" ? (
-        <ModeBPanel
-          accounts={accounts}
-          categories={categories}
-          entityPolicy={entityPolicy}
-          onResolveNewEntities={onResolveNewEntities}
-          onSaveRecord={onSaveRecord}
-          onSaveDraft={onSaveDraft}
-        />
-      ) : (
-        <>
-      <form className="ai-ledger-form" onSubmit={handleSubmit}>
-        <p className="field-help">
-          用說的、打字,或拍發票/收據,AI 會幫你把欄位填好,確認後才寫入正式記錄。
-        </p>
-        {!configured ? (
-          <output className="inline-message">尚未設定 AI 金鑰:在 .env 設定 AI_PROVIDER 與 AI_API_KEY 後即可使用。</output>
-        ) : null}
-        <label htmlFor="ai-ledger-input">記帳內容</label>
-        <textarea
-          id="ai-ledger-input"
-          className="ai-ledger-input"
-          rows={3}
-          value={inputText}
-          onChange={(event) => setInputText(event.target.value)}
-          placeholder="例如:7/25 中午和同事吃牛肉麵 480、7/26 繳房租 12000"
-        />
-        <div className="ai-ledger-actions">
-          <button className="secondary-action" type="button" onClick={toggleListening} aria-pressed={listening || starting}>
-            <Mic size={16} aria-hidden="true" />
-            {listening || starting ? "停止收音" : "用說的"}
-          </button>
-          <button
-            className="secondary-action"
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <ImagePlus size={16} aria-hidden="true" />
-            拍發票/收據
-          </button>
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            accept="image/*"
-            onChange={(event) => handleImageSelection(event.target.files?.[0])}
-          />
-          <button className="primary-action" type="submit" disabled={loading}>
-            <Sparkles size={16} aria-hidden="true" />
-            {loading ? "AI 辨識中…" : "產生記帳草稿"}
-          </button>
-        </div>
-        {selectedImage ? <p className="field-help">已選取:{selectedImage.name}</p> : null}
-      </form>
-
-      {error ? <p className="auth-message" role="alert">{error}</p> : null}
-      {message ? <output className="inline-message">{message}</output> : null}
-
-      {pendingNewEntities ? (
-        <AskNewEntitiesDialog
-          suggestion={pendingNewEntities}
-          onApprove={approveNewEntities}
-          onCancel={cancelNewEntities}
-        />
+    <form
+      className="ai-ledger-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(inputText, selectedImage?.dataUrl);
+      }}
+    >
+      <p className="field-help">
+        用說的、打字,或拍發票/收據,AI 會幫你把欄位填好,確認後才寫入正式記錄。
+      </p>
+      {!configured ? (
+        <output className="inline-message">尚未設定 AI 金鑰:在 .env 設定 AI_PROVIDER 與 AI_API_KEY 後即可使用。</output>
       ) : null}
-
-      {suggestions.length > 0 ? (
-        <section className="ai-suggestions" aria-label="AI 記帳草稿">
-          <div className="draft-list-heading">
-            <div>
-              <p className="eyebrow">AI 補帳</p>
-              <h3>{hasValidSuggestion ? "確認後寫入正式記錄" : "項目有問題:可用「填入表單」補齊欄位"}</h3>
-            </div>
-            <span>{suggestions.length} 筆</span>
-          </div>
-          {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
-          {suggestions.map((suggestion, index) => (
-            <SuggestionGroupCard
-              key={suggestion.id}
-              suggestion={suggestion}
-              index={index}
-              count={suggestions.length}
-              editing={editing}
-              onEditField={(targetIndex, field) => setEditing({ index: targetIndex, field })}
-              onFieldChange={handleFieldEdit}
-              onFieldConfirm={handleFieldConfirm}
-              onConfirm={confirmSuggestion}
-              onSaveDraft={saveSuggestionAsDraft}
-              onApplyToForm={onApplyToForm}
-            />
-          ))}
-        </section>
-      ) : null}
-        </>
-      )}
-    </div>
+      <label htmlFor="ai-ledger-input">記帳內容</label>
+      <textarea
+        id="ai-ledger-input"
+        className="ai-ledger-input"
+        rows={3}
+        value={inputText}
+        onChange={(event) => onInputTextChange(event.target.value)}
+        placeholder="例如:7/25 中午和同事吃牛肉麵 480、7/26 繳房租 12000"
+      />
+      <div className="ai-ledger-actions">
+        <button className="secondary-action" type="button" onClick={onToggleListening} aria-pressed={listening || starting}>
+          <Mic size={16} aria-hidden="true" />
+          {listening || starting ? "停止收音" : "用說的"}
+        </button>
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <ImagePlus size={16} aria-hidden="true" />
+          拍發票/收據
+        </button>
+        <input
+          ref={fileInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="image/*"
+          onChange={(event) => handleImageSelection(event.target.files?.[0])}
+        />
+        <button className="primary-action" type="submit" disabled={loading}>
+          <Sparkles size={16} aria-hidden="true" />
+          {loading ? "AI 辨識中…" : "產生記帳草稿"}
+        </button>
+      </div>
+      {selectedImage ? <p className="field-help">已選取:{selectedImage.name}</p> : null}
+    </form>
   );
 }
 

@@ -49,25 +49,27 @@ export function FieldBlocks({
     <ol className="field-blocks">
       {items.map((item) => {
         const editing = editingField === item.field && Boolean(onFieldChange);
-        const startEditing = () => {
-          if (!editing && onEditField) onEditField(item.field);
-        };
+        const content = (
+          <>
+            <span className="field-block-label">{item.label}</span>
+            <FieldBlockValue item={item} editing={editing} onFieldChange={onFieldChange} onFieldConfirm={onFieldConfirm} />
+          </>
+        );
         return (
           <li
             key={item.field}
             className={`field-block ${item.state}${editing ? " editing" : ""}${onEditField ? " editable" : ""}`}
-            role={onEditField ? "button" : undefined}
-            tabIndex={onEditField ? 0 : undefined}
-            onClick={startEditing}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                startEditing();
-              }
-            }}
           >
-            <span className="field-block-label">{item.label}</span>
-            <FieldBlockValue item={item} editing={editing} onFieldChange={onFieldChange} onFieldConfirm={onFieldConfirm} />
+            {editing || !onEditField ? content : (
+              <button
+                className="field-block-content"
+                type="button"
+                aria-label={`編輯 ${item.label}`}
+                onClick={() => onEditField(item.field)}
+              >
+                {content}
+              </button>
+            )}
           </li>
         );
       })}

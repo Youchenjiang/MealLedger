@@ -2706,6 +2706,22 @@ button.action-card.unavailable {
   cursor: auto;
 }
 
+.field-block-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
 .field-block-label {
   color: #75582e;
   font-size: 13px;

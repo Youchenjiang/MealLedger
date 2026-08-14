@@ -344,13 +344,15 @@
   }
   .summary.show { display: grid; animation: rise .25s ease; }
   .summary h2 { font-size: 19px; margin-bottom: 6px; }
-  .summary .s-row {
-    display: flex; justify-content: space-between; padding: 11px 4px;
-    border-bottom: 1px dashed var(--line); font-size: 15px;
+  .summary dl {
+    display: grid; grid-template-columns: 1fr auto; margin: 0;
   }
-  .summary .s-row:last-child { border-bottom: none; }
-  .summary .s-row dt { color: var(--muted); font-weight: 600; }
-  .summary .s-row dd { font-weight: 700; }
+  .summary dl dt, .summary dl dd {
+    padding: 11px 4px; border-bottom: 1px dashed var(--line); font-size: 15px;
+  }
+  .summary dl dt:last-of-type, .summary dl dd:last-of-type { border-bottom: none; }
+  .summary dl dt { color: var(--muted); font-weight: 600; }
+  .summary dl dd { font-weight: 700; margin: 0; }
 
   .done-banner {
     width: min(560px, 100%); text-align: center; padding: 26px;
@@ -480,13 +482,13 @@
     <div class="summary" id="summary">
       <h2>確認這筆記錄</h2>
       <dl>
-        <div class="s-row"><dt>日期</dt><dd id="sDate">2026-07-25</dd></div>
-        <div class="s-row"><dt>類型</dt><dd id="sKind">支出</dd></div>
-        <div class="s-row"><dt>帳戶</dt><dd id="sAccount">錢包</dd></div>
-        <div class="s-row"><dt>類別</dt><dd id="sCategory">午餐</dd></div>
-        <div class="s-row"><dt>對象</dt><dd id="sCounterparty">同事</dd></div>
-        <div class="s-row"><dt>品項</dt><dd id="sItem">牛肉麵</dd></div>
-        <div class="s-row"><dt>金額</dt><dd id="sAmount">TWD 480</dd></div>
+        <dt>日期</dt><dd id="sDate">2026-07-25</dd>
+        <dt>類型</dt><dd id="sKind">支出</dd>
+        <dt>帳戶</dt><dd id="sAccount">錢包</dd>
+        <dt>類別</dt><dd id="sCategory">午餐</dd>
+        <dt>對象</dt><dd id="sCounterparty">同事</dd>
+        <dt>品項</dt><dd id="sItem">牛肉麵</dd>
+        <dt>金額</dt><dd id="sAmount">TWD 480</dd>
       </dl>
     </div>
     <div class="done-banner" id="done">

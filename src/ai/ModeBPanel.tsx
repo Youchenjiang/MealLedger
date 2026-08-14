@@ -199,9 +199,9 @@ function useModeBCapture({
   accounts: ModeBPanelProps["accounts"];
   categories: string[];
   entityPolicy: AiEntityPolicy;
-  onResolveNewEntities?: ModeBPanelProps["onResolveNewEntities"];
+  onResolveNewEntities: ModeBPanelProps["onResolveNewEntities"];
   onSaveRecord: ModeBPanelProps["onSaveRecord"];
-  onSaveDraft?: ModeBPanelProps["onSaveDraft"];
+  onSaveDraft: ModeBPanelProps["onSaveDraft"];
 }>) {
   const [values, setValues] = useState<Partial<Record<ModeBField, string>>>({});
   const [step, setStep] = useState(0);
