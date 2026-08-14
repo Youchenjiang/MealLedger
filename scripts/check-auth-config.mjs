@@ -47,8 +47,15 @@ const REDIRECT_URLS_EXPECTED = [
   "http://127.0.0.1:3000/account",
 ];
 
+// Strip trailing slashes without a regex: simple, linear, and analyzer-friendly.
+function stripTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
+}
+
 function normalizeUrl(value) {
-  return String(value ?? "").trim().replace(/\/+$/u, "");
+  return stripTrailingSlashes(String(value ?? "").trim());
 }
 
 function readToken() {
@@ -96,8 +103,17 @@ function readWindowsKeyringToken() {
     "Write-Output $token",
   ].join("\r\n");
   const encoded = Buffer.from(script, "utf16le").toString("base64");
+  // Resolve PowerShell by absolute path instead of PATH lookup (S4036): the
+  // script only ever runs on Windows to read the CLI credential-manager token.
+  const powerShellPath = join(
+    process.env.SystemRoot || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
   const result = spawnSync(
-    "powershell",
+    powerShellPath,
     ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
     { encoding: "utf8", windowsHide: true, timeout: 30000 },
   );
@@ -156,11 +172,6 @@ if (!response.ok) {
 }
 
 const config = await response.json();
-if (process.env.AUTH_CHECK_DEBUG) {
-  console.error("response keys:", Object.keys(config).join(", "));
-  console.error("site_url:", JSON.stringify(config.site_url));
-  console.error("uri_allow_list:", JSON.stringify(config.uri_allow_list));
-}
 // The Management API returns uri_allow_list as a comma-separated string
 // ("a,b,c"), not a JSON array — normalize both shapes.
 const parseAllowList = (value) => {
@@ -183,11 +194,10 @@ const report = (label, ok, detail) => {
 console.log(`Project: ${projectRef}`);
 console.log("");
 
-report(
-  "Site URL",
-  actual.siteUrl === expected.siteUrl,
-  `${actual.siteUrl || "(empty)"} ${actual.siteUrl === expected.siteUrl ? "" : `— expected ${expected.siteUrl}`}`,
-);
+const siteUrlDetail = actual.siteUrl === expected.siteUrl
+  ? actual.siteUrl || "(empty)"
+  : `${actual.siteUrl || "(empty)"} — expected ${expected.siteUrl}`;
+report("Site URL", actual.siteUrl === expected.siteUrl, siteUrlDetail);
 if (actual.siteUrl !== expected.siteUrl) {
   console.log("        Fix: Authentication > URL Configuration > Site URL (emails link here)");
 }

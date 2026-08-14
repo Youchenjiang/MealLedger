@@ -55,10 +55,17 @@ function applySession(
   setState(session ? "signed-in" : "signed-out");
 }
 
+// Strip trailing slashes without a regex: simple, linear, and analyzer-friendly.
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
+}
+
 function authRedirect(): string {
   // OAuth popups must return to the document that opened them, so their
   // callback targets the current instance unless a public URL is configured.
-  const base = (authRedirectBaseUrl || window.location.origin).replace(/\/+$/, "");
+  const base = stripTrailingSlashes(authRedirectBaseUrl || window.location.origin);
   return `${base}/account`;
 }
 
@@ -68,7 +75,7 @@ function passwordResetRedirect(): string | undefined {
   // redirectTo entirely so Supabase links the email to its Site URL (the live
   // deployment in the dashboard) instead of a local instance.
   if (!authRedirectBaseUrl) return undefined;
-  return `${authRedirectBaseUrl.replace(/\/+$/, "")}/account`;
+  return `${stripTrailingSlashes(authRedirectBaseUrl)}/account`;
 }
 
 function clearAuthCallbackHash(): void {
