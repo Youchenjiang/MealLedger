@@ -11,6 +11,12 @@ export const isSupabaseConfigured = isUsableSupabaseConfig(
   { url: supabaseUrl, anonKey: supabasePublicKey },
   { allowHttp: import.meta.env.DEV },
 );
+// Stable base URL for auth emails (password reset, OAuth callbacks). Email
+// links are opened later, often on a different device, so they must point to a
+// public deployment rather than the instance that sent the request (which is
+// 127.0.0.1 in a local preview). Set VITE_AUTH_REDIRECT_URL to the deployed
+// app URL; it falls back to the current origin for local development.
+export const authRedirectBaseUrl = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim() ?? "";
 const explicitLocalDevelopmentMode = import.meta.env.VITE_LOCAL_DEVELOPMENT_MODE === "true";
 export const isLocalDevelopmentMode = import.meta.env.DEV && (explicitLocalDevelopmentMode || !isSupabaseConfigured);
 

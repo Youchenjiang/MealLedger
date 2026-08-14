@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { ALREADY_REGISTERED_MESSAGE, linkIdentity, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
+import { ALREADY_REGISTERED_MESSAGE, linkIdentity, recoverPasswordFromLink, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword } from "./authActions";
 
 function passwordClient(signInWithPasswordMock = vi.fn(), signUpMock = vi.fn()) {
   return { auth: { signInWithPassword: signInWithPasswordMock, signUp: signUpMock } };
@@ -90,6 +90,25 @@ describe("password auth action", () => {
     expect(resetMock).toHaveBeenCalledWith("user@example.com", { redirectTo: "https://app.test/settings" });
   });
 
+  test("falls back to the Supabase Site URL when no redirect URL is configured", async () => {
+    const resetMock = vi.fn().mockResolvedValue({ error: null });
+
+    await expect(requestPasswordReset(recoveryClient(resetMock), "user@example.com")).resolves.toEqual({
+      ok: true,
+      message: "Password reset link sent. Check your email.",
+    });
+    expect(resetMock).toHaveBeenCalledWith("user@example.com", {});
+  });
+
+  test("explains the platform email rate limit instead of a bare error", async () => {
+    const resetMock = vi.fn().mockResolvedValue({ error: new Error("Email rate limit exceeded") });
+
+    await expect(requestPasswordReset(recoveryClient(resetMock), "user@example.com")).resolves.toEqual({
+      ok: false,
+      message: "Email rate limit exceeded. Supabase's default email service allows only 2 emails per hour — try again later, or configure Custom SMTP in the Supabase dashboard to remove the cap.",
+    });
+  });
+
   test("does not request a reset without an email", async () => {
     const resetMock = vi.fn();
 
@@ -115,6 +134,63 @@ describe("password auth action", () => {
       message: "Opening google sign-in...",
     });
     expect(signInWithOAuthMock).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: "https://app.test/settings" } });
+  });
+
+  test("reports a failed social sign-in", async () => {
+    const signInWithOAuthMock = vi.fn().mockResolvedValue({ error: new Error("provider unavailable") });
+
+    await expect(signInWithOAuth({ auth: { signInWithOAuth: signInWithOAuthMock } }, "google", "https://app.test/settings")).resolves.toEqual({
+      ok: false,
+      message: "provider unavailable",
+    });
+  });
+
+  test("recovers a password from a pasted reset link", async () => {
+    const session = { user: { id: "recovering-user" } };
+    const setSession = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+    await expect(recoverPasswordFromLink({ auth: { setSession } }, "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
+      result: { ok: true, session },
+    });
+    expect(setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+  });
+
+  test("recovers a password from a PKCE token_hash reset link in the query string", async () => {
+    const session = { user: { id: "recovering-user" } };
+    const verifyOtp = vi.fn().mockResolvedValue({ data: { session }, error: null });
+
+    await expect(recoverPasswordFromLink({ auth: { setSession: vi.fn(), verifyOtp } }, "https://app.test/account?token_hash=pkce-hash&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
+      result: { ok: true, session },
+    });
+    expect(verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "pkce-hash" });
+  });
+
+  test("reports a failed PKCE recovery token", async () => {
+    const verifyOtp = vi.fn().mockResolvedValue({ data: null, error: new Error("Token has expired or is invalid") });
+
+    await expect(recoverPasswordFromLink({ auth: { setSession: vi.fn(), verifyOtp } }, "https://app.test/account?token_hash=stale&type=recovery")).resolves.toEqual({
+      handled: true,
+      recovery: true,
+      result: { ok: false, message: "Token has expired or is invalid" },
+    });
+  });
+
+  test("ignores a token_hash link when the client has no verifyOtp", async () => {
+    const setSession = vi.fn();
+
+    await expect(recoverPasswordFromLink({ auth: { setSession } }, "https://app.test/account?token_hash=pkce-hash&type=recovery")).resolves.toEqual({ handled: false });
+    expect(setSession).not.toHaveBeenCalled();
+  });
+
+  test("treats a pasted string without a callback as not handled", async () => {
+    const setSession = vi.fn();
+
+    await expect(recoverPasswordFromLink({ auth: { setSession } }, "not-a-link")).resolves.toEqual({ handled: false });
+    expect(setSession).not.toHaveBeenCalled();
   });
 
   test("restores a social callback session from the URL fragment", async () => {

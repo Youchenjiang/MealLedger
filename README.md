@@ -1,6 +1,18 @@
 # MealLedger
 A personal accounting app that can optionally link transactions, invoice scans, meal records, and photos while keeping large media files separate from clean financial exports.
 
+## Live Deployment
+
+The production app is hosted on Cloudflare Workers:
+
+```text
+https://mealledger.g1014308.workers.dev
+```
+
+Auth emails (password reset, confirmation) must link to this domain, never to
+a local dev server — see [Frontend hosting](docs/engineering/frontend-hosting.md)
+and [Email delivery](docs/engineering/email-delivery.md).
+
 ## Architecture
 
 MealLedger stores structured records in Supabase PostgreSQL and large media files in Cloudflare R2. The database keeps media metadata and relationship IDs only, so ledger exports stay small and do not include image bytes.
@@ -26,6 +38,8 @@ For implementation work, start from the relevant feature spec under `docs/specs/
 - [Long-term roadmap](docs/product/roadmap.md)
 - [Development workflow](docs/engineering/development-workflow.md)
 - [Backend architecture](docs/engineering/backend-architecture.md)
+- [Frontend hosting](docs/engineering/frontend-hosting.md)
+- [Email delivery](docs/engineering/email-delivery.md)
 - [Auth provider setup](docs/specs/auth/provider-setup.md)
 - [Supabase schema](supabase/schema.sql)
 - [R2 upload Edge Function](supabase/functions/create-r2-upload-url/index.ts)

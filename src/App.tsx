@@ -541,6 +541,7 @@ type AccountPageProps = Readonly<{
   onSignIn: (email?: string, password?: string) => Promise<void>;
   onSignUp: (email?: string, password?: string) => Promise<void>;
   onRequestPasswordReset: (email?: string) => Promise<void>;
+  onRecoverPasswordFromLink: (link?: string) => Promise<void>;
   onUpdatePassword: (password?: string) => Promise<void>;
   onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   onLinkIdentity: (provider: OAuthProvider) => Promise<void>;
@@ -869,7 +870,7 @@ export function App() {
 
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
-  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
+  const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, recoverPasswordFromLink, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
   const [onboardingCompleted, setOnboardingCompleted] = useState(readOnboardingCompleted);
@@ -1293,6 +1294,7 @@ function AuthenticatedApp() {
           onSignIn: signIn,
           onSignUp: signUp,
           onRequestPasswordReset: requestPasswordReset,
+          onRecoverPasswordFromLink: recoverPasswordFromLink,
           onUpdatePassword: updatePassword,
           onSignInWithOAuth: signInWithOAuth,
           identities,
@@ -1497,6 +1499,7 @@ type RouteRenderContext = {
   onSignIn: (email?: string, password?: string) => Promise<void>;
   onSignUp: (email?: string, password?: string) => Promise<void>;
   onRequestPasswordReset: (email?: string) => Promise<void>;
+  onRecoverPasswordFromLink: (link?: string) => Promise<void>;
   onUpdatePassword: (password?: string) => Promise<void>;
   onSignInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   identities: LinkedIdentity[];
@@ -1541,6 +1544,7 @@ function renderRoute({
   onSignIn,
   onSignUp,
   onRequestPasswordReset,
+  onRecoverPasswordFromLink,
   onUpdatePassword,
   onSignInWithOAuth,
   identities,
@@ -1717,6 +1721,7 @@ function renderRoute({
           onSignIn={onSignIn}
           onSignUp={onSignUp}
           onRequestPasswordReset={onRequestPasswordReset}
+          onRecoverPasswordFromLink={onRecoverPasswordFromLink}
           onUpdatePassword={onUpdatePassword}
           onSignInWithOAuth={onSignInWithOAuth}
           onLinkIdentity={onLinkIdentity}
@@ -4494,12 +4499,16 @@ function PasswordInput({ id, value, autoComplete, visible, onValueChange, onTogg
   );
 }
 
-function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
+function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCounts, storageStatus, identities, onSignIn, onSignUp, onRequestPasswordReset, onRecoverPasswordFromLink, onUpdatePassword, onSignInWithOAuth, onLinkIdentity, onUnlinkIdentity, onClaimLocalWorkspace, onSignOut }: AccountPageProps) {
   const isSignedIn = authState === "signed-in";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [recoveryLink, setRecoveryLink] = useState("");
+  // The paste-a-reset-link rescue (webviews) stays collapsed by default so it
+  // does not compete with the primary forgot-password action; reveal on demand.
+  const [showRecoveryLink, setShowRecoveryLink] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [newPasswordVisible, setNewPasswordVisible] = useState(false);
@@ -4512,6 +4521,7 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
     setConfirmPassword("");
     setPasswordVisible(false);
     setConfirmPasswordVisible(false);
+    setShowRecoveryLink(false);
   };
 
   const previousAuthMessage = useRef(authMessage);
@@ -4539,6 +4549,11 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
   const handlePasswordReset = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onRequestPasswordReset(email).catch(() => undefined);
+  };
+
+  const handleRecoveryLink = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onRecoverPasswordFromLink(recoveryLink).catch(() => undefined);
   };
 
   const handlePasswordUpdate = (event: FormEvent<HTMLFormElement>) => {
@@ -4595,17 +4610,34 @@ function AccountPage({ authState, authMessage, cloudDataOwnerMatches, handoffCou
   );
 
   const renderForgotPasswordForm = () => (
-    <form className="auth-form account-page-form" onSubmit={handlePasswordReset}>
-      <p className="field-help">Enter your email and we will send a link to reset your password.</p>
-      <label htmlFor="account-reset-email">Email</label>
-      <input id="account-reset-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-      <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
-        <KeyRound size={18} aria-hidden="true" />
-        {authState === "loading" ? "Sending link..." : "Send reset link"}
-      </button>
-      <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>Back to sign in</button>
+    <>
+      <form className="auth-form account-page-form" onSubmit={handlePasswordReset}>
+        <p className="field-help">Enter your email and we will send a link to reset your password.</p>
+        <label htmlFor="account-reset-email">Email</label>
+        <input id="account-reset-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+        <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+          <KeyRound size={18} aria-hidden="true" />
+          {authState === "loading" ? "Sending link..." : "Send reset link"}
+        </button>
+        <button className="quiet-action" type="button" onClick={() => switchAuthView("sign-in")}>Back to sign in</button>
+      </form>
+      {showRecoveryLink ? (
+        <form className="auth-form account-page-form" onSubmit={handleRecoveryLink}>
+          <p className="field-help">Reset link opened in your browser instead of here? Paste the full link from the email to finish on this device.</p>
+          <label htmlFor="account-reset-link">Reset link</label>
+          <input id="account-reset-link" type="url" inputMode="url" autoComplete="url" required value={recoveryLink} onChange={(event) => setRecoveryLink(event.target.value)} placeholder="https://.../account#access_token=..." />
+          <button className="primary-action auth-submit" type="submit" disabled={authState === "loading"}>
+            <KeyRound size={18} aria-hidden="true" />
+            {authState === "loading" ? "Checking link..." : "Use reset link"}
+          </button>
+        </form>
+      ) : (
+        <button className="quiet-action auth-forgot-action" type="button" onClick={() => setShowRecoveryLink(true)}>
+          Reset link opened in another browser? Paste it here
+        </button>
+      )}
       {authMessage ? <p className="auth-message" role="alert">{authMessage}</p> : null}
-    </form>
+    </>
   );
 
   const renderAuthForm = () => (
