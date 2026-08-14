@@ -40,7 +40,7 @@ test("switches the voice capture mode from the page header", async ({ page }) =>
 
   // 整段口說 (mode A) swaps in the free-text parse panel.
   await page.getByRole("tab", { name: "整段口說" }).click();
-  await expect(page.getByPlaceholder(/例如:7\/25/)).toBeVisible();
+  await expect(page.getByPlaceholder(/例如:7\/25/u)).toBeVisible();
 
   // Back to 逐欄口說 restores the step panel.
   await page.getByRole("tab", { name: "逐欄口說" }).click();
@@ -75,7 +75,7 @@ test("completes a mode B capture from typed fields and saves an official record"
     ["金額", "417"],
   ];
   for (const [label, value] of steps) {
-    await expect(page.getByText("第 1 步 · 共 7 步").or(page.getByText(/^第 [2-7] 步/))).toBeVisible();
+    await expect(page.getByText("第 1 步 · 共 7 步").or(page.getByText(/^第 [2-7] 步/u))).toBeVisible();
     await page.getByLabel(label, { exact: true }).fill(value);
     await page.getByRole("button", { name: "✓ 填入此欄", exact: true }).click();
   }
