@@ -103,29 +103,115 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
           onSaveDraft={onSaveDraft}
         />
       ) : (
-        <>
-          <AiCaptureForm
-            configured={configured}
-            loading={loading}
-            inputText={inputText}
-            onInputTextChange={setInputText}
-            onSubmit={handleSubmit}
-            onClearError={() => setError("")}
-            onToggleListening={speech.toggleListening}
-            listening={speech.listening}
-            starting={speech.starting}
-          />
+        <AiCaptureView
+          configured={configured}
+          loading={loading}
+          inputText={inputText}
+          onInputTextChange={setInputText}
+          onSubmit={handleSubmit}
+          onClearError={() => setError("")}
+          listening={speech.listening}
+          starting={speech.starting}
+          onToggleListening={speech.toggleListening}
+          error={error}
+          message={message}
+          pendingNewEntity={draftActions.pendingNewEntities}
+          onApproveNewEntities={draftActions.approveNewEntities}
+          onCancelNewEntities={draftActions.cancelNewEntities}
+          suggestions={suggestions}
+          hasValidSuggestion={hasValidSuggestion}
+          anyInferred={anyInferred}
+          editing={editing}
+          onEditField={(index, field) => setEditing({ index, field })}
+          onFieldChange={handleFieldEdit}
+          onFieldConfirm={handleFieldConfirm}
+          onConfirm={draftActions.confirmSuggestion}
+          onSaveDraft={draftActions.saveSuggestionAsDraft}
+          onApplyToForm={onApplyToForm}
+        />
+      )}
+    </div>
+  );
+}
 
-          {error ? <p className="auth-message" role="alert">{error}</p> : null}
-          {message ? <output className="inline-message">{message}</output> : null}
+// The mode A view: text/speech/photo entry, inline messages, the new-entity
+// approval dialog, and the draft suggestion list. Kept as its own component so
+// the branching stays out of AiLedgerPanel (cognitive complexity).
+function AiCaptureView({
+  configured,
+  loading,
+  inputText,
+  onInputTextChange,
+  onSubmit,
+  onClearError,
+  listening,
+  starting,
+  onToggleListening,
+  error,
+  message,
+  pendingNewEntity,
+  onApproveNewEntities,
+  onCancelNewEntities,
+  suggestions,
+  hasValidSuggestion,
+  anyInferred,
+  editing,
+  onEditField,
+  onFieldChange,
+  onFieldConfirm,
+  onConfirm,
+  onSaveDraft,
+  onApplyToForm,
+}: Readonly<{
+  configured: boolean;
+  loading: boolean;
+  inputText: string;
+  onInputTextChange: (value: string) => void;
+  onSubmit: (text: string, imageDataUrl: string | undefined) => void;
+  onClearError: () => void;
+  listening: boolean;
+  starting: boolean;
+  onToggleListening: () => void;
+  error: string;
+  message: string;
+  pendingNewEntity: AiDraftSuggestion | null;
+  onApproveNewEntities: () => void;
+  onCancelNewEntities: () => void;
+  suggestions: AiDraftSuggestion[];
+  hasValidSuggestion: boolean;
+  anyInferred: boolean;
+  editing: { index: number; field: string } | null;
+  onEditField: (index: number, field: string) => void;
+  onFieldChange: (index: number, field: string, value: string) => void;
+  onFieldConfirm: (index: number, field: string) => void;
+  onConfirm: (suggestion: AiDraftSuggestion) => void;
+  onSaveDraft: (suggestion: AiDraftSuggestion) => void;
+  onApplyToForm: AiLedgerPanelProps["onApplyToForm"];
+}>) {
+  return (
+    <>
+      <AiCaptureForm
+        configured={configured}
+        loading={loading}
+        inputText={inputText}
+        onInputTextChange={onInputTextChange}
+        onSubmit={onSubmit}
+        onClearError={onClearError}
+        onToggleListening={onToggleListening}
+        listening={listening}
+        starting={starting}
+      />
 
-          {draftActions.pendingNewEntities ? (
-            <AskNewEntitiesDialog
-              suggestion={draftActions.pendingNewEntities}
-              onApprove={draftActions.approveNewEntities}
-              onCancel={draftActions.cancelNewEntities}
-            />
-          ) : null}
+      {error ? <p className="auth-message" role="alert">{error}</p> : null}
+      {message ? <output className="inline-message">{message}</output> : null}
+
+      {pendingNewEntity ? (
+        <AskNewEntitiesDialog
+          suggestion={pendingNewEntity}
+          onApprove={onApproveNewEntities}
+          onCancel={onCancelNewEntities}
+        />
+      ) : null}
 
       {suggestions.length > 0 ? (
         <section className="ai-suggestions" aria-label="AI 記帳草稿">
@@ -144,19 +230,17 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
               index={index}
               count={suggestions.length}
               editing={editing}
-              onEditField={(targetIndex, field) => setEditing({ index: targetIndex, field })}
-              onFieldChange={handleFieldEdit}
-              onFieldConfirm={handleFieldConfirm}
-              onConfirm={draftActions.confirmSuggestion}
-              onSaveDraft={draftActions.saveSuggestionAsDraft}
+              onEditField={(targetIndex, field) => onEditField(targetIndex, field)}
+              onFieldChange={onFieldChange}
+              onFieldConfirm={onFieldConfirm}
+              onConfirm={onConfirm}
+              onSaveDraft={onSaveDraft}
               onApplyToForm={onApplyToForm}
             />
           ))}
         </section>
       ) : null}
-        </>
-      )}
-    </div>
+    </>
   );
 }
 
