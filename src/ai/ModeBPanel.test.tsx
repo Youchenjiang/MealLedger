@@ -32,6 +32,8 @@ class FakeRecognition implements SpeechRecognitionLike {
     this.onresult?.({ results: [[{ transcript: nextTranscript, isFinal: true }]] });
     this.onend?.();
   }
+  // skipcq: JS-0321, JS-0105 -- the fake has nothing to stop; the panel's
+  // stop() calls must be tolerated without side effects.
   stop() {}
 }
 
@@ -135,6 +137,7 @@ describe("ModeBPanel", () => {
         this.onend?.();
         fired = true;
       }
+      // skipcq: JS-0321, JS-0105 -- no-op fake stop, see FakeRecognition.
       stop() {}
     }
     vi.mocked(requestAiJson).mockResolvedValue({ ok: true, data: { value: "" } });
@@ -164,9 +167,11 @@ describe("ModeBPanel", () => {
       onresult: SpeechRecognitionLike["onresult"] = null;
       onend: SpeechRecognitionLike["onend"] = null;
       onerror: SpeechRecognitionLike["onerror"] = null;
+      // skipcq: JS-0105 -- the fake deliberately never fires onstart.
       start() {
         // The engine has not started listening yet — onstart is deferred.
       }
+      // skipcq: JS-0321, JS-0105 -- no-op fake stop, see FakeRecognition.
       stop() {}
     }
     vi.stubGlobal("SpeechRecognition", SlowRecognition);

@@ -116,7 +116,7 @@ function useModeBSpeech({
     // loads the speech model on the first start, so a warm instance begins
     // hearing almost immediately on later clicks. Some engines reject
     // restarting the same object, so fall back to a fresh one.
-    let recognition: SpeechRecognitionLike = recognitionRef.current ?? new Ctor();
+    const recognition: SpeechRecognitionLike = recognitionRef.current ?? new Ctor();
     recognition.lang = "zh-TW";
     // Interim results stream the words as they are heard; the final result
     // (the last item, flagged isFinal) drives the correction flow.

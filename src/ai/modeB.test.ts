@@ -25,6 +25,8 @@ const fullValues: Partial<Record<ModeBField, string>> = {
 
 describe("mode B step sequence", () => {
   test("walks the fixed field order for ordinary kinds", () => {
+    // skipcq: JS-W1042 -- the argument is explicit; the parameter is typed
+    // as required (string | undefined) so TS rejects the no-arg form.
     expect(modeBStepsFor(undefined)).toEqual(["date", "kind", "account", "category", "counterparty", "itemName", "amount"]);
     expect(modeBStepsFor("expense")).toEqual(["date", "kind", "account", "category", "counterparty", "itemName", "amount"]);
   });

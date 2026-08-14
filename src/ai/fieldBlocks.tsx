@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 // Marks a field value the model inferred rather than the user stated. The
@@ -88,11 +89,18 @@ function FieldBlockValue({
   onFieldChange?: (field: string, value: string) => void;
   onFieldConfirm?: (field: string) => void;
 }>) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Focus the input when the block opens for editing (the autoFocus prop is
+  // avoided so the focus behavior stays predictable under repeated edits).
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
   if (editing) {
     return (
       <input
+        ref={inputRef}
         className="field-block-input"
-        autoFocus
         value={item.value}
         onChange={(event) => onFieldChange?.(item.field, event.target.value)}
         onBlur={() => onFieldConfirm?.(item.field)}

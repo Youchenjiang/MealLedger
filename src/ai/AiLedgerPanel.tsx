@@ -225,7 +225,7 @@ function useAiSpeech({
     }
     // Reuse the previous instance so a warm engine starts hearing right away;
     // fall back to a fresh one if the engine rejects the restart.
-    let recognition: SpeechRecognitionLike = recognitionRef.current ?? new Ctor();
+    const recognition: SpeechRecognitionLike = recognitionRef.current ?? new Ctor();
     recognition.lang = "zh-TW";
     recognition.interimResults = false;
     recognition.onstart = () => setStarting(false);

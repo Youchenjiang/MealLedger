@@ -102,6 +102,10 @@ function correctionRule(
     case "itemName":
     case "transferAccount":
       return "保留使用者說的名稱,移除前後空白;無法判斷回空字串。";
+    default:
+      // Defensive: the switch is exhaustive over ModeBField; unknown fields
+      // fall back to the generic name rule rather than an empty prompt.
+      return "保留使用者說的名稱,移除前後空白;無法判斷回空字串。";
   }
 }
 
@@ -224,7 +228,7 @@ export function parseSpokenDate(value: string, today: string): string | null {
   }
 
   // Chinese numerals: 七月二十五 / 七月25日 / 7月25日.
-  const chinese = /^(\d{1,2}|[一二三四五六七八九十]{1,2})月(\d{1,2}|[一二三四五六七八九十]{1,3})日?$/.exec(raw);
+  const chinese = /^(\d{1,2}|[一二三四五六七八九十]{1,2})月(\d{1,2}|[一二三四五六七八九十]{1,3})日?$/u.exec(raw);
   if (chinese) {
     const month = chineseNumeral(chinese[1]);
     const day = chineseNumeral(chinese[2]);
@@ -245,7 +249,7 @@ function chineseNumeral(text: string): number {
   if (/^\d+$/.test(text)) return Number.parseInt(text, 10);
   const digits: Record<string, number> = { 零: 0, 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
   if (text === "十") return 10;
-  const tens = /^([一二两三四五六七八九])?十([一二三四五六七八九])?$/.exec(text);
+  const tens = /^([一二两三四五六七八九])?十([一二三四五六七八九])?$/u.exec(text);
   if (tens) {
     return (tens[1] ? digits[tens[1]] : 1) * 10 + (tens[2] ? digits[tens[2]] : 0);
   }
