@@ -4,7 +4,9 @@ import { handleAiParseRequest, type AiParseDeps } from "./handler.ts";
 const SUPABASE_URL = requireEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 // Default to "*" so browsers work out of the box; auth is enforced via the
-// bearer token so an open origin does not weaken the endpoint.
+// bearer token so an open origin does not weaken the endpoint. Production may
+// pin this to a comma-separated list of frontend origins; the handler echoes
+// the matching request origin so each allowed frontend works.
 const ALLOWED_ORIGIN = Deno.env.get("APP_ORIGIN") ?? "*";
 // Require a valid user session by default; local development can opt out with
 // AI_REQUIRE_AUTH=false so signed-out users can still use the AI panel.
@@ -18,6 +20,13 @@ const AI_BASE_URL = stripTrailingSlashes(Deno.env.get("AI_BASE_URL") ?? "https:/
 const AI_MODEL = Deno.env.get("AI_MODEL") ?? "gpt-4o-mini";
 // The handler falls back to AI_MODEL when the vision model is unset.
 const AI_VISION_MODEL = Deno.env.get("AI_VISION_MODEL") ?? "";
+// Provider resilience: each attempt is bounded, and transient overload
+// (529/429/5xx) is retried with backoff instead of surfacing to users as a
+// hard failure. Tune via function secrets when the provider needs it.
+const PROVIDER_TIMEOUT_MS = Number(Deno.env.get("AI_PROVIDER_TIMEOUT_MS") ?? 20_000);
+const PROVIDER_MAX_ATTEMPTS = Number(Deno.env.get("AI_PROVIDER_MAX_ATTEMPTS") ?? 3);
+const PROVIDER_BACKOFF_MS = Number(Deno.env.get("AI_PROVIDER_BACKOFF_MS") ?? 300);
+const PROVIDER_BACKOFF_MAX_MS = Number(Deno.env.get("AI_PROVIDER_BACKOFF_MAX_MS") ?? 2_000);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -42,6 +51,10 @@ const deps: AiParseDeps = {
     allowedOrigin: ALLOWED_ORIGIN,
     maxBodyBytes: MAX_BODY_BYTES,
     requireAuth: REQUIRE_AUTH,
+    providerTimeoutMs: PROVIDER_TIMEOUT_MS,
+    providerMaxAttempts: PROVIDER_MAX_ATTEMPTS,
+    providerBackoffMs: PROVIDER_BACKOFF_MS,
+    providerBackoffMaxMs: PROVIDER_BACKOFF_MAX_MS,
   },
   getUser: (token) => supabase.auth.getUser(token),
   fetchImpl: fetch,
