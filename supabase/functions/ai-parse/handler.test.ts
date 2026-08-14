@@ -35,6 +35,12 @@ function makeDeps(overrides: {
     allowedOrigin: "*",
     maxBodyBytes: 4 * 1024 * 1024,
     requireAuth: true,
+    // Tiny backoff so retry tests never sleep; the default env overrides
+    // these where a test exercises the real retry policy.
+    providerTimeoutMs: 20_000,
+    providerMaxAttempts: 3,
+    providerBackoffMs: 1,
+    providerBackoffMaxMs: 2,
   };
   Object.assign(env, overrides.env);
   return {
@@ -242,7 +248,7 @@ Deno.test("returns the parsed provider JSON as data", async () => {
   assertEq(await jsonBody(response), { data: { items: [] } });
 });
 
-Deno.test("surfaces a provider HTTP failure as a 502 with detail", async () => {
+Deno.test("surfaces a persistent provider HTTP failure as a 502 with detail", async () => {
   const deps = makeDeps({
     fetchImpl: () => Promise.resolve(new Response("upstream exploded", { status: 500 })),
   });
@@ -252,6 +258,80 @@ Deno.test("surfaces a provider HTTP failure as a 502 with detail", async () => {
   const body = await jsonBody(response) as { error?: string; detail?: string };
   assertEq(body.error, "ai_request_failed:500");
   assertEq(body.detail, "upstream exploded");
+});
+
+Deno.test("retries a transient provider overload and succeeds on a later attempt", async () => {
+  let calls = 0;
+  const deps = makeDeps({
+    fetchImpl: () => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.resolve(new Response("overloaded", { status: 529 }));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: OK_CONTENT } }] }), { status: 200 }),
+      );
+    },
+  });
+  const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
+
+  assertEq(response.status, 200);
+  assertEq(calls, 2);
+});
+
+Deno.test("returns the last failure when every retry is transient", async () => {
+  let calls = 0;
+  const deps = makeDeps({
+    fetchImpl: () => {
+      calls += 1;
+      return Promise.resolve(new Response("still overloaded", { status: 529 }));
+    },
+  });
+  const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
+
+  assertEq(response.status, 502);
+  const body = await jsonBody(response) as { error?: string; detail?: string };
+  assertEq(body.error, "ai_request_failed:529");
+  assertEq(body.detail, "still overloaded");
+  assertEq(calls, 3);
+});
+
+Deno.test("does not retry permanent provider errors", async () => {
+  let calls = 0;
+  const deps = makeDeps({
+    fetchImpl: () => {
+      calls += 1;
+      return Promise.resolve(new Response("bad request", { status: 400 }));
+    },
+  });
+  const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
+
+  assertEq(response.status, 502);
+  const body = await jsonBody(response) as { error?: string };
+  assertEq(body.error, "ai_request_failed:400");
+  assertEq(calls, 1);
+});
+
+Deno.test("aborts a provider call that exceeds the per-attempt timeout", async () => {
+  let calls = 0;
+  const deps = makeDeps({
+    env: { providerTimeoutMs: 30, providerMaxAttempts: 1 },
+    fetchImpl: (_input, init) => {
+      calls += 1;
+      // Never resolves on its own; the abort signal must reject the call so
+      // the handler does not hang past the timeout.
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    },
+  });
+  const response = await handleAiParseRequest(post({ system: "s", user: "u" }), deps);
+
+  assertEq(response.status, 502);
+  const body = await jsonBody(response) as { error?: string; detail?: string };
+  assertEq(body.error, "ai_request_failed");
+  assertIncludes(String(body.detail), "aborted");
+  assertEq(calls, 1);
 });
 
 Deno.test("returns ai_empty_response when the provider sends no content", async () => {

@@ -14,6 +14,14 @@ export type AiParseEnv = {
   // unauthenticated callers; local development can disable it with
   // AI_REQUIRE_AUTH=false so the AI panel works without signing in.
   requireAuth: boolean;
+  // Per-attempt provider timeout and transient-failure retry policy. A
+  // temporarily overloaded provider (529/429/5xx) is retried with backoff so
+  // it does not surface to the user as a hard failure; the bounded worst-case
+  // total stays well under the client's request timeout.
+  providerTimeoutMs: number;
+  providerMaxAttempts: number;
+  providerBackoffMs: number;
+  providerBackoffMaxMs: number;
 };
 
 export type AiParseDeps = {
@@ -114,7 +122,23 @@ function providerResultResponse(result: ProviderResult, allowedOrigin: string): 
   return json({ error: "ai_request_failed", detail: result.detail }, 502, allowedOrigin);
 }
 
-async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: string, messages: unknown[]): Promise<ProviderResult> {
+// Provider errors worth retrying: rate limits and 5xx — including Anthropic's
+// 529 overload code — plus network/timeout exceptions. 4xx failures (bad
+// key, malformed request) are permanent and fail immediately.
+function isTransientProviderFailure(result: ProviderResult): boolean {
+  return result.kind === "exception"
+    || (result.kind === "http-error" && [429, 500, 502, 503, 529].includes(result.status));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callProviderOnce(fetchImpl: typeof fetch, env: AiParseEnv, model: string, messages: unknown[]): Promise<ProviderResult> {
+  const controller = new AbortController();
+  // Bound the provider wait: an overloaded endpoint can hang far beyond the
+  // completion time, and each retry must stay within the total budget.
+  const timeout = setTimeout(() => controller.abort(), env.providerTimeoutMs);
   try {
     const response = await fetchImpl(`${env.aiBaseUrl}/chat/completions`, {
       method: "POST",
@@ -123,6 +147,7 @@ async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: str
         Authorization: `Bearer ${env.aiApiKey}`,
       },
       body: JSON.stringify({ model, messages, response_format: { type: "json_object" } }),
+      signal: controller.signal,
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
@@ -136,7 +161,29 @@ async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: str
     return { kind: "ok", data: JSON.parse(content) };
   } catch (error) {
     return { kind: "exception", detail: String(error).slice(0, 500) };
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+// Calls the provider with retries: transient failures (overload, 5xx,
+// network) are retried with exponential backoff plus jitter, bounded by
+// providerMaxAttempts. The last failure is returned so the caller can still
+// surface a specific status when the provider stays down.
+async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: string, messages: unknown[]): Promise<ProviderResult> {
+  let last: ProviderResult = { kind: "exception", detail: "provider call did not start" };
+  for (let attempt = 0; attempt < env.providerMaxAttempts; attempt += 1) {
+    last = await callProviderOnce(fetchImpl, env, model, messages);
+    if (last.kind === "ok" || !isTransientProviderFailure(last)) {
+      return last;
+    }
+    if (attempt < env.providerMaxAttempts - 1) {
+      const backoff = Math.min(env.providerBackoffMs * 2 ** attempt, env.providerBackoffMaxMs);
+      const jitter = Math.floor(Math.random() * (backoff / 2));
+      await delay(backoff + jitter);
+    }
+  }
+  return last;
 }
 
 // Returns an error Response when the request must be rejected, or null when

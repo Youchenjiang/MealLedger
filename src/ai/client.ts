@@ -43,7 +43,9 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit): Pr
 
 async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequest): Promise<unknown> {
   const token = await currentAccessToken();
-  const response = await fetchWithTimeout(edgeFunctionUrl, {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(edgeFunctionUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -56,6 +58,14 @@ async function requestAiViaEdgeFunction(edgeFunctionUrl: string, request: AiRequ
       imageDataUrl: request.imageDataUrl ?? undefined,
     }),
   });
+  } catch {
+    // The request never produced an HTTP response: the proxy is unreachable
+    // (local Supabase down, or a misconfigured remote URL), or the gateway
+    // dropped an error response before the browser could read it (which is
+    // how a provider overload surfaces here after the proxy's retries). The
+    // client cannot distinguish these, so stay honest and actionable.
+    throw new Error("AI 服務暫時無法使用(供應商超載或連線問題),請稍後再試。若使用本機 Supabase,請確認已啟動。");
+  }
   if (!response.ok) {
     // 401 means the proxy (or its gateway) rejected the request. Without a
     // session it wants a sign-in; with a session the stored token was
