@@ -37,7 +37,8 @@ provider does not change session or local-data handoff logic.
 
 Deferring LINE Login avoids custom OAuth/OIDC configuration and its security
 review burden in V1, at the cost of not supporting the most popular local
-social login until a follow-up.
+social login until a follow-up. The deferral and its trigger are tracked in
+the [roadmap](../product/roadmap.md).
 
 Deploying production provider credentials is a separate rollout outside the
 configured development Supabase environment.
@@ -48,3 +49,4 @@ configured development Supabase environment.
 - [Auth design](../specs/auth/design.md)
 - [Auth provider setup](../specs/auth/provider-setup.md)
 - [Cloud persistence spec](../specs/cloud-persistence/requirements.md)
+- [Roadmap](../product/roadmap.md)

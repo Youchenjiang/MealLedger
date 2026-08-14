@@ -32,7 +32,9 @@ used at every viewport width:
 - `/account` remains as a route but is removed from the navigation; it is
   reached from the Settings page.
 - 專區 is reserved as a tab but intentionally shows an empty-state placeholder
-  until its content (meals, photos, scan sources as a feed) is decided.
+  until its content (meals, photos, scan sources as a feed) is decided. The
+  content is tracked in the [roadmap](../product/roadmap.md) so the reserved
+  tab cannot be silently forgotten.
 
 ## Consequences
 

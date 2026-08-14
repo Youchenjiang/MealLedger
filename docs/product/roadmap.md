@@ -65,6 +65,20 @@ MealLedger uses lightweight agile planning with risk-driven testing. The long-te
 - Keep ledger export separate from media backup.
 - Keep media storage replaceable across R2, Supabase Storage, and S3-compatible providers.
 
+## Deferred (Tracked, Not Scheduled)
+
+Features with a decided direction that are intentionally deferred until a
+condition fires. They are tracked here so they cannot live only inside an ADR
+consequence.
+
+- **LINE Login (auth)**: deferred until a separately configured custom
+  OAuth/OIDC provider is in place
+  ([ADR 0004](../decisions/0004-auth-provider-strategy.md)).
+- **專區 tab content**: the reserved bottom-nav tab shows an empty state
+  until its content (meals, photos, scan sources as a feed) is decided; the
+  feed lands with Phase 3 (Meal Photo Linking) and later
+  ([ADR 0006](../decisions/0006-unified-bottom-navigation.md)).
+
 ## Roadmap Rules
 
 - Prefer small PRs aligned to one phase or one vertical slice.

@@ -47,7 +47,8 @@ Becomes harder:
 Follow-up work:
 
 - The Settings switch lands with the settings restructure
-  ([settings-restructure-plan](../product/settings-restructure-plan.md));
+  ([settings-restructure-plan](../product/settings-restructure-plan.md))
+  and is specified in the [settings spec](../specs/settings/requirements.md);
   the ledger row delete action consumes it
   ([ledger-row-compact-plan](../product/ledger-row-compact-plan.md)).
 
