@@ -22,7 +22,9 @@ WHEN a user chooses the direct audio path and speaks a description
 THE SYSTEM SHALL send the audio itself to the configured AI provider, which
 transcribes and field-parses it into the same prefilled draft suggestions, and
 keep the browser transcription path available as a fallback when the audio
-call fails (see [ADR 0013](../../decisions/0013-direct-audio-parse-coexists-with-browser-asr.md)).
+call fails (see [ADR 0013](../../decisions/0013-direct-audio-parse-coexists-with-browser-asr.md)
+and the [voice capture spec](../voice-capture/requirements.md) for the
+recording and payload mechanics).
 
 WHEN a user selects a receipt or invoice photo
 THE SYSTEM SHALL send the image to the configured AI provider and produce the
@@ -68,6 +70,37 @@ saving.
 WHEN AI credentials are not configured
 THE SYSTEM SHALL show a setup message and keep the entry usable for manual
 input.
+
+## Provider Resilience And CORS
+
+WHEN the configured provider returns a transient failure (429, 5xx including
+529 overload, or a network/timeout exception)
+THE SYSTEM SHALL retry the call with exponential backoff plus jitter, bounded
+by a maximum attempt count (default 3), instead of surfacing the failure
+immediately.
+
+WHEN a single provider attempt exceeds the per-attempt timeout (default 20s)
+THE SYSTEM SHALL abort that attempt and treat it as transient.
+
+WHEN the provider returns a permanent client error (4xx)
+THE SYSTEM SHALL fail without retrying.
+
+WHEN all retry attempts fail
+THE SYSTEM SHALL return the last failure status as `ai_request_failed:<status>`
+with an HTTP 502 and a readable detail.
+
+WHEN a browser calls the proxy from an allowed origin
+THE SYSTEM SHALL echo that origin in `access-control-allow-origin`, allow the
+`apikey`, `authorization`, and `content-type` headers, and answer preflight
+OPTIONS with 204.
+
+WHEN the proxy is called
+THE SYSTEM SHALL enforce a 4 MB body cap and, in production, require a valid
+user session (the auth gate is configurable off for local development).
+
+WHEN the client's proxy request fails before an HTTP response is readable
+THE SYSTEM SHALL show an honest message covering both provider overload and
+connectivity problems, since the browser cannot distinguish the two causes.
 
 ## Apply to Form Design Notes
 

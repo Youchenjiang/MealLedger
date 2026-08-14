@@ -45,6 +45,40 @@ official-record boundary.
 - Receipt photos are downscaled to 1600 px on the client before sending so
   base64 payloads stay under the edge-function body limit.
 
+## Provider Resilience And CORS
+
+The `ai-parse` proxy retries transient provider failures instead of exposing
+them as hard errors:
+
+- Each attempt is bounded by `AI_PROVIDER_TIMEOUT_MS` (default 20s) via an
+  AbortController; a hung endpoint aborts and counts as transient.
+- Retryable statuses are 429, 500, 502, 503, and 529 (Anthropic overload),
+  plus network/timeout exceptions; 4xx failures are permanent and fail
+  immediately.
+- Retries use exponential backoff from `AI_PROVIDER_BACKOFF_MS` (default
+  300ms) doubling up to `AI_PROVIDER_BACKOFF_MAX_MS` (default 2s), with up to
+  half-backoff jitter, for up to `AI_PROVIDER_MAX_ATTEMPTS` (default 3). The
+  worst case (~60s plus backoff) stays under the client's 90s request
+  timeout, so the user sees one bounded answer rather than a hung call.
+- After the budget is exhausted the last failure status is returned as
+  `ai_request_failed:<status>` with HTTP 502; every parameter is tunable via
+  function secrets.
+
+CORS is handled server-side so any allowed frontend works:
+
+- `APP_ORIGIN` is a comma-separated allow-list (default `*`; auth is enforced
+  by the bearer token, so an open origin does not weaken the endpoint). The
+  response echoes the matching request origin instead of a fixed header.
+- `access-control-allow-headers` lists `authorization, apikey, content-type`;
+  `apikey` is required because the app sends the publishable anon key on
+  every call, and a missing allow-header blocks the browser even when the
+  origin matches.
+- OPTIONS answers 204; other non-POST methods answer 405.
+
+The client maps a network-layer failure of the proxy request to a message
+covering both provider overload and connectivity, because the browser cannot
+read the proxy's error response (CORS) and cannot distinguish the two causes.
+
 ## Parsing And Validation
 
 - Kinds are restricted to expense, income, and simple same-currency transfer;
