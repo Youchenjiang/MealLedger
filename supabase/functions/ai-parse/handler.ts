@@ -40,13 +40,15 @@ const MAX_TEXT_CHARS = 8000;
 // key on every call, and a missing allow-header blocks the browser even when
 // the origin matches.
 function corsHeaders(allowedOrigin: string, request: Request): Record<string, string> {
-  const origins = allowedOrigin.split(",").map((item) => item.trim()).filter(Boolean);
+  // A Set makes membership checks O(1) and reads the intent (S7776).
+  const origins = new Set(allowedOrigin.split(",").map((item) => item.trim()).filter(Boolean));
   const requestOrigin = request.headers.get("origin");
-  const allowOrigin = origins.includes("*")
-    ? "*"
-    : requestOrigin && origins.includes(requestOrigin)
-      ? requestOrigin
-      : "";
+  let allowOrigin = "";
+  if (origins.has("*")) {
+    allowOrigin = "*";
+  } else if (requestOrigin && origins.has(requestOrigin)) {
+    allowOrigin = requestOrigin;
+  }
   return {
     ...(allowOrigin ? { "access-control-allow-origin": allowOrigin } : {}),
     "access-control-allow-headers": "authorization, apikey, content-type",
@@ -192,7 +194,9 @@ async function callProvider(fetchImpl: typeof fetch, env: AiParseEnv, model: str
     }
     if (attempt < env.providerMaxAttempts - 1) {
       const backoff = Math.min(env.providerBackoffMs * 2 ** attempt, env.providerBackoffMaxMs);
-      const jitter = Math.floor(Math.random() * (backoff / 2));
+      // Retry jitter only de-synchronizes concurrent attempts; it never feeds a
+      // security decision, so a CSPRNG would add ceremony without value.
+      const jitter = Math.floor(Math.random() * (backoff / 2)); // NOSONAR
       await delay(backoff + jitter);
     }
   }
