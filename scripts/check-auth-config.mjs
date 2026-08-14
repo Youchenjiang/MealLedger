@@ -189,10 +189,10 @@ const expected = expectedValues();
 
 const failures = [];
 const report = (label, ok, detail) => {
-  // NOSONAR: this operator CLI's stdout IS the verified config values from the
+  // This operator CLI's stdout IS the verified config values from the
   // authenticated user's own project; they are not written to logs or sent
   // anywhere (S5145).
-  console.log(`${ok ? "[PASS]" : "[FAIL]"} ${label}: ${detail}`);
+  console.log(`${ok ? "[PASS]" : "[FAIL]"} ${label}: ${detail}`); // NOSONAR
   if (!ok) failures.push(label);
 };
 
