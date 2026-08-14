@@ -1,6 +1,6 @@
 # 口說新增計畫（Phase 3）
 
-狀態：**計畫，尚未實作**（分支 `feature/voice-capture`，預期獨立 PR）。本文件為版面重構（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）中新增頁（Phase 3）的拆分細節。
+狀態：**已實作**（分支 `feature/voice-capture`）。語音捕捉的行為規格已獨立成 [voice-capture spec](../specs/voice-capture/requirements.md)（模式 A/B 已實作；直接音頻路徑 ADR 0013 為規劃中）。本文件保留為產品層規劃細節（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）。
 
 ---
 

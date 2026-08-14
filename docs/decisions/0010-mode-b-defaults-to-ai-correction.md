@@ -47,6 +47,8 @@ Becomes harder:
 
 ## References
 
+- [Voice capture requirements](../specs/voice-capture/requirements.md)
+- [Voice capture design](../specs/voice-capture/design.md)
 - [Voice capture plan](../product/voice-capture-plan.md)
 - [Offline AI requirements](../specs/offline-ai/requirements.md)
 - [ADR 0003: Draft-first AI and import suggestions](0003-draft-first-ai-and-import-suggestions.md)

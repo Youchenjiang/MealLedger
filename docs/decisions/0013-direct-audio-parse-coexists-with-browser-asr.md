@@ -69,8 +69,17 @@ Becomes harder:
 - Provider differences must be hidden behind the client interface
   (Gemini single-call vs. OpenAI transcription-then-parse).
 
+Follow-up work:
+
+- The capture half of the direct audio path (recording, permission,
+  degradation states, payload caps) is specified in the
+  [voice capture spec](../specs/voice-capture/requirements.md); the parse
+  half stays in the [AI ledger drafts spec](../specs/ai-ledger-drafts/requirements.md).
+
 ## References
 
+- [Voice capture requirements](../specs/voice-capture/requirements.md)
+- [Voice capture design](../specs/voice-capture/design.md)
 - [Voice capture plan](../product/voice-capture-plan.md)
 - [AI ledger drafts requirements](../specs/ai-ledger-drafts/requirements.md)
 - [Offline AI requirements](../specs/offline-ai/requirements.md)
