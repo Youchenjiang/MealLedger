@@ -16,6 +16,7 @@ function createAuthMock() {
     linkIdentity: vi.fn().mockResolvedValue({ error: null }),
     unlinkIdentity: vi.fn().mockResolvedValue({ error: null }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
+    verifyOtp: vi.fn(),
   };
 }
 
@@ -25,6 +26,7 @@ async function renderRemoteApp(authMock = createAuthMock()) {
     isLocalDevelopmentMode: false,
     isSupabaseConfigured: true,
     supabase: { auth: authMock },
+    authRedirectBaseUrl: "",
   }));
   const { App } = await import("./App");
   return { authMock, view: render(<App />) };
@@ -286,5 +288,50 @@ describe("app auth boundary", () => {
 
     expect(authMock.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", expect.anything());
     expect(await screen.findByText("Password reset link sent. Check your email.")).toBeInTheDocument();
+  });
+
+  test("finishes password recovery from a reset link pasted into the forgot-password view", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    authMock.updateUser = vi.fn().mockResolvedValue({ error: null });
+
+    await renderRemoteApp(authMock);
+    await openAccountPage(user);
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+
+    // The paste-a-link rescue stays collapsed by default (progressive
+    // disclosure) so it does not compete with the primary reset action.
+    expect(screen.queryByLabelText("Reset link")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Paste it here/ }));
+    expect(screen.getByLabelText("Reset link")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Reset link"), "https://app.test/account#access_token=access&refresh_token=refresh&type=recovery");
+    await user.click(screen.getByRole("button", { name: "Use reset link" }));
+
+    expect(authMock.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+    expect(await screen.findByLabelText("New password")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("New password"), "new-secret");
+    await user.click(screen.getByRole("button", { name: "Set new password" }));
+
+    expect(authMock.updateUser).toHaveBeenCalledWith({ password: "new-secret" });
+    expect(await screen.findByRole("button", { name: "Confirm cloud handoff" })).toBeInTheDocument();
+  });
+
+  test("finishes password recovery from a pasted PKCE token_hash reset link", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    authMock.verifyOtp = vi.fn().mockResolvedValue({ data: { session: { user: { id: "remote-user" } } }, error: null });
+    authMock.updateUser = vi.fn().mockResolvedValue({ error: null });
+
+    await renderRemoteApp(authMock);
+    await openAccountPage(user);
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+
+    await user.click(screen.getByRole("button", { name: /Paste it here/ }));
+    await user.type(screen.getByLabelText("Reset link"), "https://app.test/account?token_hash=pkce-hash&type=recovery");
+    await user.click(screen.getByRole("button", { name: "Use reset link" }));
+
+    expect(authMock.verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "pkce-hash" });
+    expect(await screen.findByLabelText("New password")).toBeInTheDocument();
   });
 });

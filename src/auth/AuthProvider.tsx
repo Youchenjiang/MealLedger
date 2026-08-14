@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { DependencyList, Dispatch, EffectCallback, ReactNode, SetStateAction } from "react";
 import type { AuthState } from "../types";
-import { isLocalDevelopmentMode, supabase } from "../lib/supabase";
-import { linkIdentity, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword, type LinkedIdentity, type OAuthProvider } from "./authActions";
+import { authRedirectBaseUrl, isLocalDevelopmentMode, supabase } from "../lib/supabase";
+import { linkIdentity, recoverPasswordFromLink, requestPasswordReset, restoreOAuthCallbackSession, signInWithOAuth, signInWithPassword, signUpWithPassword, unlinkIdentity, updatePassword, type LinkedIdentity, type OAuthProvider } from "./authActions";
 
 type AuthContextValue = {
   state: AuthState;
@@ -13,6 +13,7 @@ type AuthContextValue = {
   signIn: (email?: string, password?: string) => Promise<void>;
   signUp: (email?: string, password?: string) => Promise<void>;
   requestPasswordReset: (email?: string) => Promise<void>;
+  recoverPasswordFromLink: (link?: string) => Promise<void>;
   updatePassword: (password?: string) => Promise<void>;
   signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   identities: LinkedIdentity[];
@@ -55,11 +56,30 @@ function applySession(
 }
 
 function authRedirect(): string {
-  return `${window.location.origin}/account`;
+  // OAuth popups must return to the document that opened them, so their
+  // callback targets the current instance unless a public URL is configured.
+  const base = (authRedirectBaseUrl || window.location.origin).replace(/\/+$/, "");
+  return `${base}/account`;
+}
+
+function passwordResetRedirect(): string | undefined {
+  // Reset emails are opened later, possibly on another device, so they must
+  // link to a stable public page. When no public URL is configured, omit
+  // redirectTo entirely so Supabase links the email to its Site URL (the live
+  // deployment in the dashboard) instead of a local instance.
+  if (!authRedirectBaseUrl) return undefined;
+  return `${authRedirectBaseUrl.replace(/\/+$/, "")}/account`;
 }
 
 function clearAuthCallbackHash(): void {
-  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  // PKCE recovery links arrive in the query string (?token_hash=...&type=recovery)
+  // rather than the implicit-grant fragment; strip both so a reload does not
+  // try to redeem the single-use token again.
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.searchParams.delete("token_hash");
+  url.searchParams.delete("type");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
 }
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
@@ -222,9 +242,39 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setMessage(configurationMessage);
         return;
       }
-      const result = await requestPasswordReset(supabase, normalizedEmail, authRedirect());
+      const result = await requestPasswordReset(supabase, normalizedEmail, passwordResetRedirect());
       setState(result.ok ? "signed-out" : "auth-error");
       setMessage(result.message);
+    },
+    recoverPasswordFromLink: async (link = "") => {
+      setMessage("");
+      if (isLocalDevelopmentMode) {
+        setMessage("Password reset is available after cloud authentication is configured.");
+        return;
+      }
+      if (!supabase) {
+        setState("auth-error");
+        setMessage(configurationMessage);
+        return;
+      }
+      const callback = await recoverPasswordFromLink(supabase, link.trim());
+      if (!callback.handled) {
+        setState("auth-error");
+        setMessage("That link does not contain a password reset. Paste the full reset link from your email.");
+        return;
+      }
+      if (!callback.result.ok) {
+        setState("auth-error");
+        setMessage(callback.result.message);
+        return;
+      }
+      if (callback.recovery) {
+        recoveryStartup.current = true;
+        setUserId(callback.result.session?.user?.id ?? "");
+        setState("password-recovery");
+        return;
+      }
+      applySession(callback.result.session, setUserId, setIdentities, setState);
     },
     updatePassword: async (password = "") => {
       if (!supabase) {

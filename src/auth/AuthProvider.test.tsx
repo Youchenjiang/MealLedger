@@ -11,18 +11,20 @@ type SupabaseAuthMock = {
   signUp: ReturnType<typeof vi.fn>;
   resetPasswordForEmail: ReturnType<typeof vi.fn>;
   updateUser: ReturnType<typeof vi.fn>;
+  verifyOtp: ReturnType<typeof vi.fn>;
   signInWithOAuth: ReturnType<typeof vi.fn>;
   linkIdentity: ReturnType<typeof vi.fn>;
   unlinkIdentity: ReturnType<typeof vi.fn>;
   signOut: ReturnType<typeof vi.fn>;
 };
 
-async function renderAuthHarness(authMock?: SupabaseAuthMock) {
+async function renderAuthHarness(authMock?: SupabaseAuthMock, redirectBase = "") {
   vi.resetModules();
   vi.doMock("../lib/supabase", () => ({
     isLocalDevelopmentMode: !authMock,
     isSupabaseConfigured: Boolean(authMock),
     supabase: authMock ? { auth: authMock } : null,
+    authRedirectBaseUrl: redirectBase,
   }));
 
   const { AuthProvider, useAuth } = await import("./AuthProvider");
@@ -38,6 +40,7 @@ async function renderAuthHarness(authMock?: SupabaseAuthMock) {
         <button type="button" onClick={() => { auth.signUp(" new@example.com ", "secret").catch(() => undefined); }}>Create account</button>
         <button type="button" onClick={() => { auth.requestPasswordReset(" user@example.com ").catch(() => undefined); }}>Reset password</button>
         <button type="button" onClick={() => { auth.updatePassword("new-secret").catch(() => undefined); }}>Update password</button>
+        <button type="button" onClick={() => { auth.recoverPasswordFromLink("https://app.test/account#access_token=access&refresh_token=refresh&type=recovery").catch(() => undefined); }}>Recover from link</button>
         <button type="button" onClick={() => { auth.signInWithOAuth("google").catch(() => undefined); }}>Google sign in</button>
         <button type="button" onClick={() => { auth.linkIdentity("google").catch(() => undefined); }}>Link Google</button>
         <button type="button" onClick={() => { auth.unlinkIdentity({ id: "g1", user_id: "remote-user", identity_id: "g1", provider: "google" }).catch(() => undefined); }}>Unlink Google</button>
@@ -59,6 +62,7 @@ function createAuthMock(session: unknown = null): SupabaseAuthMock {
     signUp: vi.fn().mockResolvedValue({ data: { session: { user: { id: "new-user" } } }, error: null }),
     resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
     updateUser: vi.fn().mockResolvedValue({ error: null }),
+    verifyOtp: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
     signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
     linkIdentity: vi.fn().mockResolvedValue({ error: null }),
     unlinkIdentity: vi.fn().mockResolvedValue({ error: null }),
@@ -170,6 +174,20 @@ describe("auth provider", () => {
     window.history.pushState(null, "", "/");
   });
 
+  test("lands a PKCE token_hash recovery link on the recovery state and clears it from the URL", async () => {
+    const authMock = createAuthMock();
+    authMock.verifyOtp = vi.fn().mockResolvedValue({ data: { session: { user: { id: "remote-user" } } }, error: null });
+    window.history.pushState(null, "", "/account?token_hash=pkce-hash&type=recovery");
+    await renderAuthHarness(authMock);
+
+    expect(authMock.verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "pkce-hash" });
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("password-recovery"));
+    expect(screen.getByLabelText("auth-user")).toHaveTextContent("remote-user");
+    expect(window.location.search).toBe("");
+
+    window.history.pushState(null, "", "/");
+  });
+
   test("lands a failed recovery link on auth-error instead of the form or a sign-in", async () => {
     window.history.pushState(null, "", "/account#access_token=expired&refresh_token=expired&type=recovery");
     const authMock = createAuthMock();
@@ -213,6 +231,65 @@ describe("auth provider", () => {
 
     expect(authMock.signInWithOAuth).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: `${window.location.origin}/account` } });
     expect(screen.getByLabelText("auth-state")).toHaveTextContent("loading");
+  });
+
+  test("finishes password recovery from a pasted reset link", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
+    await user.click(screen.getByRole("button", { name: "Recover from link" }));
+
+    expect(authMock.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("password-recovery"));
+    expect(screen.getByLabelText("auth-user")).toHaveTextContent("remote-user");
+  });
+
+  test("reports a pasted link without a recovery session", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    authMock.setSession = vi.fn().mockResolvedValue({ data: { session: null }, error: new Error("expired recovery token") });
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
+    await user.click(screen.getByRole("button", { name: "Recover from link" }));
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("auth-error"));
+    expect(screen.getByLabelText("auth-message")).toHaveTextContent("expired recovery token");
+  });
+
+  test("uses the configured public redirect URL for auth emails instead of the current origin", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    await renderAuthHarness(authMock, "https://app.example.com/");
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
+    await user.click(screen.getByRole("button", { name: "Google sign in" }));
+
+    expect(authMock.signInWithOAuth).toHaveBeenCalledWith({ provider: "google", options: { redirectTo: "https://app.example.com/account" } });
+  });
+
+  test("links the reset email to the configured public URL when set", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    await renderAuthHarness(authMock, "https://app.example.com/");
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
+    await user.click(screen.getByRole("button", { name: "Reset password" }));
+
+    expect(authMock.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", { redirectTo: "https://app.example.com/account" });
+  });
+
+  test("lets the reset email fall back to the Supabase Site URL when no public URL is configured", async () => {
+    const user = userEvent.setup();
+    const authMock = createAuthMock();
+    await renderAuthHarness(authMock);
+
+    await waitFor(() => expect(screen.getByLabelText("auth-state")).toHaveTextContent("signed-out"));
+    await user.click(screen.getByRole("button", { name: "Reset password" }));
+
+    expect(authMock.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", {});
   });
 
   test("links a provider identity for the signed-in account", async () => {

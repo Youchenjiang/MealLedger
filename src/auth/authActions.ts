@@ -12,7 +12,7 @@ export type PasswordRegistrationClient = {
 
 export type PasswordResetClient = {
   auth: {
-    resetPasswordForEmail: (email: string, options: { redirectTo: string }) => Promise<{ error: unknown }>;
+    resetPasswordForEmail: (email: string, options?: { redirectTo?: string }) => Promise<{ error: unknown }>;
     updateUser: (attributes: { password: string }) => Promise<{ error: unknown }>;
   };
 };
@@ -28,6 +28,10 @@ export type OAuthClient = {
 export type OAuthCallbackClient = {
   auth: {
     setSession: (session: { access_token: string; refresh_token: string }) => Promise<{ data: { session?: PasswordSession } | null; error: unknown }>;
+    // PKCE projects send recovery links with ?token_hash=...&type=recovery
+    // instead of the implicit-grant #access_token=... fragment; the token is
+    // redeemed with verifyOtp rather than setSession.
+    verifyOtp?: (options: { token_hash: string; type: "recovery" }) => Promise<{ data: { session?: PasswordSession } | null; error: unknown }>;
   };
 };
 
@@ -109,12 +113,25 @@ export async function signUpWithPassword(client: PasswordRegistrationClient, ema
   return { ok: true, session: data.session };
 }
 
-export async function requestPasswordReset(client: PasswordResetClient, email: string, redirectTo: string): Promise<{ ok: boolean; message: string }> {
+export async function requestPasswordReset(client: PasswordResetClient, email: string, redirectTo?: string): Promise<{ ok: boolean; message: string }> {
   if (!email.trim()) return { ok: false, message: "Email is required." };
-  const { error } = await client.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-  return error
-    ? { ok: false, message: authFailureMessage(error) }
-    : { ok: true, message: "Password reset link sent. Check your email." };
+  // Without redirectTo, Supabase links the reset email to its Site URL — the
+  // live deployment configured in the dashboard — instead of whatever local
+  // instance sent the request.
+  const { error } = await client.auth.resetPasswordForEmail(email.trim(), redirectTo ? { redirectTo } : {});
+  if (error) {
+    const message = authFailureMessage(error);
+    if (message.toLowerCase().includes("rate limit")) {
+      // Supabase's default email service caps sends at 2/hour; surface the
+      // platform limit clearly instead of a bare error string.
+      return {
+        ok: false,
+        message: "Email rate limit exceeded. Supabase's default email service allows only 2 emails per hour — try again later, or configure Custom SMTP in the Supabase dashboard to remove the cap.",
+      };
+    }
+    return { ok: false, message };
+  }
+  return { ok: true, message: "Password reset link sent. Check your email." };
 }
 
 export async function updatePassword(client: PasswordResetClient, password: string): Promise<{ ok: boolean; message: string }> {
@@ -150,15 +167,44 @@ export type OAuthCallbackResult =
   | { handled: false }
   | { handled: true; recovery: boolean; result: PasswordAuthResult };
 
+export type RecoveryLinkResult =
+  | { handled: false }
+  | { handled: true; recovery: boolean; result: PasswordAuthResult };
+
+// Manual fallback for embedded webviews where the reset email / OAuth callback
+// opens in the OS browser instead of this document: the user pastes the full
+// callback link and the recovery session is restored here, so the flow finishes
+// in the app instead of being stranded in the browser.
+export async function recoverPasswordFromLink(client: OAuthCallbackClient, href: string): Promise<RecoveryLinkResult> {
+  try {
+    return await restoreOAuthCallbackSession(client, href);
+  } catch {
+    // An unparsable pasted string (e.g. a plain email address) is not a link.
+    return { handled: false };
+  }
+}
+
 export async function restoreOAuthCallbackSession(client: OAuthCallbackClient, href: string): Promise<OAuthCallbackResult> {
-  const params = new URLSearchParams(new URL(href).hash.slice(1));
+  const url = new URL(href);
+  // PKCE links carry token_hash in the query string; implicit-grant callbacks
+  // carry access_token/refresh_token in the fragment. Read both.
+  const params = new URLSearchParams([...url.searchParams, ...new URLSearchParams(url.hash.slice(1))]);
   const accessToken = params.get("access_token");
   const refreshToken = params.get("refresh_token");
-  if (!accessToken || !refreshToken) return { handled: false };
+  const tokenHash = params.get("token_hash");
   // Password-recovery links land with the same implicit-grant hash as OAuth
   // callbacks plus `type=recovery`. The caller maps these to the
   // password-recovery state instead of a sign-in so the new-password form shows.
   const recovery = params.get("type") === "recovery";
+  if (tokenHash && recovery && client.auth.verifyOtp) {
+    const { data, error } = await client.auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
+    if (error) return { handled: true, recovery: true, result: { ok: false, message: authFailureMessage(error) } };
+    if (!data?.session) {
+      return { handled: true, recovery: true, result: { ok: false, message: "Authentication did not return a workspace session." } };
+    }
+    return { handled: true, recovery: true, result: { ok: true, session: data.session } };
+  }
+  if (!accessToken || !refreshToken) return { handled: false };
 
   const { data, error } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
   if (error) return { handled: true, recovery, result: { ok: false, message: authFailureMessage(error) } };
