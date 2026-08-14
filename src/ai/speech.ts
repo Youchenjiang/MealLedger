@@ -4,7 +4,11 @@
 export type SpeechRecognitionLike = {
   lang: string;
   interimResults: boolean;
-  onresult: ((event: { results: ReadonlyArray<ReadonlyArray<{ transcript: string }>> }) => void) | null;
+  // Fires when the engine has actually begun listening (after the browser
+  // loaded the speech model / granted the microphone), so the UI can show a
+  // honest "starting" state instead of pretending to listen immediately.
+  onstart: (() => void) | null;
+  onresult: ((event: { results: ReadonlyArray<ReadonlyArray<{ transcript: string; isFinal?: boolean }>> }) => void) | null;
   onend: (() => void) | null;
   onerror: (() => void) | null;
   start: () => void;

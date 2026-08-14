@@ -25,7 +25,9 @@ async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function goToCapture(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "新增" }));
+  // 新增 is now the voice-capture flow; the manual/scan/meal/attachment tools
+  // live on the Zone page, which is where these tests interact with them.
+  await user.click(screen.getByRole("button", { name: "專區" }));
 }
 
 async function addCaptureAccount(user: ReturnType<typeof userEvent.setup>, name: string, currency = "TWD", trigger = "Add account") {
@@ -479,7 +481,7 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: /^明細/u }));
     expect(screen.getByText("1 local draft")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Continue in Capture" }));
-    expect(screen.getByRole("heading", { name: "Capture" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Zone" })).toBeInTheDocument();
     expect(screen.getByLabelText("Merchant")).toHaveValue("全聯");
     await user.selectOptions(screen.getByLabelText("Category"), "Daily");
     await user.type(screen.getByLabelText("Item name"), "香蕉");
@@ -1100,7 +1102,7 @@ describe("App shell draft flow", () => {
     await addAccount(user, "Daily wallet");
 
     view.unmount();
-    renderWorkspace("/capture");
+    renderWorkspace("/zone");
     await openWorkspace(user);
 
     expect(screen.getByRole("option", { name: "Daily wallet (TWD)" })).toBeInTheDocument();

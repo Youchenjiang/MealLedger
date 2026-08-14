@@ -20,7 +20,7 @@ describe("AiLedgerPanel", () => {
     const user = userEvent.setup();
     render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
-    await user.click(screen.getByRole("tab", { name: "逐步口說" }));
+    await user.click(screen.getByRole("tab", { name: "逐欄口說" }));
 
     expect(screen.getByText(/欄位會一個一個亮起/u)).toBeInTheDocument();
     expect(screen.getByLabelText("日期")).toBeInTheDocument();

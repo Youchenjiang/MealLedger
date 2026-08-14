@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新增記帳 · 逐欄口說（Wireframe）</title>
+<style>
+  :root {
+    --bg: #f5f2ec;
+    --card: #fffdf8;
+    --ink: #242321;
+    --muted: #69645c;
+    --line: #ddd6ca;
+    --green: #2f5d50;
+    --green-soft: #dce9e2;
+    --green-line: #8db9a4;
+    --amber: #75582e;
+    --danger: #9b2c2c;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  button { font: inherit; }
+
+  /* ── App 框架：底部導覽 ─────────────────── */
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  .bottom-nav {
+    position: fixed;
+    z-index: 40;
+    inset: auto 0 0 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: 68px;
+    border-top: 1px solid #ddd6ca;
+    background: #f6f1e7;
+  }
+  .nav-item {
+    position: relative;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 3px;
+    padding: 6px 4px 8px;
+    border: 0;
+    color: #433e37;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1.1;
+    text-align: center;
+  }
+  .nav-icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+  }
+  .nav-badge {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    color: #fff;
+    background: #9b2c2c;
+    font-size: 11px;
+    font-weight: 760;
+    line-height: 1;
+  }
+  .nav-item.active,
+  .nav-item:hover,
+  .nav-item:focus-visible {
+    color: #173f36;
+    outline: none;
+  }
+  .nav-item.active .nav-icon { color: #2f5d50; }
+  .nav-create { padding-top: 18px; }
+  .nav-create .nav-icon {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    border-radius: 50%;
+    color: #fff;
+    background: #2f5d50;
+    box-shadow: 0 3px 8px rgba(47, 93, 80, 0.35);
+  }
+  .nav-create.active .nav-icon,
+  .nav-create:hover .nav-icon,
+  .nav-create:focus-visible .nav-icon { background: #173f36; }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* ── App 框架：工作區與頁首 ─────────────── */
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 20px 20px 96px;
+  }
+  .page-header {
+    display: grid;
+    min-height: 58px;
+    align-content: start;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .topbar-title {
+    display: grid;
+    min-height: 58px;
+    align-content: start;
+    gap: 4px;
+  }
+  .eyebrow {
+    color: #75582e;
+    font-size: 12px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 0;
+    max-width: 760px;
+    font-size: 32px;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+  .status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    min-width: 0;
+  }
+  .status-strip-compact {
+    justify-content: flex-end;
+    flex: 1 1 auto;
+  }
+  .status-strip-compact .status-item { min-height: 24px; padding: 2px 0; }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 28px;
+    padding: 3px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #3b3731;
+  }
+  .status-item + .status-item { padding-left: 12px; border-left: 1px solid #d8d0c3; }
+  .status-item strong { font-size: 13px; line-height: 1; }
+  .status-item.neutral { color: #514c45; }
+  .status-item.warn { color: #75582e; }
+
+  /* 流程副欄：返回 ＋ 口說模式切換 */
+  .capture-subbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0 8px;
+  }
+  .capture-subbar .back {
+    border: none;
+    background: none;
+    font-size: 20px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+  }
+  .capture-subbar .back:hover,
+  .capture-subbar .back:focus-visible {
+    color: var(--green);
+    background: var(--green-soft);
+    outline: none;
+  }
+  .mode-tabs {
+    display: flex; gap: 4px; background: #e7e0d3; border-radius: 10px; padding: 3px;
+  }
+  .mode-tabs button {
+    border: none; background: transparent; padding: 7px 14px; border-radius: 8px;
+    font-size: 13px; color: var(--muted); cursor: pointer; font-weight: 600;
+  }
+  .mode-tabs button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .mode-tabs button.soon { opacity: .45; }
+
+  /* ── 進度 ─────────────────────────────── */
+  .progress {
+    display: flex; gap: 6px; padding: 14px 0 4px;
+  }
+  .progress .p {
+    flex: 1; height: 6px; border-radius: 3px; background: var(--line);
+  }
+  .progress .p.done { background: var(--green); }
+  .progress .p.now { background: var(--amber); }
+  /* 已填欄位：只列已填的，名稱＋值一目了然 */
+  .filled {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    padding: 10px 0 14px;
+  }
+  .filled:empty { display: none; }
+  .f {
+    display: inline-flex; align-items: baseline; gap: 5px;
+    background: var(--green-soft); border: 1px solid var(--green-line);
+    color: var(--green); padding: 4px 11px; border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+  }
+  .f b { font-weight: 800; }
+  .f .arrow { color: var(--green-line); font-weight: 800; }
+
+  /* ── 中央主區 ─────────────────────────── */
+  main {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 20px 0; gap: 22px;
+  }
+  .field-label {
+    font-size: 15px; color: var(--muted); letter-spacing: 2px; font-weight: 600;
+  }
+  .field-big { font-size: 44px; font-weight: 800; letter-spacing: 1px; }
+  .field-hint { font-size: 15px; color: var(--muted); }
+
+  /* 收音鈕 */
+  .mic-wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .mic-ring {
+    position: absolute; inset: -14px; border-radius: 50%;
+    border: 2px solid var(--green-line);
+  }
+  .mic-ring.pulse { animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse {
+    0% { transform: scale(.8); opacity: .9; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
+  .mic {
+    width: 96px; height: 96px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--green); color: #fff; font-size: 40px;
+    box-shadow: 0 8px 24px rgba(47,93,80,.4);
+    transition: transform .15s;
+  }
+  .mic:hover { transform: scale(1.04); }
+  .mic.listening { background: var(--danger); box-shadow: 0 8px 24px rgba(155,44,44,.4); animation: shake .5s ease-in-out infinite; }
+  @keyframes shake {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  .mic-note { text-align: center; font-size: 13px; color: var(--muted); }
+  .mic-note.listening { color: var(--danger); font-weight: 700; }
+
+  /* 收音中：等化器波形 */
+  .wave {
+    display: none; align-items: center; gap: 5px; height: 30px;
+  }
+  .wave.on { display: flex; }
+  .wave i {
+    width: 5px; height: 8px; border-radius: 3px; background: var(--danger);
+    animation: bounce 1s ease-in-out infinite;
+  }
+  .wave i:nth-child(2) { animation-delay: .12s; }
+  .wave i:nth-child(3) { animation-delay: .24s; }
+  .wave i:nth-child(4) { animation-delay: .36s; }
+  .wave i:nth-child(5) { animation-delay: .48s; }
+  .wave i:nth-child(6) { animation-delay: .6s; }
+  .wave i:nth-child(7) { animation-delay: .72s; }
+  @keyframes bounce {
+    0%, 100% { height: 8px; }
+    50% { height: 26px; }
+  }
+
+  /* 即時轉錄：收音中逐字浮現 */
+  .live {
+    display: none; min-height: 26px; font-size: 20px; font-weight: 600;
+    color: var(--ink); text-align: center;
+  }
+  .live.on { display: block; animation: rise .2s ease; }
+
+  /* 結果卡 */
+  .result {
+    width: min(560px, 100%); background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 20px 24px; display: none; flex-direction: column; gap: 10px;
+  }
+  .result.show { display: flex; animation: rise .25s ease; }
+  @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
+  .result .row { display: flex; align-items: center; gap: 10px; }
+  .result .tag {
+    flex: 0 0 auto; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
+  }
+  .result .tag.raw { background: #f1ece0; color: var(--muted); }
+  .result .tag.ai { background: var(--green-soft); color: var(--green); border: 1px solid var(--green-line); }
+  .result .txt { font-size: 20px; font-weight: 600; }
+  .result .ai-row .txt { color: var(--green); }
+  .result .ai-note { font-size: 12px; color: var(--muted); margin-top: -2px; }
+
+  /* 底部操作 */
+  .actions {
+    display: flex; gap: 12px; padding: 6px 0 26px; justify-content: center;
+  }
+  button.action {
+    border: none; padding: 12px 26px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .action.ghost { background: #e7e0d3; color: var(--ink); }
+  .action.primary { background: var(--green); color: #fff; box-shadow: 0 4px 14px rgba(47,93,80,.35); }
+  .action[disabled] { opacity: .4; cursor: not-allowed; }
+
+  /* 摘要確認畫面 */
+  .summary {
+    width: min(560px, 100%); background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 26px; display: none; gap: 12px;
+  }
+  .summary.show { display: grid; animation: rise .25s ease; }
+  .summary h2 { font-size: 19px; margin-bottom: 6px; }
+  .summary .s-row {
+    display: flex; justify-content: space-between; padding: 11px 4px;
+    border-bottom: 1px dashed var(--line); font-size: 15px;
+  }
+  .summary .s-row:last-child { border-bottom: none; }
+  .summary .s-row dt { color: var(--muted); font-weight: 600; }
+  .summary .s-row dd { font-weight: 700; }
+
+  .done-banner {
+    width: min(560px, 100%); text-align: center; padding: 26px;
+    background: var(--green-soft); border: 1px solid var(--green-line);
+    border-radius: var(--radius); display: none; gap: 10px; flex-direction: column;
+  }
+  .done-banner.show { display: flex; }
+  .done-banner .big { font-size: 40px; }
+  .done-banner p { font-size: 16px; font-weight: 700; color: var(--green); }
+  .done-banner .action { margin-top: 6px; }
+
+  @media (max-width: 760px) {
+    .bottom-nav { height: 60px; }
+    .nav-item { font-size: 11px; padding: 4px 2px 6px; }
+    .nav-create { padding-top: 14px; }
+    .nav-create .nav-icon {
+      top: -12px; width: 42px; height: 42px; margin-left: -21px;
+    }
+    .workspace { padding: 12px 12px 76px; }
+    .page-header, .topbar-title { min-height: 42px; }
+    h1 { font-size: 26px; }
+    .topbar { align-items: flex-start; flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- App 框架：底部導覽 -->
+  <nav class="bottom-nav" aria-label="MealLedger navigation">
+    <button class="nav-item" type="button">
+      <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+      <span>概覽</span>
+    </button>
+    <button class="nav-item" type="button">
+      <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></span>
+      <span>明細</span>
+      <span class="nav-badge" aria-hidden="true">1</span>
+      <span class="visually-hidden">, 1 item to review</span>
+    </button>
+    <button class="nav-item nav-create active" type="button" aria-current="page">
+      <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+      <span>新增</span>
+    </button>
+    <button class="nav-item" type="button">
+      <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></span>
+      <span>專區</span>
+    </button>
+    <button class="nav-item" type="button">
+      <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      <span>設定</span>
+    </button>
+  </nav>
+
+  <section class="workspace">
+
+    <!-- App 框架：頁首 -->
+    <section class="page-header" aria-labelledby="page-title">
+      <header class="topbar">
+        <div class="topbar-title">
+          <p class="eyebrow">Personal finance workspace</p>
+          <h1 id="page-title">新增記帳</h1>
+        </div>
+        <div class="status-strip status-strip-compact" aria-label="Application status">
+          <div class="status-item neutral" title="This workspace keeps changes on this device until an account is verified." aria-label="Local workspace. This workspace keeps changes on this device until an account is verified.">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/></svg>
+            <strong>Local workspace</strong>
+          </div>
+          <div class="status-item warn" title="1 draft waiting. Confirm the completed fields to write the record." aria-label="1 draft waiting. Confirm the completed fields to write the record.">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            <strong>1 draft waiting</strong>
+          </div>
+        </div>
+      </header>
+    </section>
+
+    <!-- 流程副欄：返回 ＋ 口說模式切換 -->
+    <div class="capture-subbar">
+      <button class="back" type="button" aria-label="返回">←</button>
+      <div class="mode-tabs" role="tablist" aria-label="口說模式">
+        <button class="soon" type="button">整段口說</button>
+        <button class="on" type="button">逐欄口說</button>
+      </div>
+    </div>
+
+    <div class="progress" aria-hidden="true">
+      <div class="p done"></div><div class="p done"></div><div class="p now"></div>
+      <div class="p"></div><div class="p"></div><div class="p"></div><div class="p"></div>
+    </div>
+
+    <div class="filled" id="filledWrap" aria-label="已填欄位"></div>
+
+    <main>
+      <p class="field-label">第 3 步 · 共 7 步</p>
+      <p class="field-big" id="fieldName">帳戶</p>
+      <p class="field-hint" id="fieldHint">請說帳戶名稱</p>
+
+      <div class="mic-wrap">
+        <div class="mic-ring" id="ring"></div>
+        <button class="mic" id="mic" aria-label="用說的">🎙</button>
+        <div class="wave" id="wave" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <p class="live" id="live"></p>
+      </div>
+      <p class="mic-note" id="micNote">點擊麥克風開始說</p>
+
+      <div class="result" id="result">
+        <div class="row">
+          <span class="tag raw">聽到的</span>
+          <span class="txt" id="rawText">錢包</span>
+        </div>
+        <div class="row ai-row">
+          <span class="tag ai">AI 校對</span>
+          <span class="txt" id="aiText">錢包</span>
+        </div>
+        <p class="ai-note">校對結果供你確認，可以直接修改後填入。</p>
+      </div>
+    </main>
+
+    <div class="actions">
+      <button class="action ghost" id="retry" disabled>↺ 重新說</button>
+      <button class="action primary" id="confirm" disabled>✓ 填入此欄</button>
+    </div>
+
+    <div class="summary" id="summary">
+      <h2>確認這筆記錄</h2>
+      <div class="s-row"><dt>日期</dt><dd id="sDate">2026-07-25</dd></div>
+      <div class="s-row"><dt>類型</dt><dd id="sKind">支出</dd></div>
+      <div class="s-row"><dt>帳戶</dt><dd id="sAccount">錢包</dd></div>
+      <div class="s-row"><dt>類別</dt><dd id="sCategory">午餐</dd></div>
+      <div class="s-row"><dt>對象</dt><dd id="sCounterparty">同事</dd></div>
+      <div class="s-row"><dt>品項</dt><dd id="sItem">牛肉麵</dd></div>
+      <div class="s-row"><dt>金額</dt><dd id="sAmount">TWD 480</dd></div>
+    </div>
+    <div class="done-banner" id="done">
+      <span class="big">✓</span>
+      <p>已確認並寫入正式記錄。</p>
+    </div>
+
+  </section>
+</div>
+
+<script>
+  // ── 逐欄口說流程模擬 ──────────────────
+  // 每欄：名稱、提示、辨識原文、AI 校對結果；"start" 是開始說話的秒數
+  // （第 1、2 步日期/類型已填好，從第 3 步帳戶開始走）。
+  const FIELDS = [
+    { name: "帳戶", hint: "請說帳戶名稱", raw: "錢包", ai: "錢包" },
+    { name: "類別", hint: "請說類別", raw: "午餐", ai: "午餐" },
+    { name: "對象", hint: "請說對象或店家", raw: "同事", ai: "同事" },
+    { name: "品項", hint: "請說品項", raw: "牛肉麵", ai: "牛肉麵" },
+    { name: "金額", hint: "請說金額（例如：兩百五十、480）", raw: "兩百五十", ai: "250" },
+  ];
+  const FILLED = [
+    { label: "日期", value: "7/25" },
+    { label: "類型", value: "支出" },
+    { label: "帳戶", value: "錢包" },
+    { label: "類別", value: "午餐" },
+    { label: "對象", value: "同事" },
+    { label: "品項", value: "牛肉麵" },
+    { label: "金額", value: "TWD 250" },
+  ];
+  const SUMMARY = { date: "2026-07-25", kind: "支出", account: "錢包", category: "午餐", counterparty: "同事", item: "牛肉麵", amount: "TWD 250" };
+
+  // 已填的欄位顯示成小標籤（名稱＋值）；只列已填的，未填不顯示。
+  function renderFilled() {
+    const count = 2 + idx; // 日期、類型預設已填
+    filledWrap.innerHTML = FILLED.slice(0, count)
+      .map((f) => `<span class="f"><span>${f.label}</span> <b>${f.value}</b></span>`)
+      .join("");
+  }
+
+  const mic = document.getElementById("mic");
+  const ring = document.getElementById("ring");
+  const micNote = document.getElementById("micNote");
+  const result = document.getElementById("result");
+  const rawText = document.getElementById("rawText");
+  const aiText = document.getElementById("aiText");
+  const retry = document.getElementById("retry");
+  const confirmBtn = document.getElementById("confirm");
+  const filledWrap = document.getElementById("filledWrap");
+  const fieldName = document.getElementById("fieldName");
+  const fieldHint = document.getElementById("fieldHint");
+  const summary = document.getElementById("summary");
+  const done = document.getElementById("done");
+
+  let idx = 0;
+  let listening = false;
+  let captured = false;
+  const wave = document.getElementById("wave");
+  const live = document.getElementById("live");
+  const micNoteEl = document.getElementById("micNote");
+  let liveTimer = null;
+
+  function render() {
+    const f = FIELDS[idx];
+    fieldName.textContent = f.name;
+    fieldHint.textContent = f.hint;
+    micNote.textContent = "點擊麥克風開始說";
+    document.querySelector(".field-label").textContent = `第 ${idx + 3} 步 · 共 7 步`;
+    const bars = document.querySelectorAll(".progress .p");
+    bars.forEach((b, i) => {
+      b.className = "p";
+      if (i < 2 + idx) b.classList.add("done");
+      else if (i === 2 + idx) b.classList.add("now");
+    });
+    result.classList.remove("show");
+    captured = false;
+    retry.disabled = true;
+    confirmBtn.disabled = true;
+    micNoteEl.textContent = "點擊麥克風開始說";
+    micNoteEl.classList.remove("listening");
+    wave.classList.remove("on");
+    live.classList.remove("on");
+    renderFilled();
+  }
+
+  mic.addEventListener("click", () => {
+    if (listening || captured) return;
+    listening = true;
+    mic.classList.add("listening");
+    ring.classList.add("pulse");
+    wave.classList.add("on");
+    micNoteEl.textContent = "正在聽…";
+    micNoteEl.classList.add("listening");
+    live.classList.add("on");
+    // 收音中：聽到的字逐字浮現
+    const f = FIELDS[idx];
+    const chars = f.raw.split("");
+    let i = 0;
+    live.textContent = "";
+    liveTimer = setInterval(() => {
+      if (i < chars.length) {
+        live.textContent += chars[i];
+        i += 1;
+    } else {
+      clearInterval(liveTimer);
+    }
+  }, 260);
+    setTimeout(() => {
+      listening = false;
+      mic.classList.remove("listening");
+      ring.classList.remove("pulse");
+      wave.classList.remove("on");
+      clearInterval(liveTimer);
+      // 慢半拍收尾，讓「正在聽」的波形與逐字浮現有足夠時間被看見
+      rawText.textContent = f.raw;
+      aiText.textContent = f.ai;
+      result.classList.add("show");
+      live.textContent = "";
+      live.classList.remove("on");
+      micNoteEl.textContent = `AI 校對成「${f.ai}」，確認後填入`;
+      micNoteEl.classList.remove("listening");
+      captured = true;
+      retry.disabled = false;
+      confirmBtn.disabled = false;
+    }, 2500);
+  });
+
+  retry.addEventListener("click", () => {
+    result.classList.remove("show");
+    captured = false;
+    retry.disabled = true;
+    confirmBtn.disabled = true;
+    micNote.textContent = "點擊麥克風重新說";
+  });
+
+  // 收尾時清掉計時器
+  window.addEventListener("beforeunload", () => clearInterval(liveTimer));
+
+  // 初始渲染：載入即顯示已填的日期/類型標籤
+  render();
+
+  confirmBtn.addEventListener("click", () => {
+    idx += 1;
+    if (idx < FIELDS.length) { render(); return; }
+    // 全部填完 → 顯示確認摘要
+    filledWrap.style.display = "none";
+    document.querySelector(".progress").style.display = "none";
+    document.querySelector(".capture-subbar").style.display = "none";
+    document.querySelector("main").style.display = "none";
+    document.querySelector(".actions").style.display = "none";
+    document.getElementById("sAccount").textContent = SUMMARY.account;
+    document.getElementById("sCategory").textContent = SUMMARY.category;
+    document.getElementById("sCounterparty").textContent = SUMMARY.counterparty;
+    document.getElementById("sItem").textContent = SUMMARY.item;
+    document.getElementById("sAmount").textContent = SUMMARY.amount;
+    summary.classList.add("show");
+  });
+
+  // 摘要畫面：確認後寫入 → 完成 banner（可重新開始）。
+  const finish = document.createElement("button");
+  finish.className = "action primary";
+  finish.type = "button";
+  finish.textContent = "✓ 確認寫入";
+  summary.appendChild(finish);
+
+  finish.addEventListener("click", () => {
+    summary.classList.remove("show");
+    done.classList.add("show");
+  });
+
+  const restartBtn = document.createElement("button");
+  restartBtn.className = "action ghost";
+  restartBtn.type = "button";
+  restartBtn.textContent = "↺ 重新開始";
+  done.appendChild(restartBtn);
+
+  restartBtn.addEventListener("click", () => {
+    done.classList.remove("show");
+    filledWrap.style.display = "flex";
+    document.querySelector(".progress").style.display = "flex";
+    document.querySelector(".capture-subbar").style.display = "flex";
+    document.querySelector("main").style.display = "flex";
+    document.querySelector(".actions").style.display = "flex";
+    idx = 0;
+    render();
+  });
+</script>
+</body>
+</html>

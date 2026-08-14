@@ -23,11 +23,13 @@ let nextTranscript = "";
 class FakeRecognition implements SpeechRecognitionLike {
   lang = "zh-TW";
   interimResults = false;
+  onstart: SpeechRecognitionLike["onstart"] = null;
   onresult: SpeechRecognitionLike["onresult"] = null;
   onend: SpeechRecognitionLike["onend"] = null;
   onerror: SpeechRecognitionLike["onerror"] = null;
   start() {
-    this.onresult?.({ results: [[{ transcript: nextTranscript }]] });
+    this.onstart?.();
+    this.onresult?.({ results: [[{ transcript: nextTranscript, isFinal: true }]] });
     this.onend?.();
   }
   stop() {}
@@ -51,7 +53,7 @@ describe("ModeBPanel", () => {
 
     const fill = async (label: string, value: string) => {
       await user.type(screen.getByLabelText(label), value);
-      await user.click(screen.getByRole("button", { name: "填入此欄" }));
+      await user.click(screen.getByRole("button", { name: /填入此欄/u }));
     };
 
     await fill("日期", "2026-07-25");
@@ -63,7 +65,7 @@ describe("ModeBPanel", () => {
     await fill("金額", "480");
 
     expect(screen.getByText("確認這筆記錄")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "確認存檔" }));
+    await user.click(screen.getByRole("button", { name: /確認寫入/u }));
 
     expect(onSaveRecord).toHaveBeenCalledTimes(1);
     const draft = onSaveRecord.mock.calls[0][0] as { amount: string; account: string; category: string };
@@ -82,7 +84,8 @@ describe("ModeBPanel", () => {
     await user.click(screen.getByRole("button", { name: "用說的" }));
 
     await waitFor(() => expect(screen.getByLabelText("日期")).toHaveValue("2026-07-25"));
-    expect(screen.getByText("AI 校對結果:2026-07-25")).toBeInTheDocument();
+    // 聽到的 row shows the raw transcript, the AI 校對 row carries the value.
+    expect(screen.getByText("七月二十五")).toBeInTheDocument();
     expect(requestAiJson).toHaveBeenCalledWith(expect.objectContaining({ user: "七月二十五" }));
   });
 
@@ -113,13 +116,77 @@ describe("ModeBPanel", () => {
     expect(requestAiJson).not.toHaveBeenCalled();
   });
 
+  test("applies the last interim transcript when the session ends without a final result", async () => {
+    // Some engines stream interim results and then end without ever flagging
+    // the last item isFinal (common when the user pauses). The panel must
+    // promote the last interim words so the field still gets filled.
+    let fired = false;
+    class InterimOnlyRecognition implements SpeechRecognitionLike {
+      lang = "zh-TW";
+      interimResults = true;
+      onstart: SpeechRecognitionLike["onstart"] = null;
+      onresult: SpeechRecognitionLike["onresult"] = null;
+      onend: SpeechRecognitionLike["onend"] = null;
+      onerror: SpeechRecognitionLike["onerror"] = null;
+      start() {
+        // One interim result, then the session ends without a final one.
+        this.onstart?.();
+        this.onresult?.({ results: [[{ transcript: "昨天", isFinal: false }]] });
+        this.onend?.();
+        fired = true;
+      }
+      stop() {}
+    }
+    vi.mocked(requestAiJson).mockResolvedValue({ ok: true, data: { value: "" } });
+    vi.stubGlobal("SpeechRecognition", InterimOnlyRecognition);
+    const user = userEvent.setup();
+    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "用說的" }));
+
+    expect(fired).toBe(true);
+    // The interim transcript is promoted and resolved into the date field.
+    await waitFor(() => {
+      const value = (screen.getByLabelText("日期") as HTMLInputElement).value;
+      expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+    expect(screen.getByText("昨天")).toBeInTheDocument();
+  });
+
+  test("shows the starting hint until the engine fires onstart", async () => {
+    // The browser may take a few seconds to load the speech model / grant the
+    // microphone; the panel must say it is starting instead of pretending to
+    // listen (or looking dead) during that window.
+    class SlowRecognition implements SpeechRecognitionLike {
+      lang = "zh-TW";
+      interimResults = true;
+      onstart: SpeechRecognitionLike["onstart"] = null;
+      onresult: SpeechRecognitionLike["onresult"] = null;
+      onend: SpeechRecognitionLike["onend"] = null;
+      onerror: SpeechRecognitionLike["onerror"] = null;
+      start() {
+        // The engine has not started listening yet — onstart is deferred.
+      }
+      stop() {}
+    }
+    vi.stubGlobal("SpeechRecognition", SlowRecognition);
+    const user = userEvent.setup();
+    render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "用說的" }));
+
+    expect(screen.getByText("正在啟動麥克風,請稍候…")).toBeInTheDocument();
+    // The button becomes the stop control while starting.
+    expect(screen.getByRole("button", { name: "停止收音" })).toBeInTheDocument();
+  });
+
   test("shows a date picker for the date field and keeps the raw value for others", async () => {
     const user = userEvent.setup();
     render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     expect(screen.getByLabelText("日期")).toHaveAttribute("type", "date");
     await user.type(screen.getByLabelText("日期"), "2026-07-25");
-    await user.click(screen.getByRole("button", { name: "填入此欄" }));
+    await user.click(screen.getByRole("button", { name: /填入此欄/u }));
 
     await user.type(screen.getByLabelText("類型"), "expense");
     expect(screen.getByLabelText("類型")).toHaveAttribute("type", "text");
@@ -130,11 +197,11 @@ describe("ModeBPanel", () => {
     render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} />);
 
     await user.type(screen.getByLabelText("日期"), "2026-07-25");
-    await user.click(screen.getByRole("button", { name: "填入此欄" }));
+    await user.click(screen.getByRole("button", { name: /填入此欄/u }));
     await user.type(screen.getByLabelText("類型"), "transfer");
-    await user.click(screen.getByRole("button", { name: "填入此欄" }));
+    await user.click(screen.getByRole("button", { name: /填入此欄/u }));
     await user.type(screen.getByLabelText("帳戶"), "Daily wallet");
-    await user.click(screen.getByRole("button", { name: "填入此欄" }));
+    await user.click(screen.getByRole("button", { name: /填入此欄/u }));
 
     // The next step is the transfer destination; the category step is skipped.
     expect(screen.getByLabelText("轉帳目標")).toBeInTheDocument();
@@ -158,7 +225,7 @@ describe("ModeBPanel", () => {
 
     const fill = async (label: string, value: string) => {
       await user.type(screen.getByLabelText(label), value);
-      await user.click(screen.getByRole("button", { name: "填入此欄" }));
+      await user.click(screen.getByRole("button", { name: /填入此欄/u }));
     };
 
     await fill("日期", "2026-07-25");
@@ -169,7 +236,7 @@ describe("ModeBPanel", () => {
     await fill("品項", "牛肉麵");
     await fill("金額", "480");
 
-    await user.click(screen.getByRole("button", { name: "確認存檔" }));
+    await user.click(screen.getByRole("button", { name: /確認寫入/u }));
 
     expect(onResolveNewEntities).toHaveBeenCalledTimes(1);
     expect(onResolveNewEntities).toHaveBeenCalledWith(expect.objectContaining({ newAccount: "新錢包" }));

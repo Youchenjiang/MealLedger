@@ -672,6 +672,55 @@ a {
   padding: 28px 28px 96px;
 }
 
+/* 新增 voice-capture route: a fixed, non-scrolling screen like the
+   wireframe — progress at top, mic stage centered, actions at the bottom. */
+.workspace-voice {
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspace-voice .page-header .ai-mode-switch {
+  margin-bottom: 0;
+}
+
+/* Keep the mode switch at the top-right of the voice screen even on narrow
+   viewports (the generic breakpoint stacks the topbar into a column). */
+.workspace-voice .topbar {
+  align-items: center;
+  flex-direction: row;
+}
+
+.workspace-voice .capture-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-voice .ai-ledger-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-voice .mode-b-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Mode A suggestion list scrolls internally so the page never moves. */
+.workspace-voice .ai-suggestions {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .page-header {
   display: grid;
   min-height: 58px;
@@ -2598,24 +2647,24 @@ button.action-card.unavailable {
   gap: 4px;
   margin-bottom: 14px;
   padding: 3px;
-  border: 1px solid #ebe4d8;
-  border-radius: 8px;
-  background: #f5f2ec;
+  border-radius: 10px;
+  background: #e7e0d3;
 }
 
 .ai-mode-tab {
-  padding: 6px 12px;
+  padding: 7px 14px;
   border: 0;
-  border-radius: 6px;
-  color: #75582e;
+  border-radius: 8px;
+  color: #69645c;
   background: transparent;
   cursor: pointer;
+  font-weight: 600;
 }
 
 .ai-mode-tab.active {
   color: #242321;
-  background: #fffdf8;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
 }
 
 .mode-b-panel {
@@ -2701,51 +2750,331 @@ button.action-card.unavailable {
   font-size: 15px;
 }
 
-.mode-b-prompt {
-  margin: 0;
+.mode-b-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 逐欄口說:進度條 */
+.mode-b-progress {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.mode-b-p {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #ddd6ca;
+}
+
+.mode-b-p.done { background: #2f5d50; }
+.mode-b-p.now { background: #75582e; }
+
+/* 已填欄位小標籤 */
+.mode-b-filled {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  padding: 2px 0;
+}
+
+.mode-b-filled:empty { display: none; }
+
+.mode-b-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 11px;
+  border: 1px solid #8db9a4;
+  border-radius: 999px;
+  background: #dce9e2;
+  color: #2f5d50;
+  font-size: 13px;
   font-weight: 600;
 }
 
-.mode-b-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d8d0c0;
-  border-radius: 8px;
-  background: #fffdf8;
-  line-height: 1.5;
+.mode-b-chip b { font-weight: 800; }
+
+/* 中央主區 */
+.mode-b-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 0 4px;
+  text-align: center;
 }
 
-.mode-b-summary {
+.mode-b-step {
+  margin: 0;
+  color: #69645c;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+.mode-b-field-name {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+.mode-b-hint {
+  margin: 0;
+  color: #69645c;
+  font-size: 15px;
+}
+
+/* 收音鈕 */
+.mode-b-mic-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 0 2px;
+}
+
+.mode-b-ring {
+  position: absolute;
+  inset: 4px;
+  border: 2px solid #8db9a4;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.mode-b-ring.pulse { animation: mode-b-pulse 1.6s ease-out infinite; }
+
+@keyframes mode-b-pulse {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.22); opacity: 0; }
+}
+
+.mode-b-mic {
+  position: relative;
   display: grid;
+  width: 92px;
+  height: 92px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #2f5d50;
+  font-size: 38px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgb(47 93 80 / 0.4);
+  transition: transform 0.15s;
+}
+
+.mode-b-mic:hover { transform: scale(1.04); }
+
+.mode-b-mic.listening {
+  background: #9b2c2c;
+  box-shadow: 0 8px 24px rgb(155 44 44 / 0.4);
+  animation: mode-b-shake 0.5s ease-in-out infinite;
+}
+
+@keyframes mode-b-shake {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.mode-b-wave {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+}
+
+.mode-b-wave.on { display: flex; }
+
+.mode-b-wave i {
+  width: 5px;
+  height: 8px;
+  border-radius: 3px;
+  background: #9b2c2c;
+  animation: mode-b-bounce 1s ease-in-out infinite;
+}
+
+.mode-b-wave i:nth-child(2) { animation-delay: 0.12s; }
+.mode-b-wave i:nth-child(3) { animation-delay: 0.24s; }
+.mode-b-wave i:nth-child(4) { animation-delay: 0.36s; }
+.mode-b-wave i:nth-child(5) { animation-delay: 0.48s; }
+.mode-b-wave i:nth-child(6) { animation-delay: 0.6s; }
+.mode-b-wave i:nth-child(7) { animation-delay: 0.72s; }
+
+@keyframes mode-b-bounce {
+  0%, 100% { height: 8px; }
+  50% { height: 24px; }
+}
+
+.mode-b-live {
+  display: none;
+  min-height: 24px;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.mode-b-live.on { display: block; }
+
+.mode-b-note {
+  margin: 0;
+  color: #69645c;
+  font-size: 13px;
+  text-align: center;
+}
+
+.mode-b-note.listening { color: #9b2c2c; font-weight: 700; }
+
+/* 結果卡 */
+.mode-b-result {
+  display: grid;
+  gap: 10px;
+  width: min(560px, 100%);
+  align-self: center;
+  padding: 18px 22px;
+  border: 1px solid #ddd6ca;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.mode-b-row {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
-.mode-b-summary h3 {
+.mode-b-tag {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mode-b-tag.raw { background: #f1ece0; color: #69645c; }
+
+.mode-b-tag.ai {
+  border: 1px solid #8db9a4;
+  background: #dce9e2;
+  color: #2f5d50;
+}
+
+.mode-b-txt {
+  font-size: 19px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mode-b-row.ai-row .mode-b-txt { color: #2f5d50; }
+
+.mode-b-input {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #d8d0c0;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #242321;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.mode-b-input:focus {
+  border-color: #8db9a4;
+  outline: 2px solid #dce9e2;
+}
+
+.mode-b-ai-note {
   margin: 0;
+  color: #69645c;
+  font-size: 12px;
+}
+
+/* 底部操作 */
+.mode-b-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  padding: 2px 0 6px;
+}
+
+/* 摘要確認 */
+.mode-b-summary {
+  display: grid;
+  gap: 12px;
+  width: min(560px, 100%);
+  align-self: center;
+  padding: 22px;
+  border: 1px solid #ddd6ca;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.mode-b-summary h2 {
+  margin: 0;
+  font-size: 19px;
 }
 
 .mode-b-summary-list {
   display: grid;
-  gap: 4px;
+  gap: 0;
   margin: 0;
 }
 
-.mode-b-summary-list > div {
+.mode-b-s-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid #f0ead9;
+  padding: 10px 4px;
+  border-bottom: 1px dashed #ddd6ca;
+  font-size: 15px;
 }
 
-.mode-b-summary-list dt {
-  color: #75582e;
-  font-size: 13px;
-  font-weight: 700;
-}
+.mode-b-s-row:last-child { border-bottom: 0; }
 
-.mode-b-summary-list dd {
+.mode-b-s-row dt { color: #69645c; font-weight: 600; }
+
+.mode-b-s-row dd {
   margin: 0;
+  font-weight: 700;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+/* 完成 banner */
+.mode-b-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, 100%);
+  align-self: center;
+  padding: 26px;
+  border: 1px solid #8db9a4;
+  border-radius: 14px;
+  background: #dce9e2;
+  text-align: center;
+}
+
+.mode-b-done-icon { font-size: 40px; line-height: 1; }
+
+.mode-b-done p {
+  margin: 0;
+  color: #2f5d50;
+  font-size: 16px;
+  font-weight: 700;
 }

@@ -38,11 +38,29 @@ export type AiLedgerPanelProps = Readonly<{
   onSaveDraft: (draft: TransactionDraft) => void;
   // Prefills the ledger form with the fields the AI could identify so the
   // user can complete the remaining ones (account, category, …) manually.
-  onApplyToForm: (suggestion: AiDraftSuggestion) => void;
+  // Optional: the 新增 voice page has no manual form, so the button hides.
+  onApplyToForm?: (suggestion: AiDraftSuggestion) => void;
+  // Controlled mode for the 新增 header switch: when onModeChange is provided
+  // the panel uses the given mode and does not render its own switch.
+  mode?: "a" | "b";
+  onModeChange?: (mode: "a" | "b") => void;
 }>;
 
-export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_ENTITY_POLICY, onResolveNewEntities, onSaveRecord, onSaveDraft, onApplyToForm }: AiLedgerPanelProps) {
-  const [mode, setMode] = useState<"a" | "b">("a");
+// The 整段口說 / 逐欄口說 pill switch. Rendered in the page header on 新增
+// and inside the panel on the Zone page.
+export function AiModeSwitch({ mode, onModeChange }: Readonly<{ mode: "a" | "b"; onModeChange: (mode: "a" | "b") => void }>) {
+  return (
+    <div className="ai-mode-switch" role="tablist" aria-label="口說模式">
+      <button className={`ai-mode-tab ${mode === "a" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "a"} onClick={() => onModeChange("a")}>整段口說</button>
+      <button className={`ai-mode-tab ${mode === "b" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "b"} onClick={() => onModeChange("b")}>逐欄口說</button>
+    </div>
+  );
+}
+
+export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_ENTITY_POLICY, onResolveNewEntities, onSaveRecord, onSaveDraft, onApplyToForm, mode: controlledMode, onModeChange }: AiLedgerPanelProps) {
+  const [internalMode, setInternalMode] = useState<"a" | "b">("a");
+  const mode = controlledMode ?? internalMode;
+  const setMode = onModeChange ?? setInternalMode;
   // Which suggestion field is being edited in place for mode A. Index-based:
   // the suggestion key embeds mutable draft fields (amount, counterparty…), so
   // it would change mid-edit and the update would stop matching.
@@ -55,6 +73,9 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
   const [error, setError] = useState("");
   const [pendingNewEntities, setPendingNewEntities] = useState<AiDraftSuggestion | null>(null);
   const [listening, setListening] = useState(false);
+  // True from the click until the engine's onstart fires (the browser may
+  // take a few seconds to load the speech model / grant the microphone).
+  const [starting, setStarting] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,13 +147,16 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
       setError("此瀏覽器不支援語音輸入,請改用文字或照片。");
       return;
     }
-    if (listening) {
+    if (listening || starting) {
       recognitionRef.current?.stop();
       return;
     }
-    const recognition = new Ctor();
+    // Reuse the previous instance so a warm engine starts hearing right away;
+    // fall back to a fresh one if the engine rejects the restart.
+    let recognition: SpeechRecognitionLike = recognitionRef.current ?? new Ctor();
     recognition.lang = "zh-TW";
     recognition.interimResults = false;
+    recognition.onstart = () => setStarting(false);
     recognition.onresult = (event) => {
       let transcript = "";
       for (const result of event.results) {
@@ -140,14 +164,31 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
       }
       setInputText((current) => `${current}${current ? " " : ""}${transcript}`.trim());
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      setStarting(false);
+    };
     recognition.onerror = () => {
       setListening(false);
+      setStarting(false);
       setError("語音辨識失敗,請再試一次或改用文字輸入。");
     };
     recognitionRef.current = recognition;
     setListening(true);
-    recognition.start();
+    setStarting(true);
+    try {
+      recognition.start();
+    } catch {
+      const fresh = new Ctor();
+      recognitionRef.current = fresh;
+      fresh.lang = "zh-TW";
+      fresh.interimResults = false;
+      fresh.onstart = () => setStarting(false);
+      fresh.onresult = recognition.onresult;
+      fresh.onend = recognition.onend;
+      fresh.onerror = recognition.onerror;
+      fresh.start();
+    }
   };
 
   // Whether confirming this suggestion must first ask the user to create the
@@ -292,10 +333,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
 
   return (
     <div className="ai-ledger-panel">
-      <div className="ai-mode-switch" role="tablist" aria-label="口說模式">
-        <button className={`ai-mode-tab ${mode === "a" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "a"} onClick={() => setMode("a")}>整段口說</button>
-        <button className={`ai-mode-tab ${mode === "b" ? "active" : ""}`} type="button" role="tab" aria-selected={mode === "b"} onClick={() => setMode("b")}>逐步口說</button>
-      </div>
+      {!onModeChange ? <AiModeSwitch mode={mode} onModeChange={setMode} /> : null}
       {mode === "b" ? (
         <ModeBPanel
           accounts={accounts}
@@ -324,9 +362,9 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
           placeholder="例如:7/25 中午和同事吃牛肉麵 480、7/26 繳房租 12000"
         />
         <div className="ai-ledger-actions">
-          <button className="secondary-action" type="button" onClick={toggleListening} aria-pressed={listening}>
+          <button className="secondary-action" type="button" onClick={toggleListening} aria-pressed={listening || starting}>
             <Mic size={16} aria-hidden="true" />
-            {listening ? "停止收音" : "用說的"}
+            {listening || starting ? "停止收音" : "用說的"}
           </button>
           <button
             className="secondary-action"
@@ -415,9 +453,11 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
                     <button className="secondary-action" type="button" onClick={() => saveSuggestionAsDraft(suggestion)}>
                       存草稿
                     </button>
-                    <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                      填入表單
-                    </button>
+                    {onApplyToForm ? (
+                      <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+                        填入表單
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
                   <>
@@ -426,11 +466,13 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
                         {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
                       </ul>
                     ) : null}
-                    <div className="record-actions">
-                      <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                        填入表單
-                      </button>
-                    </div>
+                    {onApplyToForm ? (
+                      <div className="record-actions">
+                        <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+                          填入表單
+                        </button>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>

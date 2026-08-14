@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic } from "lucide-react";
 import type { TransactionDraft } from "../appShell/drafts";
 import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
-import { FieldBlocks } from "./fieldBlocks";
 import {
   buildFieldCorrectionSystemPrompt,
   buildModeBDraft,
@@ -46,11 +44,18 @@ export function ModeBPanel({
   const [step, setStep] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [transcript, setTranscript] = useState("");
+  // Interim speech text shown while listening (the final result replaces it).
+  const [liveText, setLiveText] = useState("");
   const [corrected, setCorrected] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [listening, setListening] = useState(false);
-  const [message, setMessage] = useState("");
+  // True from the click until the engine's onstart fires: the browser may
+  // take a few seconds to load the speech model / grant the microphone, and
+  // during that window nothing is being recorded yet.
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  // Which completion banner is showing after a confirmed write.
+  const [done, setDone] = useState<"" | "saved" | "draft">("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const configured = isAiConfigured();
@@ -107,37 +112,82 @@ export function ModeBPanel({
       setError("此瀏覽器不支援語音輸入,請改用文字輸入。");
       return;
     }
-    if (listening) {
+    if (listening || starting) {
       recognitionRef.current?.stop();
       return;
     }
-    const recognition = new Ctor();
+    // Reuse the previous recognition instance when possible: the browser
+    // loads the speech model on the first start, so a warm instance begins
+    // hearing almost immediately on later clicks. Some engines reject
+    // restarting the same object, so fall back to a fresh one.
+    let recognition: SpeechRecognitionLike = recognitionRef.current ?? new Ctor();
     recognition.lang = "zh-TW";
-    recognition.interimResults = false;
+    // Interim results stream the words as they are heard; the final result
+    // (the last item, flagged isFinal) drives the correction flow.
+    recognition.interimResults = true;
+    // The latest interim text, so a session that ends without a final result
+    // (some engines never flag the last item isFinal) still fills the field.
+    let lastInterim = "";
+    recognition.onstart = () => setStarting(false);
     recognition.onresult = (event) => {
-      let transcriptText = "";
-      for (const result of event.results) {
-        transcriptText += result[0].transcript;
+      const last = event.results[event.results.length - 1];
+      const text = last?.[0]?.transcript ?? "";
+      if (last?.[0]?.isFinal) {
+        lastInterim = "";
+        setLiveText("");
+        applyTranscript(currentField, text);
+      } else {
+        lastInterim = text;
+        setLiveText(text);
       }
-      applyTranscript(currentField, transcriptText);
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      setStarting(false);
+      // The engine ended without flagging a final result; promote the last
+      // interim words so the spoken value is still applied (e.g. 念「昨天」
+      // 後停頓,Chrome 常見只送 interim 就結束)。
+      if (lastInterim.trim()) {
+        const pending = lastInterim;
+        lastInterim = "";
+        setLiveText("");
+        applyTranscript(currentField, pending);
+      }
+    };
     recognition.onerror = () => {
       setListening(false);
+      setStarting(false);
+      setLiveText("");
       setError("語音辨識失敗,請再試一次或改用文字輸入。");
     };
     recognitionRef.current = recognition;
+    setLiveText("");
+    setStarting(true);
     setListening(true);
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      // The reused instance may be in a state the engine rejects (e.g. a
+      // previous session errored out); start over with a fresh one.
+      const fresh = new Ctor();
+      recognitionRef.current = fresh;
+      fresh.lang = "zh-TW";
+      fresh.interimResults = true;
+      fresh.onstart = () => setStarting(false);
+      fresh.onresult = recognition.onresult;
+      fresh.onend = recognition.onend;
+      fresh.onerror = recognition.onerror;
+      fresh.start();
+    }
   };
 
   const enterField = (index: number) => {
     setStep(index);
     setInputValue(values[steps[index]] ?? "");
     setTranscript("");
+    setLiveText("");
     setCorrected(null);
     setError("");
-    setMessage("");
   };
 
   const confirmField = () => {
@@ -155,19 +205,31 @@ export function ModeBPanel({
     setStep((current) => current + 1);
     setInputValue("");
     setTranscript("");
+    setLiveText("");
     setCorrected(null);
     setError("");
   };
 
   const retryField = () => {
     setTranscript("");
+    setLiveText("");
     setCorrected(null);
     setInputValue("");
   };
 
+  const resetAll = () => {
+    setValues({});
+    setStep(0);
+    setInputValue("");
+    setTranscript("");
+    setLiveText("");
+    setCorrected(null);
+    setError("");
+    setDone("");
+  };
+
   const save = () => {
     setError("");
-    setMessage("");
     const today = localToday();
     const result = buildModeBDraft(values, accounts, categories, today, entityPolicy);
     if (!result.draft) {
@@ -196,14 +258,11 @@ export function ModeBPanel({
       setError("這筆記錄無法建立,請檢查帳戶與欄位。");
       return;
     }
-    setValues({});
-    setStep(0);
-    setMessage("已確認並寫入正式記錄。");
+    setDone("saved");
   };
 
   const saveDraft = () => {
     setError("");
-    setMessage("");
     if (!onSaveDraft) return;
     const today = localToday();
     const result = buildModeBDraft(values, accounts, categories, today, entityPolicy);
@@ -212,10 +271,31 @@ export function ModeBPanel({
       return;
     }
     onSaveDraft(result.draft);
-    setValues({});
-    setStep(0);
-    setMessage("已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。");
+    setDone("draft");
   };
+
+  const hasTranscript = transcript !== "";
+  const micNote = starting
+    ? "正在啟動麥克風,請稍候…"
+    : listening
+      ? "正在聽…"
+      : hasTranscript
+        ? `AI 校對成「${corrected ?? inputValue}」，確認後填入`
+        : "點擊麥克風開始說";
+
+  if (done) {
+    return (
+      <div className="mode-b-panel">
+        <div className="mode-b-done">
+          <span className="mode-b-done-icon">✓</span>
+          <p>{done === "saved" ? "已確認並寫入正式記錄。" : "已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。"}</p>
+          <button className="primary-action" type="button" onClick={resetAll}>
+            ↺ 重新開始
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mode-b-panel">
@@ -225,62 +305,94 @@ export function ModeBPanel({
       {!configured ? (
         <output className="inline-message">尚未設定 AI 金鑰:將直接使用語音辨識的原始結果。</output>
       ) : null}
-      <FieldBlocks
-        items={steps.map((field, index) => ({
-          field,
-          label: MODE_B_FIELD_LABELS[field],
-          value: index < step ? (values[field] ?? "") : index === step ? inputValue : "",
-          state: index < step ? "filled" : index === step ? "current" : "pending",
-        }))}
-      />
-      {!isComplete ? (
-        <div className="mode-b-current">
-          <p className="mode-b-prompt">{MODE_B_FIELD_PROMPTS[currentField]}</p>
-          <div className="ai-ledger-actions">
-            <button className="secondary-action" type="button" onClick={toggleListening} aria-pressed={listening}>
-              <Mic size={16} aria-hidden="true" />
-              {listening ? "停止收音" : "用說的"}
-            </button>
-            <button className="secondary-action" type="button" onClick={retryField} disabled={!transcript}>
-              重新說一次
-            </button>
-          </div>
-          <label htmlFor="mode-b-input">{MODE_B_FIELD_LABELS[currentField]}</label>
-          <input
-            id="mode-b-input"
-            className="mode-b-input"
-            type={currentField === "date" ? "date" : "text"}
-            value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
-            placeholder={currentField === "date" ? undefined : "可直接打字,或按下「用說的」"}
+
+      <div className="mode-b-progress" aria-hidden="true">
+        {steps.map((field, index) => (
+          <div
+            className={`mode-b-p${index < step ? " done" : ""}${index === step ? " now" : ""}`}
+            key={field}
           />
-          {correcting ? <p className="field-help">AI 校對中…</p> : null}
-          {corrected !== null && corrected !== transcript && transcript ? (
-            <p className="field-help">AI 校對結果:{corrected}</p>
-          ) : null}
-          <div className="record-actions">
-            <button className="primary-action" type="button" onClick={confirmField} disabled={!inputValue.trim()}>
-              填入此欄
+        ))}
+      </div>
+
+      <div className="mode-b-filled" aria-label="已填欄位">
+        {steps.slice(0, step).map((field) => (
+          <span className="mode-b-chip" key={field}>
+            <span>{MODE_B_FIELD_LABELS[field]}</span>
+            <b>{values[field]}</b>
+          </span>
+        ))}
+      </div>
+
+      {!isComplete ? (
+        <>
+          <div className="mode-b-stage">
+            <p className="mode-b-step">第 {step + 1} 步 · 共 {steps.length} 步</p>
+            <p className="mode-b-field-name">{MODE_B_FIELD_LABELS[currentField]}</p>
+            <p className="mode-b-hint">{MODE_B_FIELD_PROMPTS[currentField]}</p>
+
+            <div className="mode-b-mic-wrap">
+              <div className={`mode-b-ring${listening || starting ? " pulse" : ""}`} />
+              <button
+                className={`mode-b-mic${listening || starting ? " listening" : ""}`}
+                type="button"
+                aria-label={listening || starting ? "停止收音" : "用說的"}
+                onClick={toggleListening}
+              >
+                🎙
+              </button>
+              <div className={`mode-b-wave${listening ? " on" : ""}`} aria-hidden="true">
+                <i /><i /><i /><i /><i /><i /><i />
+              </div>
+              <p className={`mode-b-live${liveText ? " on" : ""}`} aria-live="polite">{liveText}</p>
+            </div>
+            <p className={`mode-b-note${listening || starting ? " listening" : ""}`}>{micNote}</p>
+          </div>
+
+          <div className="mode-b-result">
+            <div className="mode-b-row">
+              <span className="mode-b-tag raw">聽到的</span>
+              <span className="mode-b-txt" aria-live="polite">{transcript || "—"}</span>
+            </div>
+            <div className="mode-b-row ai-row">
+              <span className="mode-b-tag ai">AI 校對</span>
+              <input
+                id="mode-b-input"
+                className="mode-b-input"
+                type={currentField === "date" ? "date" : "text"}
+                value={inputValue}
+                aria-label={MODE_B_FIELD_LABELS[currentField]}
+                onChange={(event) => setInputValue(event.target.value)}
+                placeholder={currentField === "date" ? undefined : "可直接打字,或按下「用說的」"}
+              />
+            </div>
+            <p className="mode-b-ai-note">校對結果供你確認,可以直接修改後填入。</p>
+            {correcting ? <p className="field-help">AI 校對中…</p> : null}
+          </div>
+
+          <div className="mode-b-actions">
+            <button className="secondary-action" type="button" onClick={retryField} disabled={!hasTranscript || listening}>
+              ↺ 重新說
             </button>
-            <button className="secondary-action" type="button" onClick={() => enterField(step - 1)} disabled={step === 0}>
-              上一步
+            <button className="primary-action" type="button" onClick={confirmField} disabled={!inputValue.trim() || listening || correcting}>
+              ✓ 填入此欄
             </button>
           </div>
-        </div>
+        </>
       ) : (
         <div className="mode-b-summary">
-          <h3>確認這筆記錄</h3>
-          <dl className="mode-b-summary-list">
+          <h2>確認這筆記錄</h2>
+          <div className="mode-b-summary-list">
             {steps.map((field) => (
-              <div key={field}>
+              <div className="mode-b-s-row" key={field}>
                 <dt>{MODE_B_FIELD_LABELS[field]}</dt>
                 <dd>{values[field]}</dd>
               </div>
             ))}
-          </dl>
-          <div className="record-actions">
+          </div>
+          <div className="mode-b-actions">
             <button className="primary-action" type="button" onClick={save}>
-              確認存檔
+              ✓ 確認寫入
             </button>
             {onSaveDraft ? (
               <button className="secondary-action" type="button" onClick={saveDraft}>
@@ -294,7 +406,6 @@ export function ModeBPanel({
         </div>
       )}
       {error ? <p className="auth-message" role="alert">{error}</p> : null}
-      {message ? <output className="inline-message">{message}</output> : null}
     </div>
   );
 }
