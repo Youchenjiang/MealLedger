@@ -106,7 +106,7 @@ function readWindowsKeyringToken() {
   // Resolve PowerShell by absolute path instead of PATH lookup (S4036): the
   // script only ever runs on Windows to read the CLI credential-manager token.
   const powerShellPath = join(
-    process.env.SystemRoot || "C:\\Windows",
+    process.env.SystemRoot || String.raw`C:\Windows`,
     "System32",
     "WindowsPowerShell",
     "v1.0",
@@ -167,7 +167,9 @@ if (response.status === 401 || response.status === 403) {
   process.exit(2);
 }
 if (!response.ok) {
-  console.error(`Management API request failed (HTTP ${response.status}): ${(await response.text()).slice(0, 300)}`);
+  // Status and project only — never echo the response body, which may contain
+  // arbitrary or user data (S5145).
+  console.error(`Management API request failed (HTTP ${response.status}) for project ${projectRef}.`);
   process.exit(2);
 }
 
@@ -187,6 +189,9 @@ const expected = expectedValues();
 
 const failures = [];
 const report = (label, ok, detail) => {
+  // NOSONAR: this operator CLI's stdout IS the verified config values from the
+  // authenticated user's own project; they are not written to logs or sent
+  // anywhere (S5145).
   console.log(`${ok ? "[PASS]" : "[FAIL]"} ${label}: ${detail}`);
   if (!ok) failures.push(label);
 };
