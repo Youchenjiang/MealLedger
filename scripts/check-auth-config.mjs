@@ -192,27 +192,27 @@ const report = (label, ok, detail) => {
   // This operator CLI's stdout IS the verified config values from the
   // authenticated user's own project; they are not written to logs or sent
   // anywhere (S5145).
-  console.log(`${ok ? "[PASS]" : "[FAIL]"} ${label}: ${detail}`); // NOSONAR
+  console.log(`${ok ? "[PASS]" : "[FAIL]"} ${label}: ${detail}`); // NOSONAR skipcq: JS-0002
   if (!ok) failures.push(label);
 };
 
-console.log(`Project: ${projectRef}`);
-console.log("");
+console.log(`Project: ${projectRef}`); // skipcq: JS-0002
+console.log(""); // skipcq: JS-0002
 
 const siteUrlDetail = actual.siteUrl === expected.siteUrl
   ? actual.siteUrl || "(empty)"
   : `${actual.siteUrl || "(empty)"} — expected ${expected.siteUrl}`;
 report("Site URL", actual.siteUrl === expected.siteUrl, siteUrlDetail);
 if (actual.siteUrl !== expected.siteUrl) {
-  console.log("        Fix: Authentication > URL Configuration > Site URL (emails link here)");
+  console.log("        Fix: Authentication > URL Configuration > Site URL (emails link here)"); // skipcq: JS-0002
 }
 
-console.log("");
-console.log(`Redirect URLs allow-list (${actual.redirectUrls.length} configured):`);
+console.log(""); // skipcq: JS-0002
+console.log(`Redirect URLs allow-list (${actual.redirectUrls.length} configured):`); // skipcq: JS-0002
 for (const url of actual.redirectUrls) {
-  console.log(`  - ${url}`);
+  console.log(`  - ${url}`); // skipcq: JS-0002
 }
-console.log("");
+console.log(""); // skipcq: JS-0002
 for (const expectedUrl of expected.redirectUrls) {
   const ok = actual.redirectUrls.includes(expectedUrl);
   report(
@@ -221,11 +221,11 @@ for (const expectedUrl of expected.redirectUrls) {
     ok ? expectedUrl : `${expectedUrl} — missing from allow-list`,
   );
   if (!ok) {
-    console.log("        Fix: add it under Authentication > URL Configuration > Redirect URLs");
+    console.log("        Fix: add it under Authentication > URL Configuration > Redirect URLs"); // skipcq: JS-0002
   }
 }
 
-console.log("");
+console.log(""); // skipcq: JS-0002
 if (failures.length > 0) {
   console.error(`${failures.length} field(s) out of spec — update the Supabase dashboard per docs/engineering/frontend-hosting.md.`);
   process.exitCode = 1;
