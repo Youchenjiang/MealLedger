@@ -49,39 +49,65 @@ export function FieldBlocks({
     <ol className="field-blocks">
       {items.map((item) => {
         const editing = editingField === item.field && Boolean(onFieldChange);
+        const startEditing = () => {
+          if (!editing && onEditField) onEditField(item.field);
+        };
         return (
           <li
             key={item.field}
             className={`field-block ${item.state}${editing ? " editing" : ""}${onEditField ? " editable" : ""}`}
-            onClick={() => {
-              if (!editing && onEditField) onEditField(item.field);
+            role={onEditField ? "button" : undefined}
+            tabIndex={onEditField ? 0 : undefined}
+            onClick={startEditing}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                startEditing();
+              }
             }}
           >
             <span className="field-block-label">{item.label}</span>
-            {editing ? (
-              <input
-                className="field-block-input"
-                autoFocus
-                value={item.value}
-                onChange={(event) => onFieldChange?.(item.field, event.target.value)}
-                onBlur={() => onFieldConfirm?.(item.field)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") onFieldConfirm?.(item.field);
-                }}
-              />
-            ) : item.valueContent ? (
-              item.valueContent
-            ) : item.value ? (
-              <span className="field-block-value">
-                {item.inferred ? <InferredSpan inferred>{item.value}</InferredSpan> : item.value}
-                {item.badge ? <NewEntityTag label={item.badge} /> : null}
-              </span>
-            ) : (
-              <span className="field-block-placeholder">待填</span>
-            )}
+            <FieldBlockValue item={item} editing={editing} onFieldChange={onFieldChange} onFieldConfirm={onFieldConfirm} />
           </li>
         );
       })}
     </ol>
   );
+}
+
+function FieldBlockValue({
+  item,
+  editing,
+  onFieldChange,
+  onFieldConfirm,
+}: Readonly<{
+  item: FieldBlockItem;
+  editing: boolean;
+  onFieldChange?: (field: string, value: string) => void;
+  onFieldConfirm?: (field: string) => void;
+}>) {
+  if (editing) {
+    return (
+      <input
+        className="field-block-input"
+        autoFocus
+        value={item.value}
+        onChange={(event) => onFieldChange?.(item.field, event.target.value)}
+        onBlur={() => onFieldConfirm?.(item.field)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") onFieldConfirm?.(item.field);
+        }}
+      />
+    );
+  }
+  if (item.valueContent) return item.valueContent;
+  if (item.value) {
+    return (
+      <span className="field-block-value">
+        {item.inferred ? <InferredSpan inferred>{item.value}</InferredSpan> : item.value}
+        {item.badge ? <NewEntityTag label={item.badge} /> : null}
+      </span>
+    );
+  }
+  return <span className="field-block-placeholder">待填</span>;
 }

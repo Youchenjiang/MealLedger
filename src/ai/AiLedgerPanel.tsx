@@ -5,7 +5,7 @@ import type { LocalAccount } from "../manualLedger/accounts";
 import { isAiConfigured } from "./config";
 import { requestAiJson } from "./client";
 import { DEFAULT_AI_ENTITY_POLICY, type AiEntityPolicy } from "./entityPolicy";
-import { FieldBlocks, InferredSpan, NewEntityTag, type FieldBlockItem } from "./fieldBlocks";
+import { FieldBlocks, InferredSpan, type FieldBlockItem } from "./fieldBlocks";
 import { ModeBPanel } from "./ModeBPanel";
 import { MODE_B_FIELD_LABELS, modeBStepsFor } from "./modeB";
 import { buildLedgerSystemPrompt, buildUserPrompt } from "./prompt";
@@ -259,56 +259,6 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     setMessage("已存到草稿佇列,可到 Ledger 的 Review queue 繼續處理。");
   };
 
-  // Maps a draft field to its raw value, used to decide whether a suggestion
-  // is complete and to feed the in-place editor.
-  const fieldValueFor = (draft: TransactionDraft, field: string): string => {
-    switch (field) {
-      case "date": return draft.date;
-      case "kind": return kindLabel[draft.kind as string] ?? draft.kind;
-      case "account": return draft.account;
-      case "transferAccount": return draft.transferAccount;
-      case "category": return draft.category;
-      case "counterparty": return draft.counterparty;
-      case "itemName": return draft.itemName;
-      case "amount": return draft.amount;
-      default: return "";
-    }
-  };
-
-  // The display value in the blocks: the parser fills placeholder text for
-  // a missing counterparty/item name, which is suppressed here so the block
-  // reads as 待填 instead of leaking the placeholder.
-  const displayValueFor = (draft: TransactionDraft, field: string): string => {
-    if (field === "counterparty" && draft.counterparty === missingCounterpartyLabel) return "";
-    if (field === "itemName" && draft.itemName === missingItemNameLabel) return "";
-    return fieldValueFor(draft, field);
-  };
-
-  const badgeFor = (suggestion: AiDraftSuggestion, field: string): string | undefined => {
-    if (field === "account" && suggestion.newAccount) return "帳戶尚不存在";
-    if (field === "category" && suggestion.newCategory) return "類別尚不存在";
-    if (field === "transferAccount" && suggestion.newTransferAccount) return "帳戶尚不存在";
-    return undefined;
-  };
-
-  // The field-block items for a valid suggestion, in the same order both
-  // modes use (ADR 0009), with inferred marking and new-entity badges.
-  const blockItemsFor = (suggestion: AiDraftSuggestion): FieldBlockItem[] => {
-    const draft = suggestion.draft;
-    if (!draft) return [];
-    return modeBStepsFor(draft.kind).map((field) => ({
-      field,
-      label: MODE_B_FIELD_LABELS[field],
-      value: displayValueFor(draft, field),
-      state: "filled" as const,
-      inferred: isInferred(suggestion.input, field),
-      badge: badgeFor(suggestion, field),
-      ...(field === "date"
-        ? { valueContent: <DateDisplay inputDate={suggestion.input.date} date={draft.date} inferred={isInferred(suggestion.input, "date")} /> }
-        : {}),
-    }));
-  };
-
   // Live-updates the edited field on the draft; the block input stays
   // controlled from the draft value. Index-based so the update keeps matching
   // even while the edited field (and thus any derived key) changes.
@@ -410,79 +360,197 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
             <span>{suggestions.length} 筆</span>
           </div>
           {anyInferred ? <p className="field-help">底線欄位是 AI 推論的,請確認後再寫入。</p> : null}
-          {suggestions.map((suggestion, index) => {
-            const blocks = blockItemsFor(suggestion);
-            const complete = suggestion.draft
-              ? modeBStepsFor(suggestion.draft.kind).every((field) => fieldValueFor(suggestion.draft as TransactionDraft, field) !== "")
-              : false;
-            return (
-              <div className="field-block-group" key={index}>
-                <div className="field-block-group-heading">
-                  <strong>
-                    {suggestions.length > 1 ? `第 ${index + 1} 筆 · ` : ""}
-                    {suggestion.draft ? (
-                      <>
-                        <InferredSpan inferred={isInferred(suggestion.input, "kind")}>{kindLabel[suggestion.draft.kind as string] ?? "未知類型"}</InferredSpan>
-                        {" · "}
-                        <InferredSpan inferred={isInferred(suggestion.input, "currency")}>{suggestion.draft.currency}</InferredSpan>
-                        {" "}
-                        <InferredSpan inferred={isInferred(suggestion.input, "amount")}>{suggestion.draft.amount}</InferredSpan>
-                      </>
-                    ) : (
-                      suggestionHeading(suggestion)
-                    )}
-                  </strong>
-                </div>
-                {suggestion.draft ? (
-                  <FieldBlocks
-                    items={blocks}
-                    editingField={editing?.index === index ? editing.field : null}
-                    onEditField={(field) => setEditing({ index, field })}
-                    onFieldChange={(field, value) => handleFieldEdit(index, field, value)}
-                    onFieldConfirm={(field) => handleFieldConfirm(index, field)}
-                  />
-                ) : (
-                  <p className="field-help">{partialLine(suggestion.input) || "無法辨識的項目"}</p>
-                )}
-                {suggestion.draft && !complete ? <p className="field-help">尚有欄位待填,填完才能確認寫入。</p> : null}
-                {suggestion.ok && suggestion.draft && complete ? (
-                  <div className="record-actions">
-                    <button className="primary-action" type="button" onClick={() => confirmSuggestion(suggestion)}>
-                      確認寫入
-                    </button>
-                    <button className="secondary-action" type="button" onClick={() => saveSuggestionAsDraft(suggestion)}>
-                      存草稿
-                    </button>
-                    {onApplyToForm ? (
-                      <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                        填入表單
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <>
-                    {suggestion.issues.length > 0 ? (
-                      <ul className="ai-issues">
-                        {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
-                      </ul>
-                    ) : null}
-                    {onApplyToForm ? (
-                      <div className="record-actions">
-                        <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
-                          填入表單
-                        </button>
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            );
-          })}
+          {suggestions.map((suggestion, index) => (
+            <SuggestionGroupCard
+              key={suggestion.id}
+              suggestion={suggestion}
+              index={index}
+              count={suggestions.length}
+              editing={editing}
+              onEditField={(targetIndex, field) => setEditing({ index: targetIndex, field })}
+              onFieldChange={handleFieldEdit}
+              onFieldConfirm={handleFieldConfirm}
+              onConfirm={confirmSuggestion}
+              onSaveDraft={saveSuggestionAsDraft}
+              onApplyToForm={onApplyToForm}
+            />
+          ))}
         </section>
       ) : null}
         </>
       )}
     </div>
+  );
+}
+
+// Maps a draft field to its raw value, used to decide whether a suggestion
+// is complete and to feed the in-place editor.
+function fieldValueFor(draft: TransactionDraft, field: string): string {
+  switch (field) {
+    case "date": return draft.date;
+    case "kind": return kindLabel[draft.kind as string] ?? draft.kind;
+    case "account": return draft.account;
+    case "transferAccount": return draft.transferAccount;
+    case "category": return draft.category;
+    case "counterparty": return draft.counterparty;
+    case "itemName": return draft.itemName;
+    case "amount": return draft.amount;
+    default: return "";
+  }
+}
+
+// The display value in the blocks: the parser fills placeholder text for
+// a missing counterparty/item name, which is suppressed here so the block
+// reads as 待填 instead of leaking the placeholder.
+function displayValueFor(draft: TransactionDraft, field: string): string {
+  if (field === "counterparty" && draft.counterparty === missingCounterpartyLabel) return "";
+  if (field === "itemName" && draft.itemName === missingItemNameLabel) return "";
+  return fieldValueFor(draft, field);
+}
+
+function badgeFor(suggestion: AiDraftSuggestion, field: string): string | undefined {
+  if (field === "account" && suggestion.newAccount) return "帳戶尚不存在";
+  if (field === "category" && suggestion.newCategory) return "類別尚不存在";
+  if (field === "transferAccount" && suggestion.newTransferAccount) return "帳戶尚不存在";
+  return undefined;
+}
+
+// The field-block items for a valid suggestion, in the same order both
+// modes use (ADR 0009), with inferred marking and new-entity badges.
+function blockItemsFor(suggestion: AiDraftSuggestion): FieldBlockItem[] {
+  const draft = suggestion.draft;
+  if (!draft) return [];
+  return modeBStepsFor(draft.kind).map((field) => ({
+    field,
+    label: MODE_B_FIELD_LABELS[field],
+    value: displayValueFor(draft, field),
+    state: "filled" as const,
+    inferred: isInferred(suggestion.input, field),
+    badge: badgeFor(suggestion, field),
+    ...(field === "date"
+      ? { valueContent: <DateDisplay inputDate={suggestion.input.date} date={draft.date} inferred={isInferred(suggestion.input, "date")} /> }
+      : {}),
+  }));
+}
+
+// One AI draft suggestion card: the field blocks plus the confirm/save
+// actions once every mode B step is filled.
+function SuggestionGroupCard({
+  suggestion,
+  index,
+  count,
+  editing,
+  onEditField,
+  onFieldChange,
+  onFieldConfirm,
+  onConfirm,
+  onSaveDraft,
+  onApplyToForm,
+}: Readonly<{
+  suggestion: AiDraftSuggestion;
+  index: number;
+  count: number;
+  editing: { index: number; field: string } | null;
+  onEditField: (index: number, field: string) => void;
+  onFieldChange: (index: number, field: string, value: string) => void;
+  onFieldConfirm: (index: number, field: string) => void;
+  onConfirm: (suggestion: AiDraftSuggestion) => void;
+  onSaveDraft: (suggestion: AiDraftSuggestion) => void;
+  onApplyToForm?: (suggestion: AiDraftSuggestion) => void;
+}>) {
+  const blocks = blockItemsFor(suggestion);
+  const complete = suggestion.draft
+    ? modeBStepsFor(suggestion.draft.kind).every((field) => fieldValueFor(suggestion.draft as TransactionDraft, field) !== "")
+    : false;
+  return (
+    <div className="field-block-group">
+      <div className="field-block-group-heading">
+        <strong>
+          {count > 1 ? `第 ${index + 1} 筆 · ` : ""}
+          {suggestion.draft ? (
+            <>
+              <InferredSpan inferred={isInferred(suggestion.input, "kind")}>{kindLabel[suggestion.draft.kind as string] ?? "未知類型"}</InferredSpan>
+              {" · "}
+              <InferredSpan inferred={isInferred(suggestion.input, "currency")}>{suggestion.draft.currency}</InferredSpan>
+              {" "}
+              <InferredSpan inferred={isInferred(suggestion.input, "amount")}>{suggestion.draft.amount}</InferredSpan>
+            </>
+          ) : (
+            suggestionHeading(suggestion)
+          )}
+        </strong>
+      </div>
+      {suggestion.draft ? (
+        <FieldBlocks
+          items={blocks}
+          editingField={editing?.index === index ? editing.field : null}
+          onEditField={(field) => onEditField(index, field)}
+          onFieldChange={(field, value) => onFieldChange(index, field, value)}
+          onFieldConfirm={(field) => onFieldConfirm(index, field)}
+        />
+      ) : (
+        <p className="field-help">{partialLine(suggestion.input) || "無法辨識的項目"}</p>
+      )}
+      {suggestion.draft && !complete ? <p className="field-help">尚有欄位待填,填完才能確認寫入。</p> : null}
+      <SuggestionActions
+        suggestion={suggestion}
+        complete={complete}
+        onConfirm={onConfirm}
+        onSaveDraft={onSaveDraft}
+        onApplyToForm={onApplyToForm}
+      />
+    </div>
+  );
+}
+
+// The confirm/save actions for a completed suggestion, or the issues list and
+// the form fallback for a rejected one.
+function SuggestionActions({
+  suggestion,
+  complete,
+  onConfirm,
+  onSaveDraft,
+  onApplyToForm,
+}: Readonly<{
+  suggestion: AiDraftSuggestion;
+  complete: boolean;
+  onConfirm: (suggestion: AiDraftSuggestion) => void;
+  onSaveDraft: (suggestion: AiDraftSuggestion) => void;
+  onApplyToForm?: (suggestion: AiDraftSuggestion) => void;
+}>) {
+  const canWrite = Boolean(suggestion.ok && suggestion.draft && complete);
+  if (canWrite) {
+    return (
+      <div className="record-actions">
+        <button className="primary-action" type="button" onClick={() => onConfirm(suggestion)}>
+          確認寫入
+        </button>
+        <button className="secondary-action" type="button" onClick={() => onSaveDraft(suggestion)}>
+          存草稿
+        </button>
+        {onApplyToForm ? (
+          <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+            填入表單
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <>
+      {suggestion.issues.length > 0 ? (
+        <ul className="ai-issues">
+          {suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}
+        </ul>
+      ) : null}
+      {onApplyToForm ? (
+        <div className="record-actions">
+          <button className="secondary-action" type="button" onClick={() => onApplyToForm(suggestion)}>
+            填入表單
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 

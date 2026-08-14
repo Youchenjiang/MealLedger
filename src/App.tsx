@@ -56,7 +56,7 @@ import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChang
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
 import { AiLedgerPanel, AiModeSwitch } from "./ai/AiLedgerPanel";
 import { readAiEntityPolicy, writeAiEntityPolicy, type AiEntityPolicy, type AiEntityPolicyOption } from "./ai/entityPolicy";
-import { buildPrefillForm, type AiDraftSuggestion, type NewEntityCarrier } from "./ai/parse";
+import { buildPrefillForm, type NewEntityCarrier } from "./ai/parse";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "概覽", path: "/", icon: Home },
@@ -3264,6 +3264,40 @@ function ManualLedgerPanel(props: Readonly<ManualLedgerFormProps>) {
 // Owns the custom-category list so the spoken entity policy can create a
 // not-yet-existing category right before the confirmed write, mirroring the
 // tools page (ADR 0012).
+// Creates the not-yet-existing accounts/categories an AI suggestion carries,
+// right before the confirmed write (see ADR 0012). New accounts follow the
+// default-wallet convention (name as spoken, currency TWD), categories join
+// the custom categories; the user can edit or delete either later in
+// account/category management. Shared by the voice capture page and the
+// manual capture page so both mode A and mode B flows resolve entities the
+// same way.
+function resolveNewEntitiesFor(
+  suggestion: NewEntityCarrier,
+  accounts: LocalAccount[],
+  customCategories: string[],
+  setCustomCategories: Dispatch<SetStateAction<string[]>>,
+  onAddAccount: (account: LocalAccount) => void,
+): LocalAccount[] | false {
+  const created: LocalAccount[] = [];
+  const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
+  for (const name of newAccountNames) {
+    if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      continue;
+    }
+    const account = createLocalAccount(name, "TWD", crypto.randomUUID());
+    if (!account) {
+      return false;
+    }
+    created.push(account);
+    onAddAccount(account);
+  }
+  const newCategory = suggestion.newCategory;
+  if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
+    setCustomCategories((current) => [...current, newCategory]);
+  }
+  return created;
+}
+
 function VoiceCapturePage({
   accounts,
   entityPolicy,
@@ -3295,26 +3329,8 @@ function VoiceCapturePage({
     }
   }, [customCategories]);
 
-  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false => {
-    const created: LocalAccount[] = [];
-    const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
-    for (const name of newAccountNames) {
-      if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-        continue;
-      }
-      const account = createLocalAccount(name, "TWD", crypto.randomUUID());
-      if (!account) {
-        return false;
-      }
-      created.push(account);
-      onAddAccount(account);
-    }
-    const newCategory = suggestion.newCategory;
-    if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
-      setCustomCategories((current) => [...current, newCategory]);
-    }
-    return created;
-  };
+  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
+    resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
 
   return (
     <section className="capture-layout">
@@ -3492,26 +3508,8 @@ function CapturePage({
   // default-wallet convention (name as spoken, currency TWD), categories join
   // the custom categories; the user can edit or delete either later in
   // account/category management.
-  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false => {
-    const created: LocalAccount[] = [];
-    const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
-    for (const name of newAccountNames) {
-      if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-        continue;
-      }
-      const account = createLocalAccount(name, "TWD", crypto.randomUUID());
-      if (!account) {
-        return false;
-      }
-      created.push(account);
-      onAddAccount(account);
-    }
-    const newCategory = suggestion.newCategory;
-    if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
-      setCustomCategories((current) => [...current, newCategory]);
-    }
-    return created;
-  };
+  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
+    resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
   const sourceOptions = useMemo(
     () => [...new Set([...customSources, ...records.filter((record) => record.kind === "income" || record.kind === "fund-addition").map((record) => record.counterparty).filter(Boolean)])],
     [customSources, records],

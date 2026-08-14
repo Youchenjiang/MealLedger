@@ -138,6 +138,58 @@ function normalizeKindValue(value: string | undefined): "expense" | "income" | "
   return "expense";
 }
 
+// Resolves a spoken account name against the existing accounts under the
+// entity policy (ADR 0012): existing-only rejects unknown names, ask/auto
+// carry them as new entities to create on the confirmed write. Pushes an
+// issue for a blank name and for an unknown name under existing-only.
+function resolveAccountField(
+  raw: string,
+  accounts: AiLedgerAccounts,
+  policy: AiEntityPolicy,
+  label: string,
+  entityKey: "newAccount" | "newTransferAccount",
+  newEntities: NewEntityCarrier,
+  issues: string[],
+): { name: string; currency: string } | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    issues.push(`${label}為空白。`);
+    return null;
+  }
+  const matched = matchAccountName(trimmed, accounts);
+  if (matched) return matched;
+  if (policy.account === "existing") {
+    issues.push(`${label}「${trimmed}」不存在。`);
+    return null;
+  }
+  newEntities[entityKey] = trimmed;
+  return { name: trimmed, currency: "TWD" };
+}
+
+// Same resolution as resolveAccountField but for categories (which have no
+// currency), used only for non-transfer records.
+function resolveCategoryField(
+  raw: string,
+  categories: string[],
+  policy: AiEntityPolicy,
+  newEntities: NewEntityCarrier,
+  issues: string[],
+): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    issues.push("類別為空白。");
+    return "";
+  }
+  const matched = matchCategoryName(trimmed, categories);
+  if (matched) return matched;
+  if (policy.category === "existing") {
+    issues.push(`類別「${trimmed}」不存在。`);
+    return "";
+  }
+  newEntities.newCategory = trimmed;
+  return trimmed;
+}
+
 function matchAccountName(value: string, accounts: AiLedgerAccounts): { name: string; currency: string } | null {
   const normalized = value.toLocaleLowerCase();
   return accounts.find((account) => account.name.toLocaleLowerCase() === normalized) ?? null;
@@ -225,45 +277,11 @@ export function buildModeBDraft(
   const kind = normalizeKindValue(values.kind);
   const isTransfer = kind === "transfer";
 
-  const rawAccount = values.account?.trim() ?? "";
-  const matchedAccount = matchAccountName(rawAccount, accounts);
-  let account = matchedAccount;
-  if (!rawAccount) {
-    issues.push("帳戶為空白。");
-  } else if (!matchedAccount) {
-    if (policy.account === "existing") {
-      issues.push(`帳戶「${rawAccount}」不存在。`);
-    } else {
-      newEntities.newAccount = rawAccount;
-      account = { name: rawAccount, currency: "TWD" };
-    }
-  }
-
-  const rawCategory = values.category?.trim() ?? "";
-  const matchedCategory = matchCategoryName(rawCategory, categories);
-  let category = matchedCategory;
-  if (!isTransfer && !rawCategory) {
-    issues.push("類別為空白。");
-  } else if (!isTransfer && !matchedCategory) {
-    if (policy.category === "existing") {
-      issues.push(`類別「${rawCategory}」不存在。`);
-    } else {
-      newEntities.newCategory = rawCategory;
-      category = rawCategory;
-    }
-  }
-
-  const rawTransfer = values.transferAccount?.trim() ?? "";
-  const matchedTransfer = matchAccountName(rawTransfer, accounts);
-  if (isTransfer && !rawTransfer) {
-    issues.push("轉帳目標帳戶為空白。");
-  } else if (isTransfer && !matchedTransfer) {
-    if (policy.account === "existing") {
-      issues.push(`轉帳目標帳戶「${rawTransfer}」不存在。`);
-    } else {
-      newEntities.newTransferAccount = rawTransfer;
-    }
-  }
+  const sourceAccount = resolveAccountField(values.account ?? "", accounts, policy, "帳戶", "newAccount", newEntities, issues);
+  const category = isTransfer ? "" : resolveCategoryField(values.category ?? "", categories, policy, newEntities, issues);
+  const transferName = isTransfer
+    ? resolveAccountField(values.transferAccount ?? "", accounts, policy, "轉帳目標帳戶", "newTransferAccount", newEntities, issues)?.name ?? ""
+    : "";
 
   const amount = values.amount?.trim() ?? "";
   if (!amount) {
@@ -277,12 +295,8 @@ export function buildModeBDraft(
     issues.push(`日期「${rawDate}」無法辨識,請用 YYYY-MM-DD、7/25、七月二十五或今天/昨天等說法。`);
   }
 
-  if (issues.length > 0) {
+  if (issues.length > 0 || !sourceAccount) {
     return { draft: null, issues, ...newEntities };
-  }
-  const sourceAccount = account;
-  if (!sourceAccount) {
-    return { draft: null, issues: [...issues, "帳戶為空白。"], ...newEntities };
   }
 
   const form: DraftForm = {
@@ -294,7 +308,7 @@ export function buildModeBDraft(
     counterpartyMissing: false,
     itemName: values.itemName?.trim() ?? "",
     itemNameMissing: false,
-    transferAccount: isTransfer ? (matchedTransfer?.name ?? rawTransfer) : "",
+    transferAccount: transferName,
     transferMode: "same-currency",
     amount,
     currency: sourceAccount.currency,

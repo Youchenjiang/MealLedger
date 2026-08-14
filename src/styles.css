@@ -2667,11 +2667,6 @@ button.action-card.unavailable {
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
 }
 
-.mode-b-panel {
-  display: grid;
-  gap: 12px;
-}
-
 .field-blocks {
   display: grid;
   gap: 8px;

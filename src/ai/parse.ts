@@ -22,6 +22,10 @@ export type AiSuggestionInput = {
 };
 
 export type AiDraftSuggestion = {
+  // Stable per-parse identity used as the React list key: the draft fields
+  // mutate in place during mode A editing, so a content-derived key would
+  // change mid-edit and break the editing state matching.
+  id: string;
   input: AiSuggestionInput;
   draft: TransactionDraft | null;
   ok: boolean;
@@ -305,6 +309,7 @@ export function parseDraftSuggestions(
 
   return items.map((item): AiDraftSuggestion => {
     const input = (item && typeof item === "object" ? item : {}) as AiSuggestionInput;
+    const id = crypto.randomUUID();
     const issues: string[] = [];
 
     const kind = normalizeKind(input.kind);
@@ -325,7 +330,7 @@ export function parseDraftSuggestions(
     }
 
     if (!kind || !account || !effectiveAmount) {
-      return { input, draft: null, ok: false, issues, ...newEntities };
+      return { id, input, draft: null, ok: false, issues, ...newEntities };
     }
 
     const form = buildForm(input, account, accounts, today, category);
@@ -337,14 +342,14 @@ export function parseDraftSuggestions(
     }
 
     if (issues.length > 0) {
-      return { input, draft: null, ok: false, issues, ...newEntities };
+      return { id, input, draft: null, ok: false, issues, ...newEntities };
     }
 
     const draft = createTransactionDraft(form, `ai-${crypto.randomUUID()}`, [...accounts, ...syntheticAccountsFor(newEntities)]);
     if (!draft) {
       issues.push("欄位組合未通過既有記帳規則,請手動檢查。");
-      return { input, draft: null, ok: false, issues, ...newEntities };
+      return { id, input, draft: null, ok: false, issues, ...newEntities };
     }
-    return { input, draft, ok: true, issues, ...newEntities };
+    return { id, input, draft, ok: true, issues, ...newEntities };
   });
 }
