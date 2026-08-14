@@ -142,6 +142,29 @@ existing `ai-parse` auth-gated proxy (CORS, server-side key, body cap, auth
 gate). Local development keeps the direct-provider fallback with
 `AI_REQUIRE_AUTH=false`.
 
+## Rejected Alternatives
+
+- **Audio vectors/embeddings as the LLM input.** Feeding the LLM the audio
+  encoder's embeddings (Pengi/LLaVA-style audio-LLMs such as SALMONN, LTU,
+  GAMA; see the PAL study, arXiv:2506.10423) is a research architecture:
+  the model must be trained on millions of audio-text pairs, and no hosted
+  API exposes the embedding path. Embeddings are lossy semantic
+  representations, so exact lexical fields — amounts (480 vs 48), account
+  and category names — survive poorly, which is exactly what ledger parsing
+  depends on. Rejected for both training cost and accuracy.
+- **Server-side ASR only, without an audio-native path.** Whisper-class
+  transcription plus the existing text parse is the industry-default cascade
+  and roughly 10–50x cheaper than audio tokens, but it reintroduces a lossy
+  transcript stage and a second provider. ADR 0013's motivation was precisely
+  that a garbled zh-TW transcript poisons everything downstream, so the
+  direct path keeps both options: audio → JSON in one call when the provider
+  accepts audio inline (Gemini), transcription-then-parse behind the same
+  interface otherwise.
+- **Browser ASR as the only voice input.** The browser transcript path stays
+  the default (free, on-device, no bytes off the device), but its zh-TW
+  accuracy is the weak link that motivated the direct path; it is not
+  upgraded or replaced, only coexisted with.
+
 ## References
 
 - [Voice capture plan](../../product/voice-capture-plan.md)
