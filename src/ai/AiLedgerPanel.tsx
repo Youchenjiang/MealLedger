@@ -88,35 +88,7 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
     setError,
   });
 
-  // Parses the typed/said text (and optional photo) into draft suggestions.
-  const handleSubmit = async (text: string, imageDataUrl: string | undefined) => {
-    setError("");
-    setMessage("");
-    if (!text.trim() && !imageDataUrl) {
-      setError("請輸入或念出記帳內容,或選擇發票/收據照片。");
-      return;
-    }
-    setLoading(true);
-    try {
-      // Compute once per submit so the system prompt and the parsed drafts
-      // always agree on the reference date, even across midnight.
-      const today = localToday();
-      const system = buildLedgerSystemPrompt({ accounts, categories, today, entityPolicy });
-      const user = buildUserPrompt(text, imageDataUrl);
-      const result = await requestAiJson({ system, user, imageDataUrl });
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-      const parsed = parseDraftSuggestions(result.data, accounts, categories, today, entityPolicy);
-      setSuggestions(parsed);
-      if (parsed.length === 0) {
-        setError("AI 沒有辨識出任何交易,請換一種描述試試。");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleSubmit = useAiSubmit({ accounts, categories, entityPolicy, setSuggestions, setLoading, setMessage, setError });
 
   return (
     <div className="ai-ledger-panel">
@@ -186,6 +158,56 @@ export function AiLedgerPanel({ accounts, categories, entityPolicy = DEFAULT_AI_
       )}
     </div>
   );
+}
+
+// Parses the typed/said text (and optional photo) into draft suggestions.
+// Kept in a hook so the submit pipeline's branching does not count toward the
+// panel component's cognitive complexity.
+function useAiSubmit({
+  accounts,
+  categories,
+  entityPolicy,
+  setSuggestions,
+  setLoading,
+  setMessage,
+  setError,
+}: Readonly<{
+  accounts: AiLedgerPanelProps["accounts"];
+  categories: AiLedgerPanelProps["categories"];
+  entityPolicy: AiEntityPolicy;
+  setSuggestions: React.Dispatch<React.SetStateAction<AiDraftSuggestion[]>>;
+  setLoading: (loading: boolean) => void;
+  setMessage: (message: string) => void;
+  setError: (message: string) => void;
+}>) {
+  return async (text: string, imageDataUrl: string | undefined) => {
+    setError("");
+    setMessage("");
+    if (!text.trim() && !imageDataUrl) {
+      setError("請輸入或念出記帳內容,或選擇發票/收據照片。");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Compute once per submit so the system prompt and the parsed drafts
+      // always agree on the reference date, even across midnight.
+      const today = localToday();
+      const system = buildLedgerSystemPrompt({ accounts, categories, today, entityPolicy });
+      const user = buildUserPrompt(text, imageDataUrl);
+      const result = await requestAiJson({ system, user, imageDataUrl });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      const parsed = parseDraftSuggestions(result.data, accounts, categories, today, entityPolicy);
+      setSuggestions(parsed);
+      if (parsed.length === 0) {
+        setError("AI 沒有辨識出任何交易,請換一種描述試試。");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 }
 
 // Mode A speech capture: toggles the microphone and streams the recognized
@@ -324,7 +346,7 @@ function useDraftActions({
   setError,
 }: Readonly<{
   entityPolicy: AiEntityPolicy;
-  onResolveNewEntities?: AiLedgerPanelProps["onResolveNewEntities"];
+  onResolveNewEntities: AiLedgerPanelProps["onResolveNewEntities"];
   onSaveRecord: AiLedgerPanelProps["onSaveRecord"];
   onSaveDraft: AiLedgerPanelProps["onSaveDraft"];
   setSuggestions: React.Dispatch<React.SetStateAction<AiDraftSuggestion[]>>;
