@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from "react";
+import type { ChangeEvent, Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import {
   AlertCircle,
   Banknote,
@@ -54,9 +54,9 @@ import { createSupabasePersistenceClient, createSupabaseReferenceBootstrapClient
 import { enqueueRecordSync, retryCloudSyncItem, type CloudSyncQueueItem } from "./cloudPersistence/syncQueue";
 import { enqueueLocalChanges, mergeSyncedItems, mergeSyncedScans, syncLocalChanges } from "./cloudPersistence/syncService";
 import { rebindLocalWorkspace } from "./cloudPersistence/workspaceHandoff";
-import { AiLedgerPanel } from "./ai/AiLedgerPanel";
+import { AiLedgerPanel, AiModeSwitch } from "./ai/AiLedgerPanel";
 import { readAiEntityPolicy, writeAiEntityPolicy, type AiEntityPolicy, type AiEntityPolicyOption } from "./ai/entityPolicy";
-import { buildPrefillForm, type AiDraftSuggestion } from "./ai/parse";
+import { buildPrefillForm, type NewEntityCarrier } from "./ai/parse";
 
 const navItems: NavItem[] = [
   { route: "overview", label: "概覽", path: "/", icon: Home },
@@ -813,7 +813,13 @@ function BottomNav({ route, reviewCount, navigate }: Readonly<{
   );
 }
 
-function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; statusItems: StatusItem[] }>) {
+function WorkspaceHeader({ route, statusItems, headerAction }: Readonly<{
+  route: AppRoute;
+  statusItems: StatusItem[];
+  // Replaces the status strip on routes that host their own header control
+  // (e.g. the 整段口說/逐欄口說 switch on the voice capture page).
+  headerAction?: ReactNode;
+}>) {
   return (
     <section className="page-header" aria-labelledby="page-title">
       <header className="topbar">
@@ -821,7 +827,7 @@ function WorkspaceHeader({ route, statusItems }: Readonly<{ route: AppRoute; sta
           <p className="eyebrow">Personal finance workspace</p>
           <h1 id="page-title">{routeTitle(route)}</h1>
         </div>
-        <StatusStrip items={statusItems} compact />
+        {headerAction ?? <StatusStrip items={statusItems} compact />}
       </header>
     </section>
   );
@@ -888,6 +894,11 @@ function AuthenticatedApp() {
   const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
+  // Which capture mode the 新增 header switch shows; shared with the panel.
+  // 新增 defaults to 逐欄口說: the approved wireframe flow fills fields one at
+  // a time and degrades to raw input when AI is unreachable, while 整段口說
+  // needs the AI proxy for its free-text parse.
+  const [voiceCaptureMode, setVoiceCaptureMode] = useState<"a" | "b">("b");
   const [records, setRecords] = useState<LocalLedgerRecord[]>(readStoredRecords);
   const [auditEvents, setAuditEvents] = useState<LocalAuditEvent[]>(readStoredAuditEvents);
   const [cloudSyncQueue, setCloudSyncQueue] = useState<CloudSyncQueueItem[]>(readStoredCloudSyncQueue);
@@ -1256,10 +1267,11 @@ function AuthenticatedApp() {
         navigate={navigate}
       />
 
-      <section className="workspace">
+      <section className={`workspace${route === "capture" ? " workspace-voice" : ""}`}>
         <WorkspaceHeader
           route={route}
-          statusItems={route !== "settings" && route !== "account" ? shellStatusItems(statusItems) : []}
+          statusItems={route !== "settings" && route !== "account" && route !== "capture" ? shellStatusItems(statusItems) : []}
+          headerAction={route === "capture" ? <AiModeSwitch mode={voiceCaptureMode} onModeChange={setVoiceCaptureMode} /> : undefined}
         />
         {renderRoute({
           route,
@@ -1310,6 +1322,8 @@ function AuthenticatedApp() {
           mediaPreviewUrls,
           onQueueUploads: queueUploads,
           onClearUploads: clearUploads,
+          voiceCaptureMode,
+          setVoiceCaptureMode,
         })}
       </section>
     </main>
@@ -1515,6 +1529,8 @@ type RouteRenderContext = {
   mediaPreviewUrls: Record<string, string>;
   onQueueUploads: (items: UploadQueueItem[], files?: File[]) => void;
   onClearUploads: (ids: string[]) => void;
+  voiceCaptureMode: "a" | "b";
+  setVoiceCaptureMode: Dispatch<SetStateAction<"a" | "b">>;
 };
 
 function renderRoute({
@@ -1560,6 +1576,8 @@ function renderRoute({
   mediaPreviewUrls,
   onQueueUploads,
   onClearUploads,
+  voiceCaptureMode,
+  setVoiceCaptureMode,
 }: Readonly<RouteRenderContext>) {
   const draftCount = drafts.length;
   const recordCount = records.length;
@@ -1602,8 +1620,10 @@ function renderRoute({
           navigate={navigate}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onEditDraft={(draft) => {
+            // Draft completion needs the manual ledger form, which now lives
+            // on the Zone page; 新增 is the voice-capture flow.
             setDraftToEdit(draft);
-            navigate(navItemFor("capture"));
+            navigate(navItemFor("zone"));
           }}
           onConfirmDraft={(draft) => {
             if (!saveOfficialRecord(draft, accounts, `draft:${draft.id}`)) {
@@ -1654,6 +1674,20 @@ function renderRoute({
         />
       );
     case "capture":
+      // 新增 is the voice-capture flow (mode A / mode B); the manual, scan,
+      // meal, and attachment tools live on the Zone page.
+      return (
+        <VoiceCapturePage
+          accounts={accounts}
+          entityPolicy={aiEntityPolicy}
+          mode={voiceCaptureMode}
+          onModeChange={setVoiceCaptureMode}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
+          onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
+        />
+      );
+    case "zone":
       return (
         <CapturePage
           records={records}
@@ -1707,8 +1741,6 @@ function renderRoute({
           }}
         />
       );
-    case "zone":
-      return <ZonePage />;
     case "account":
       return (
         <AccountPage
@@ -3228,6 +3260,94 @@ function ManualLedgerPanel(props: Readonly<ManualLedgerFormProps>) {
 }
 
 
+// 新增 route: the voice-capture flow only (mode A 整段口說 / mode B 逐欄口說).
+// Owns the custom-category list so the spoken entity policy can create a
+// not-yet-existing category right before the confirmed write, mirroring the
+// tools page (ADR 0012).
+// Creates the not-yet-existing accounts/categories an AI suggestion carries,
+// right before the confirmed write (see ADR 0012). New accounts follow the
+// default-wallet convention (name as spoken, currency TWD), categories join
+// the custom categories; the user can edit or delete either later in
+// account/category management. Shared by the voice capture page and the
+// manual capture page so both mode A and mode B flows resolve entities the
+// same way.
+function resolveNewEntitiesFor(
+  suggestion: NewEntityCarrier,
+  accounts: LocalAccount[],
+  customCategories: string[],
+  setCustomCategories: Dispatch<SetStateAction<string[]>>,
+  onAddAccount: (account: LocalAccount) => void,
+): LocalAccount[] | false {
+  const created: LocalAccount[] = [];
+  const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
+  for (const name of newAccountNames) {
+    if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      continue;
+    }
+    const account = createLocalAccount(name, "TWD", crypto.randomUUID());
+    if (!account) {
+      return false;
+    }
+    created.push(account);
+    onAddAccount(account);
+  }
+  const newCategory = suggestion.newCategory;
+  if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
+    setCustomCategories((current) => [...current, newCategory]);
+  }
+  return created;
+}
+
+function VoiceCapturePage({
+  accounts,
+  entityPolicy,
+  mode,
+  onModeChange,
+  onAddAccount,
+  onSaveRecord,
+  onSaveDraft,
+}: Readonly<{
+  accounts: LocalAccount[];
+  entityPolicy: AiEntityPolicy;
+  mode: "a" | "b";
+  onModeChange: (mode: "a" | "b") => void;
+  onAddAccount: (account: LocalAccount) => void;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveDraft: (draft: TransactionDraft) => void;
+}>) {
+  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
+  const categories = useMemo(
+    () => [...new Set([...expenseCategories, ...incomeCategories, ...customCategories])],
+    [customCategories],
+  );
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
+    } catch {
+      // Category persistence is best effort while the account and record stores remain local-first.
+    }
+  }, [customCategories]);
+
+  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
+    resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
+
+  return (
+    <section className="capture-layout">
+      <AiLedgerPanel
+        accounts={accounts}
+        categories={categories}
+        entityPolicy={entityPolicy}
+        mode={mode}
+        onModeChange={onModeChange}
+        onResolveNewEntities={resolveNewEntities}
+        onSaveRecord={onSaveRecord}
+        onSaveDraft={onSaveDraft}
+      />
+    </section>
+  );
+}
+
 function CapturePage({
   records,
   accounts,
@@ -3388,26 +3508,8 @@ function CapturePage({
   // default-wallet convention (name as spoken, currency TWD), categories join
   // the custom categories; the user can edit or delete either later in
   // account/category management.
-  const resolveNewEntities = (suggestion: AiDraftSuggestion): LocalAccount[] | false => {
-    const created: LocalAccount[] = [];
-    const newAccountNames = [suggestion.newAccount, suggestion.newTransferAccount].filter((name): name is string => Boolean(name));
-    for (const name of newAccountNames) {
-      if (accounts.some((account) => account.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-        continue;
-      }
-      const account = createLocalAccount(name, "TWD", crypto.randomUUID());
-      if (!account) {
-        return false;
-      }
-      created.push(account);
-      onAddAccount(account);
-    }
-    const newCategory = suggestion.newCategory;
-    if (newCategory && !customCategories.some((category) => category.toLocaleLowerCase() === newCategory.toLocaleLowerCase())) {
-      setCustomCategories((current) => [...current, newCategory]);
-    }
-    return created;
-  };
+  const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
+    resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
   const sourceOptions = useMemo(
     () => [...new Set([...customSources, ...records.filter((record) => record.kind === "income" || record.kind === "fund-addition").map((record) => record.counterparty).filter(Boolean)])],
     [customSources, records],
@@ -4454,18 +4556,6 @@ function EntityPolicyRow({ label, value, onChange }: Readonly<{ label: string; v
         </label>
       ))}
     </fieldset>
-  );
-}
-
-function ZonePage() {
-  return (
-    <section className="zone-page">
-      <div className="panel zone-placeholder">
-        <p className="eyebrow">Zone</p>
-        <h2>此區尚未開放</h2>
-        <p className="panel-copy">這個專區正在規劃中，之後會在這裡放上新功能。</p>
-      </div>
-    </section>
   );
 }
 

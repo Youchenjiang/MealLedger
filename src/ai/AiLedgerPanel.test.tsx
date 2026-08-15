@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { AiLedgerPanel } from "./AiLedgerPanel";
@@ -16,6 +16,16 @@ beforeEach(() => {
 });
 
 describe("AiLedgerPanel", () => {
+  test("switches to the step-by-step mode B panel", async () => {
+    const user = userEvent.setup();
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={vi.fn()} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.click(screen.getByRole("tab", { name: "逐欄口說" }));
+
+    expect(screen.getByText(/欄位會一個一個亮起/u)).toBeInTheDocument();
+    expect(screen.getByLabelText("日期")).toBeInTheDocument();
+  });
+
   test("turns typed text into a confirmable draft and saves it", async () => {
     vi.mocked(requestAiJson).mockResolvedValue({
       ok: true,
@@ -177,8 +187,42 @@ describe("AiLedgerPanel", () => {
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
 
     expect(await screen.findByRole("button", { name: "確認寫入" })).toBeInTheDocument();
-    expect(screen.getByText(/品項:牛肉麵/u)).toBeInTheDocument();
+    const itemBlock = screen.getByText("品項").closest(".field-block");
+    expect(itemBlock).not.toBeNull();
+    expect(itemBlock?.textContent).toContain("牛肉麵");
     expect(screen.queryByText(/Merchant unavailable/u)).not.toBeInTheDocument();
+  });
+
+  test("lets the user edit a field in place before confirming", async () => {
+    vi.mocked(requestAiJson).mockResolvedValue({
+      ok: true,
+      data: { items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", counterparty: "麵店", itemName: "牛肉麵", amount: 480, currency: "TWD" }] },
+    });
+    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => true);
+    const user = userEvent.setup();
+    render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("記帳內容"), "7/25 中午吃牛肉麵 480");
+    await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
+    await screen.findByRole("button", { name: "確認寫入" });
+
+    const amountBlock = screen.getByText("金額").closest(".field-block");
+    expect(amountBlock).not.toBeNull();
+    if (!(amountBlock instanceof HTMLElement)) return;
+    // The editable block is a real button (keyboard-accessible), so the test
+    // clicks it by its accessible name instead of the wrapping list item.
+    await user.click(screen.getByRole("button", { name: "編輯 金額" }));
+    const amountInput = within(amountBlock).getByRole("textbox");
+    await user.clear(amountInput);
+    await user.type(amountInput, "500");
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByText("500")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確認寫入" }));
+
+    expect(onSaveRecord).toHaveBeenCalledTimes(1);
+    const draft = onSaveRecord.mock.calls[0][0] as { amount: string };
+    expect(draft.amount).toBe("500");
   });
 
   test("creates a mentioned new account on confirm under the auto policy", async () => {
@@ -333,10 +377,10 @@ describe("AiLedgerPanel", () => {
     await user.click(screen.getByRole("button", { name: /產生記帳草稿/u }));
 
     const confirm = await screen.findByRole("button", { name: "確認寫入" });
-    const card = confirm.closest("article");
-    expect(card).not.toBeNull();
+    const group = confirm.closest(".field-block-group");
+    expect(group).not.toBeNull();
 
-    const marked = Array.from(card ? card.querySelectorAll(".inferred-field") : []);
+    const marked = Array.from(group ? group.querySelectorAll(".inferred-field") : []);
     // kind, currency, the derived year, account, and category were inferred.
     expect(marked.some((element) => element.textContent === "支出")).toBe(true);
     expect(marked.some((element) => element.textContent === "TWD")).toBe(true);

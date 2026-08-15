@@ -56,7 +56,7 @@ test("creates a local official record and shows it in Ledger", async ({ page }) 
 
   await openWorkspace(page);
   await addAccount(page, "Daily wallet");
-  await page.getByRole("button", { name: "新增" }).click();
+  await page.getByRole("button", { name: "專區" }).click();
   await page.getByLabel("Account", { exact: true }).selectOption("Daily wallet");
   await page.getByLabel("Category", { exact: true }).selectOption("Daily");
   await page.getByLabel("Merchant", { exact: true }).fill("全聯");
@@ -102,7 +102,7 @@ test("captures a meal with multiple photos without a ledger write", async ({ pag
 
   await openWorkspace(page);
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
-  await page.getByRole("button", { name: "新增" }).click();
+  await page.getByRole("button", { name: "專區" }).click();
   await page.getByRole("button", { name: /Record meal/ }).click();
   const mealLabels = page.locator(".meal-form > label");
   await expect(mealLabels).toHaveCount(2);
@@ -129,7 +129,7 @@ test("keeps invoice scans in review without creating a ledger record", async ({ 
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "新增" }).click();
+  await page.getByRole("button", { name: "專區" }).click();
   await page.getByRole("button", { name: /Scan invoice/ }).click();
   await page.getByLabel("Scan images").setInputFiles({
     name: "invoice.jpg",
@@ -174,8 +174,8 @@ test("keeps mobile navigation usable without horizontal overflow", async ({ page
   await page.setViewportSize({ width: 390, height: 844 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "新增" }).click();
-  await expect(page.getByRole("heading", { name: "Capture", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "專區" }).click();
+  await expect(page.getByRole("heading", { name: "Zone", exact: true })).toBeVisible();
   await expect(page.locator(".capture-intent-button")).toHaveCount(6);
   await expect(page.getByRole("heading", { name: "What are you saving?" })).toBeVisible();
   await page.getByRole("button", { name: "明細", exact: true }).click();
@@ -228,7 +228,7 @@ test("keeps the first-account flow usable at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
 
   await openWorkspace(page);
-  await page.getByRole("button", { name: "新增" }).click();
+  await page.getByRole("button", { name: "專區" }).click();
   await page.getByRole("button", { name: "Create first account" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Add account" });
