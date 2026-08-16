@@ -33,8 +33,9 @@ async function renderRemoteApp(authMock = createAuthMock()) {
 }
 
 async function openAccountPage(user: ReturnType<typeof userEvent.setup>) {
+  // /account merged into Settings: the 登入 section is the default tab, so
+  // opening 設定 lands directly on the account content (settings spec).
   await user.click(screen.getByRole("button", { name: "設定" }));
-  await user.click(screen.getByRole("button", { name: "Manage cloud access" }));
 }
 
 describe("app auth boundary", () => {
@@ -58,13 +59,13 @@ describe("app auth boundary", () => {
     expect(screen.queryByRole("button", { name: /open workspace/i })).not.toBeInTheDocument();
   });
 
-  test("opens the dedicated account route with password and provider sign-in", async () => {
+  test("opens the 登入 section from Settings with password and provider sign-in", async () => {
     const user = userEvent.setup();
     const { authMock } = await renderRemoteApp();
 
     await openAccountPage(user);
     expect(screen.getByRole("heading", { name: "Optional cloud sync" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/account");
+    expect(window.location.pathname).toBe("/settings");
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();

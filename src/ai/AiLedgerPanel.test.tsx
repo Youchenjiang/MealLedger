@@ -31,7 +31,7 @@ describe("AiLedgerPanel", () => {
       ok: true,
       data: { items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", counterparty: "麵店", itemName: "牛肉麵", amount: 480, currency: "TWD" }] },
     });
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
     render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
@@ -198,7 +198,7 @@ describe("AiLedgerPanel", () => {
       ok: true,
       data: { items: [{ kind: "expense", date: "7/25", account: "Daily wallet", category: "午餐", counterparty: "麵店", itemName: "牛肉麵", amount: 480, currency: "TWD" }] },
     });
-    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => true);
+    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => null);
     const user = userEvent.setup();
     render(<AiLedgerPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
 
@@ -232,7 +232,7 @@ describe("AiLedgerPanel", () => {
     });
     const autoPolicy = { account: "auto", category: "auto" } as const;
     const onResolveNewEntities = vi.fn(() => []);
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
     render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
@@ -258,7 +258,7 @@ describe("AiLedgerPanel", () => {
     });
     const askPolicy = { account: "ask", category: "ask" } as const;
     const onResolveNewEntities = vi.fn(() => []);
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
     render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
@@ -287,7 +287,7 @@ describe("AiLedgerPanel", () => {
     });
     const autoPolicy = { account: "auto", category: "auto" } as const;
     const onResolveNewEntities = vi.fn(() => []);
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
     render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={autoPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
@@ -317,7 +317,7 @@ describe("AiLedgerPanel", () => {
     });
     const askPolicy = { account: "ask", category: "ask" } as const;
     const onResolveNewEntities = vi.fn(() => []);
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
     render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);
@@ -348,7 +348,7 @@ describe("AiLedgerPanel", () => {
     });
     const askPolicy = { account: "ask", category: "ask" } as const;
     const onResolveNewEntities = vi.fn(() => []);
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
 
     render(<AiLedgerPanel accounts={accounts} categories={categories} entityPolicy={askPolicy} onResolveNewEntities={onResolveNewEntities} onSaveRecord={onSaveRecord} onSaveDraft={vi.fn()} onApplyToForm={vi.fn()} />);

@@ -49,7 +49,7 @@ afterEach(() => {
 
 describe("ModeBPanel", () => {
   test("walks the fields step by step and saves the assembled draft", async () => {
-    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => true);
+    const onSaveRecord = vi.fn((_draft: unknown, _extra?: unknown[]) => null);
     const user = userEvent.setup();
     render(<ModeBPanel accounts={accounts} categories={categories} onSaveRecord={onSaveRecord} />);
 
@@ -216,7 +216,7 @@ describe("ModeBPanel", () => {
   test("creates a new account on save under the auto policy", async () => {
     const createdAccount = createLocalAccount("新錢包", "TWD", "account-1");
     const onResolveNewEntities = vi.fn(() => (createdAccount ? [createdAccount] : []));
-    const onSaveRecord = vi.fn(() => true);
+    const onSaveRecord = vi.fn(() => null);
     const user = userEvent.setup();
     render(
       <ModeBPanel

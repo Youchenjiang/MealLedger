@@ -21,7 +21,6 @@ import {
   Settings,
   Sparkles,
   Upload,
-  UserRound,
   Wifi,
   WifiOff,
   type LucideIcon,
@@ -33,7 +32,10 @@ import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { applyResolvedTheme, readStoredTheme, resolveTheme, writeStoredTheme, type ThemeMode } from "./appShell/theme";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
+import { readDeleteAction, writeDeleteAction, type DeleteAction } from "./manualLedger/deletePolicy";
+import { negativeBalanceRejectionReason, readNegativeBalancePolicy, writeNegativeBalancePolicy, type NegativeBalancePolicy } from "./manualLedger/negativeBalance";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
@@ -65,7 +67,6 @@ const navItems: NavItem[] = [
   { route: "zone", label: "專區", path: "/zone", icon: LayoutGrid },
   { route: "settings", label: "設定", path: "/settings", icon: Settings },
 ];
-const accountNavItem: NavItem = { route: "account", label: "Cloud & account", path: "/account", icon: UserRound };
 
 type RouteDefinition = {
   segments: string[];
@@ -91,7 +92,9 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["zone"], route: "zone" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
-  { segments: ["account"], route: "account" },
+  // /account stays reachable as the password-reset redirect target; it renders
+  // the settings page with the 登入 section open (see the settings spec).
+  { segments: ["account"], route: "settings" },
 ];
 
 function navItemFor(route: AppRoute): NavItem {
@@ -874,8 +877,30 @@ export function App() {
   );
 }
 
+// 深色 default, with 淺色 / 跟隨系統 options. Applies the resolved theme to
+// <html data-theme> (styles.css variables), persists the choice, and follows
+// the OS preference while the mode is 跟隨系統. See src/appShell/theme.ts.
+function useThemeMode() {
+  const [mode, setMode] = useState<ThemeMode>(readStoredTheme);
+
+  useEffect(() => {
+    const apply = () => applyResolvedTheme(resolveTheme(mode));
+    apply();
+    writeStoredTheme(mode);
+    if (mode === "system") {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+    return undefined;
+  }, [mode]);
+
+  return [mode, setMode] as const;
+}
+
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
+  const [themeMode, setThemeMode] = useThemeMode();
   const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, recoverPasswordFromLink, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
@@ -892,6 +917,9 @@ function AuthenticatedApp() {
   uploadQueueRef.current = uploadQueue;
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
+  const [deleteAction, setDeleteAction] = useState<DeleteAction>(readDeleteAction);
+  const [negativeBalancePolicy, setNegativeBalancePolicy] = useState<NegativeBalancePolicy>(readNegativeBalancePolicy);
+  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   // Which capture mode the 新增 header switch shows; shared with the panel.
@@ -920,6 +948,22 @@ function AuthenticatedApp() {
   useEffect(() => {
     writeAiEntityPolicy(aiEntityPolicy);
   }, [aiEntityPolicy]);
+
+  useEffect(() => {
+    writeDeleteAction(deleteAction);
+  }, [deleteAction]);
+
+  useEffect(() => {
+    writeNegativeBalancePolicy(negativeBalancePolicy);
+  }, [negativeBalancePolicy]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
+    } catch {
+      // Category persistence is best effort while the account and record stores remain local-first.
+    }
+  }, [customCategories]);
 
   useEffect(() => {
     try {
@@ -1229,8 +1273,8 @@ function AuthenticatedApp() {
             aliases: readStoredAliases(),
           });
 
+          setCustomCategories(next.categories);
           try {
-            window.localStorage.setItem(categoriesStorageKey, JSON.stringify(next.categories));
             window.localStorage.setItem(tagsStorageKey, JSON.stringify(next.tags));
             window.localStorage.setItem(aliasesStorageKey, JSON.stringify(next.aliases));
           } catch {
@@ -1270,7 +1314,7 @@ function AuthenticatedApp() {
       <section className={`workspace${route === "capture" ? " workspace-voice" : ""}`}>
         <WorkspaceHeader
           route={route}
-          statusItems={route !== "settings" && route !== "account" && route !== "capture" ? shellStatusItems(statusItems) : []}
+          statusItems={route !== "settings" && route !== "capture" ? shellStatusItems(statusItems) : []}
           headerAction={route === "capture" ? <AiModeSwitch mode={voiceCaptureMode} onModeChange={setVoiceCaptureMode} /> : undefined}
         />
         {renderRoute({
@@ -1301,6 +1345,14 @@ function AuthenticatedApp() {
           setAccounts,
           aiEntityPolicy,
           setAiEntityPolicy,
+          deleteAction,
+          setDeleteAction,
+          negativeBalancePolicy,
+          setNegativeBalancePolicy,
+          customCategories,
+          setCustomCategories,
+          themeMode,
+          onThemeModeChange: setThemeMode,
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
           onSignIn: signIn,
@@ -1508,6 +1560,14 @@ type RouteRenderContext = {
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
   aiEntityPolicy: AiEntityPolicy;
   setAiEntityPolicy: Dispatch<SetStateAction<AiEntityPolicy>>;
+  deleteAction: DeleteAction;
+  setDeleteAction: Dispatch<SetStateAction<DeleteAction>>;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  setNegativeBalancePolicy: Dispatch<SetStateAction<NegativeBalancePolicy>>;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
   onSignIn: (email?: string, password?: string) => Promise<void>;
@@ -1555,6 +1615,14 @@ function renderRoute({
   setAccounts,
   aiEntityPolicy,
   setAiEntityPolicy,
+  deleteAction,
+  setDeleteAction,
+  negativeBalancePolicy,
+  setNegativeBalancePolicy,
+  customCategories,
+  setCustomCategories,
+  themeMode,
+  onThemeModeChange,
   navigate,
   onReopenOnboarding,
   onSignIn,
@@ -1589,7 +1657,7 @@ function renderRoute({
     idempotencyKey: string,
     recordId = `record-${draft.id}`,
     feeRecordId?: string,
-  ): boolean => {
+  ): string | null => {
     const bundle = createOfficialRecordBundle(draft, recordAccounts, {
       userId: recordOwner,
       recordId,
@@ -1599,13 +1667,20 @@ function renderRoute({
     });
 
     if (!bundle) {
-      return false;
+      return "This record could not be saved. Check the selected accounts and amounts.";
+    }
+
+    if (negativeBalancePolicy === "reject") {
+      const reason = negativeBalanceRejectionReason(draft, recordAccounts, records);
+      if (reason) {
+        return reason;
+      }
     }
 
     setRecords((current) => appendIdempotentRecords(current, bundle));
     setAuditEvents((current) => [...current, ...bundle.auditEvents]);
     queueRecordBundle(bundle.records);
-    return true;
+    return null;
   };
 
   switch (route) {
@@ -1618,6 +1693,7 @@ function renderRoute({
           drafts={drafts}
           accounts={accounts}
           navigate={navigate}
+          deleteAction={deleteAction}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onEditDraft={(draft) => {
             // Draft completion needs the manual ledger form, which now lives
@@ -1626,7 +1702,7 @@ function renderRoute({
             navigate(navItemFor("zone"));
           }}
           onConfirmDraft={(draft) => {
-            if (!saveOfficialRecord(draft, accounts, `draft:${draft.id}`)) {
+            if (saveOfficialRecord(draft, accounts, `draft:${draft.id}`) !== null) {
               return false;
             }
 
@@ -1658,9 +1734,17 @@ function renderRoute({
             setAuditEvents((current) => [...current, result.auditEvent]);
             return true;
           }}
-          onVoidRecord={(id) => {
+          onDeleteRecord={(id) => {
             const record = records.find((item) => item.id === id);
             if (!record || record.recordState === "voided") {
+              return;
+            }
+
+            if (deleteAction === "hard-delete") {
+              // 真正刪除 removes the record and its bundle children (ADR 0007).
+              const deletedIds = new Set(records.filter((item) => item.id === id || item.linkedRecordId === id).map((item) => item.id));
+              setRecords((current) => current.filter((item) => !deletedIds.has(item.id)));
+              setAuditEvents((current) => current.filter((event) => !deletedIds.has(event.targetId)));
               return;
             }
 
@@ -1669,7 +1753,7 @@ function renderRoute({
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`)}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`) === null}
           onReopenOnboarding={onReopenOnboarding}
         />
       );
@@ -1682,6 +1766,8 @@ function renderRoute({
           entityPolicy={aiEntityPolicy}
           mode={voiceCaptureMode}
           onModeChange={setVoiceCaptureMode}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
@@ -1695,10 +1781,12 @@ function renderRoute({
           aiEntityPolicy={aiEntityPolicy}
           navigate={navigate}
           draftToEdit={draftToEdit}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`)}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`) === null}
           onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
           onSaveMeal={onSaveMeal}
@@ -1718,32 +1806,14 @@ function renderRoute({
           records={records}
           entityPolicy={aiEntityPolicy}
           onEntityPolicyChange={setAiEntityPolicy}
-          onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
-          onReopenOnboarding={onReopenOnboarding}
-          onOpenAccount={() => navigate(accountNavItem)}
-          onImportRecord={(row, importId) => {
-            const draft = toImportedTransactionDraft(row, importId);
-            if (!draft) {
-              return false;
-            }
-
-            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`);
-          }}
-          onMergeImportDraft={(row, importId) => {
-            const draft = toImportedTransactionDraft(row, importId);
-            if (!draft) {
-              return false;
-            }
-
-            setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
-            return true;
-          }}
-        />
-      );
-    case "account":
-      return (
-        <AccountPage
+          themeMode={themeMode}
+          onThemeModeChange={onThemeModeChange}
+          deleteAction={deleteAction}
+          onDeleteActionChange={setDeleteAction}
+          negativeBalancePolicy={negativeBalancePolicy}
+          onNegativeBalancePolicyChange={setNegativeBalancePolicy}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           authState={authState}
           authMessage={authMessage}
           cloudDataOwnerMatches={cloudDataOwnerMatches}
@@ -1760,6 +1830,26 @@ function renderRoute({
           onUnlinkIdentity={onUnlinkIdentity}
           onClaimLocalWorkspace={onClaimLocalWorkspace}
           onSignOut={onSignOut}
+          onAddAccount={(account) => setAccounts((current) => [...current, account])}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`) === null}
+          onReopenOnboarding={onReopenOnboarding}
+          onImportRecord={(row, importId) => {
+            const draft = toImportedTransactionDraft(row, importId);
+            if (!draft) {
+              return false;
+            }
+
+            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`) === null;
+          }}
+          onMergeImportDraft={(row, importId) => {
+            const draft = toImportedTransactionDraft(row, importId);
+            if (!draft) {
+              return false;
+            }
+
+            setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
+            return true;
+          }}
         />
       );
     default:
@@ -1887,20 +1977,26 @@ type LedgerRecordCardProps = {
   onCancelDetails: () => void;
   onConvertDetails: (fields: UnresolvedExpenseConversion) => boolean;
   onUpdate: (patch: Partial<EditableRecordFields>) => void;
-  onVoid: () => void;
+  onDelete: () => void;
+  deleteAction: DeleteAction;
 };
 
-function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onVoid }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onVoid"> & { isVoided: boolean }>) {
+function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onDelete, deleteAction }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onDelete" | "deleteAction"> & { isVoided: boolean }>) {
   if (isVoided) return <span className="record-state-label">Voided</span>;
 
   const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  const hardDelete = deleteAction === "hard-delete";
   return (
     <div className="record-actions">
       {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>Complete details</button> : null}
       {isRecurring ? <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>{record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}</button> : null}
       {isRecurring ? <ConfirmActionButton label="Cancel recurring" message="Cancel future recurrence?" onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
       <button className="text-action" type="button" onClick={onEdit}>Edit</button>
-      <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onVoid} />
+      {hardDelete ? (
+        <ConfirmActionButton label="Delete" message="Permanently delete this record? This cannot be undone." onConfirm={onDelete} />
+      ) : (
+        <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onDelete} />
+      )}
     </div>
   );
 }
@@ -1916,7 +2012,8 @@ function LedgerRecordCard({
   onCancelDetails,
   onConvertDetails,
   onUpdate,
-  onVoid,
+  onDelete,
+  deleteAction,
 }: Readonly<LedgerRecordCardProps>) {
   if (isEditingUnresolved && record.recordState !== "voided") {
     return <UnresolvedExpenseEditor record={record} onCancel={onCancelDetails} onConvert={onConvertDetails} />;
@@ -1938,7 +2035,7 @@ function LedgerRecordCard({
         <strong>{record.currency} {record.amount}</strong>
         <span>{record.kind} · {statusLabel}</span>
       </div>
-      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onVoid={onVoid} />
+      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onDelete={onDelete} deleteAction={deleteAction} />
     </article>
   );
 }
@@ -1958,7 +2055,8 @@ function LedgerPage({
   onConfirmDraft,
   onUpdateRecord,
   onConvertUnresolved,
-  onVoidRecord,
+  onDeleteRecord,
+  deleteAction,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
@@ -1972,7 +2070,8 @@ function LedgerPage({
   onConfirmDraft: (draft: TransactionDraft) => boolean;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
-  onVoidRecord: (id: string) => void;
+  onDeleteRecord: (id: string) => void;
+  deleteAction: DeleteAction;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -2004,7 +2103,8 @@ function LedgerPage({
           onDiscardDraft={onDiscardDraft}
           onUpdateRecord={onUpdateRecord}
           onConvertUnresolved={onConvertUnresolved}
-          onVoidRecord={onVoidRecord}
+          onDeleteRecord={onDeleteRecord}
+          deleteAction={deleteAction}
           onBeginEditRecord={setEditingRecordId}
           onEndEditRecord={() => setEditingRecordId(null)}
           onBeginUnresolved={setEditingUnresolvedId}
@@ -2029,7 +2129,8 @@ function LedgerRecordsView({
   onDiscardDraft,
   onUpdateRecord,
   onConvertUnresolved,
-  onVoidRecord,
+  onDeleteRecord,
+  deleteAction,
   onBeginEditRecord,
   onEndEditRecord,
   onBeginUnresolved,
@@ -2048,7 +2149,8 @@ function LedgerRecordsView({
   onDiscardDraft: (id: string) => void;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
-  onVoidRecord: (id: string) => void;
+  onDeleteRecord: (id: string) => void;
+  deleteAction: DeleteAction;
   onBeginEditRecord: (id: string) => void;
   onEndEditRecord: () => void;
   onBeginUnresolved: (id: string) => void;
@@ -2096,7 +2198,8 @@ function LedgerRecordsView({
                 return converted;
               }}
               onUpdate={(patch) => onUpdateRecord(record.id, patch)}
-              onVoid={() => onVoidRecord(record.id)}
+              onDelete={() => onDeleteRecord(record.id)}
+              deleteAction={deleteAction}
             />
           ))}
         </section>
@@ -3303,6 +3406,8 @@ function VoiceCapturePage({
   entityPolicy,
   mode,
   onModeChange,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveRecord,
   onSaveDraft,
@@ -3311,23 +3416,16 @@ function VoiceCapturePage({
   entityPolicy: AiEntityPolicy;
   mode: "a" | "b";
   onModeChange: (mode: "a" | "b") => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
 }>) {
-  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const categories = useMemo(
     () => [...new Set([...expenseCategories, ...incomeCategories, ...customCategories])],
     [customCategories],
   );
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
-    } catch {
-      // Category persistence is best effort while the account and record stores remain local-first.
-    }
-  }, [customCategories]);
 
   const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
     resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
@@ -3356,6 +3454,8 @@ function CapturePage({
   draftToEdit,
   onDiscardDraft,
   onFinishDraftEdit,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveInitialFunding,
   onSaveRecord,
@@ -3376,9 +3476,11 @@ function CapturePage({
   draftToEdit: TransactionDraft | null;
   onDiscardDraft: (id: string) => void;
   onFinishDraftEdit: () => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
   onSaveMeal: (meal: MealEntry) => void;
   scans: TemporaryScan[];
@@ -3402,7 +3504,6 @@ function CapturePage({
   const [quickAccountBalance, setQuickAccountBalance] = useState("");
   const [quickAccountBalanceDate, setQuickAccountBalanceDate] = useState(localDate());
   const [quickAccountError, setQuickAccountError] = useState("");
-  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [quickCategoryName, setQuickCategoryName] = useState("");
   const [quickCategoryError, setQuickCategoryError] = useState("");
@@ -3461,14 +3562,6 @@ function CapturePage({
     setAttachmentFiles([]);
     setAttachmentSavedMessage(`${queuedMedia.length} photo${queuedMedia.length === 1 ? "" : "s"} saved locally as attachment evidence.`);
   };
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
-    } catch {
-      // Category persistence is best effort while the account and record stores remain local-first.
-    }
-  }, [customCategories]);
 
   useEffect(() => {
     try {
@@ -3670,8 +3763,9 @@ function CapturePage({
       return;
     }
 
-    if (!onSaveRecord(nextDraft)) {
-      setFormError("This record could not be saved. Check the selected accounts and amounts.");
+    const saveReason = onSaveRecord(nextDraft);
+    if (saveReason !== null) {
+      setFormError(saveReason);
       return;
     }
 
@@ -4454,15 +4548,24 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   );
 }
 
-type SettingsPageProps = {
+type SettingsSection = "login" | "portability" | "categories" | "preferences";
+
+type SettingsPageProps = AccountPageProps & {
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   entityPolicy: AiEntityPolicy;
   onEntityPolicyChange: (policy: AiEntityPolicy) => void;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
+  deleteAction: DeleteAction;
+  onDeleteActionChange: (action: DeleteAction) => void;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  onNegativeBalancePolicyChange: (policy: NegativeBalancePolicy) => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
-  onOpenAccount: () => void;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 };
@@ -4472,31 +4575,83 @@ function SettingsPage({
   records,
   entityPolicy,
   onEntityPolicyChange,
+  themeMode,
+  onThemeModeChange,
+  deleteAction,
+  onDeleteActionChange,
+  negativeBalancePolicy,
+  onNegativeBalancePolicyChange,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
-  onOpenAccount,
   onImportRecord,
   onMergeImportDraft,
+  ...accountProps
 }: Readonly<SettingsPageProps>) {
-  const [section, setSection] = useState<"ledger-accounts" | "portability" | "ai-capture">("ledger-accounts");
+  const [section, setSection] = useState<SettingsSection>("login");
 
   const renderSection = () => {
-    if (section === "ledger-accounts") {
+    if (section === "login") {
+      return <AccountPage {...accountProps} />;
+    }
+    if (section === "portability") {
+      return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
+    }
+    if (section === "categories") {
       return (
-        <LedgerAccountsPanel
-          accounts={accounts}
-          onAddAccount={onAddAccount}
-          onSaveInitialFunding={onSaveInitialFunding}
-          onReopenOnboarding={onReopenOnboarding}
+        <CategoriesPanel
+          records={records}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
         />
       );
     }
-    if (section === "ai-capture") {
-      return (
-        <section className="settings-ai-policy" aria-labelledby="ai-capture-title">
+    return (
+      <div className="route-stack">
+        <section className="settings-preferences-block" aria-labelledby="preferences-accounts-title">
+          <p className="eyebrow">Accounts</p>
+          <h2 id="preferences-accounts-title">帳戶管理 Account management</h2>
+          <LedgerAccountsPanel
+            accounts={accounts}
+            onAddAccount={onAddAccount}
+            onSaveInitialFunding={onSaveInitialFunding}
+            onReopenOnboarding={onReopenOnboarding}
+          />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-theme-title">
+          <p className="eyebrow">Appearance</p>
+          <h2 id="preferences-theme-title">主題 Theme</h2>
+          <p className="panel-copy">深色為預設;可切換 深色 / 淺色 / 跟隨系統。</p>
+          <ThemeControl value={themeMode} onChange={onThemeModeChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-delete-title">
+          <p className="eyebrow">Ledger records</p>
+          <h2 id="preferences-delete-title">刪除行為 Delete behavior</h2>
+          <p className="panel-copy">
+            明細列的刪除動作:作廢保留記錄於歷史但排除於餘額與報表;真正刪除連同其附屬記錄一併移除。
+          </p>
+          <DeleteActionControl value={deleteAction} onChange={onDeleteActionChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-negative-title">
+          <p className="eyebrow">Accounting</p>
+          <h2 id="preferences-negative-title">負餘額政策 Negative balance</h2>
+          <p className="panel-copy">
+            開啟後,支出或餘額調整不得使可編輯帳戶餘額低於零(維持與會計規則一致的預設行為)。
+          </p>
+          <NegativeBalancePolicyControl value={negativeBalancePolicy} onChange={onNegativeBalancePolicyChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-localization-title">
+          <p className="eyebrow">Language</p>
+          <h2 id="preferences-localization-title">本地化 Localization</h2>
+          <p className="panel-copy">
+            語言與格式偏好將併入此區(行為依 localization spec);目前尚未實作,介面保留英文。
+          </p>
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
           <p className="eyebrow">Spoken capture</p>
-          <h2 id="ai-capture-title">Voice &amp; AI</h2>
+          <h2 id="preferences-ai-title">AI 口說偏好</h2>
           <p className="panel-copy">
             口說記帳時可否提到尚未建立的帳戶或類別;新帳戶以 TWD 建立(如同預設錢包),事後可在帳戶/類別管理修改。
           </p>
@@ -4511,30 +4666,186 @@ function SettingsPage({
             onChange={(value) => onEntityPolicyChange({ ...entityPolicy, category: value })}
           />
         </section>
-      );
-    }
-    return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
+      </div>
+    );
   };
 
   return (
     <section className="settings-page">
-      <section className="settings-account-entry" aria-labelledby="cloud-account-title">
-        <div>
-          <p className="eyebrow">Optional cloud features</p>
-          <h2 id="cloud-account-title">Cloud &amp; account</h2>
-          <p>Keep using MealLedger locally, or sign in when you are ready to sync this workspace.</p>
-        </div>
-        <button className="secondary-action" type="button" onClick={onOpenAccount}>
-          <UserRound size={18} aria-hidden="true" />
-          Manage cloud access
-        </button>
-      </section>
       <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-        <button className={`settings-tab ${section === "ledger-accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ledger-accounts"} onClick={() => setSection("ledger-accounts")}>Money accounts</button>
-        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
-        <button className={`settings-tab ${section === "ai-capture" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ai-capture"} onClick={() => setSection("ai-capture")}>Voice &amp; AI</button>
+        <button className={`settings-tab ${section === "login" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "login"} onClick={() => setSection("login")}>登入</button>
+        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>匯入匯出</button>
+        <button className={`settings-tab ${section === "categories" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "categories"} onClick={() => setSection("categories")}>類別</button>
+        <button className={`settings-tab ${section === "preferences" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "preferences"} onClick={() => setSection("preferences")}>相關設定</button>
       </div>
       {renderSection()}
+    </section>
+  );
+}
+
+const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
+  { value: "dark", label: "深色" },
+  { value: "light", label: "淺色" },
+  { value: "system", label: "跟隨系統" },
+];
+
+const DELETE_ACTION_OPTIONS: Array<{ value: DeleteAction; label: string; hint: string }> = [
+  { value: "void", label: "作廢", hint: "保留記錄於歷史,從餘額與報表排除" },
+  { value: "hard-delete", label: "真正刪除", hint: "連同附屬記錄一併移除,無法復原" },
+];
+
+const NEGATIVE_BALANCE_OPTIONS: Array<{ value: NegativeBalancePolicy; label: string; hint: string }> = [
+  { value: "allow", label: "允許負餘額", hint: "維持現行行為,帳戶餘額可為負" },
+  { value: "reject", label: "不允許負餘額", hint: "支出或餘額調整不得使帳戶餘額低於零" },
+];
+
+function NegativeBalancePolicyControl({ value, onChange }: Readonly<{ value: NegativeBalancePolicy; onChange: (policy: NegativeBalancePolicy) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>負餘額 Negative balance</legend>
+      {NEGATIVE_BALANCE_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={option.hint}>
+          <input type="radio" name="negative-balance" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function DeleteActionControl({ value, onChange }: Readonly<{ value: DeleteAction; onChange: (action: DeleteAction) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>刪除動作 Delete action</legend>
+      {DELETE_ACTION_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={option.hint}>
+          <input type="radio" name="delete-action" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function ThemeControl({ value, onChange }: Readonly<{ value: ThemeMode; onChange: (mode: ThemeMode) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>主題 Theme</legend>
+      {THEME_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option">
+          <input type="radio" name="theme" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function CategoriesPanel({ records, customCategories, setCustomCategories }: Readonly<{
+  records: LocalLedgerRecord[];
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
+}>) {
+  const used = new Set(records.map((record) => record.category).filter((value): value is string => Boolean(value)));
+  const all = [...new Set([...expenseCategories, ...incomeCategories, ...customCategories, ...used])].sort((a, b) => a.localeCompare(b));
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    if (!record.category) continue;
+    counts.set(record.category, (counts.get(record.category) ?? 0) + 1);
+  }
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [error, setError] = useState("");
+
+  const isCustom = (name: string) => customCategories.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase());
+  const normalized = (name: string) => name.trim().replace(/\s+/g, " ");
+
+  const addCategory = () => {
+    const name = normalized(newName);
+    if (!name) {
+      setError("Enter a category name before adding it.");
+      return;
+    }
+    if (all.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError("This category already exists.");
+      return;
+    }
+    setCustomCategories((current) => [...current, name]);
+    setNewName("");
+    setAdding(false);
+    setError("");
+  };
+
+  const renameCategory = (previous: string) => {
+    const name = normalized(editName);
+    if (!name) {
+      setError("Enter a category name before saving.");
+      return;
+    }
+    if (name.toLocaleLowerCase() !== previous.toLocaleLowerCase() && all.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError("This category already exists.");
+      return;
+    }
+    setCustomCategories((current) => current.map((item) => item.toLocaleLowerCase() === previous.toLocaleLowerCase() ? name : item));
+    setEditing(null);
+    setError("");
+  };
+
+  const removeCategory = (name: string) => {
+    setCustomCategories((current) => current.filter((item) => item.toLocaleLowerCase() !== name.toLocaleLowerCase()));
+    setError("");
+  };
+
+  return (
+    <section className="settings-preferences-block" aria-labelledby="categories-title">
+      <p className="eyebrow">Classification</p>
+      <h2 id="categories-title">類別 Categories</h2>
+      <p className="panel-copy">
+        內建類別固定;自訂類別可在此新增、改名或刪除,也會用於口說與手動記帳。
+      </p>
+      {adding ? (
+        <div className="category-add-form">
+          <label htmlFor="new-category-name">New category</label>
+          <input id="new-category-name" type="text" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="例如:寵物" />
+          <button className="secondary-action" type="button" onClick={addCategory}>Add</button>
+          <button className="quiet-action" type="button" onClick={() => { setAdding(false); setError(""); }}>Cancel</button>
+        </div>
+      ) : (
+        <button className="secondary-action align-start" type="button" onClick={() => setAdding(true)}>新增類別</button>
+      )}
+      {error ? <p className="auth-message" role="alert">{error}</p> : null}
+      {all.length > 0 ? (
+        <ul className="category-list">
+          {all.map((category) => (
+            <li key={category}>
+              {editing === category ? (
+                <span className="category-edit-row">
+                  <input type="text" value={editName} onChange={(event) => setEditName(event.target.value)} aria-label={`Rename ${category}`} />
+                  <button className="text-action" type="button" onClick={() => renameCategory(category)}>Save</button>
+                  <button className="quiet-action" type="button" onClick={() => { setEditing(null); setError(""); }}>Cancel</button>
+                </span>
+              ) : (
+                <>
+                  <span className="category-list-name">{category}</span>
+                  <span className="category-list-count">{counts.get(category)} 筆</span>
+                  {isCustom(category) ? (
+                    <span className="category-row-actions">
+                      <button className="text-action" type="button" onClick={() => { setEditing(category); setEditName(category); setError(""); }}>改名</button>
+                      <button className="text-action danger-action" type="button" onClick={() => removeCategory(category)}>刪除</button>
+                    </span>
+                  ) : (
+                    <span className="category-list-builtin">內建</span>
+                  )}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="panel-copy">尚無類別。</p>
+      )}
     </section>
   );
 }
@@ -5096,8 +5407,6 @@ function routeTitle(route: AppRoute) {
       return "Zone";
     case "settings":
       return "Settings";
-    case "account":
-      return "Account";
     default:
       return "Unknown route";
   }

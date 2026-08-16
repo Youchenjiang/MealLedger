@@ -3,12 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f4ee" />
+    <meta name="theme-color" content="#171a1c" />
     <title>MealLedger</title>
+    <script>
+      // Apply the persisted theme before first paint so there is no flash of
+      // the wrong theme. Default is 深色 per the settings spec; only an
+      // explicit "light" choice forces the light palette, and "system" follows
+      // the OS preference. The React app keeps this in sync at runtime.
+      (function () {
+        try {
+          var stored = localStorage.getItem("mealledger.settings.theme");
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = stored === "light"
+            ? "light"
+            : stored === "system"
+              ? prefersDark ? "dark" : "light"
+              : "dark";
+          document.documentElement.dataset.theme = resolved;
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", resolved === "dark" ? "#171a1c" : "#f5f2ec");
+        } catch (error) {
+          // No storage access: keep the dark default from the markup above.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
