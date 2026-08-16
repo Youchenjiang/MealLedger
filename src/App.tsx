@@ -4642,6 +4642,13 @@ function SettingsPage({
           </p>
           <NegativeBalancePolicyControl value={negativeBalancePolicy} onChange={onNegativeBalancePolicyChange} />
         </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-localization-title">
+          <p className="eyebrow">Language</p>
+          <h2 id="preferences-localization-title">本地化 Localization</h2>
+          <p className="panel-copy">
+            語言與格式偏好將併入此區(行為依 localization spec);目前尚未實作,介面保留英文。
+          </p>
+        </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
           <p className="eyebrow">Spoken capture</p>
           <h2 id="preferences-ai-title">AI 口說偏好</h2>
