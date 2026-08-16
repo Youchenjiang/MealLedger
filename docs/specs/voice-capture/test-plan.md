@@ -1,5 +1,9 @@
 # Voice Capture Test Plan
 
+Status: mode A/B implemented (branch `feature/voice-capture`, merged to main);
+direct audio path cases are marked planned and must not be reported as
+implemented.
+
 ## Unit Tests
 
 - The Mode B field model exposes the fixed order and one prompt per field.

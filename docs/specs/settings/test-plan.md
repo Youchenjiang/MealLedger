@@ -1,5 +1,9 @@
 # Settings Test Plan
 
+Status: voice/AI entity policy (ADR 0012) implemented; restructure, theme,
+delete behavior, and negative-balance policy cases are planned (Phase 4) and
+must not be reported as implemented.
+
 ## Unit Tests
 
 - The entity policy reads the persisted value and falls back to the default

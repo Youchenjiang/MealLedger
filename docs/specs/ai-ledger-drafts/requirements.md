@@ -22,9 +22,11 @@ WHEN a user chooses the direct audio path and speaks a description
 THE SYSTEM SHALL send the audio itself to the configured AI provider, which
 transcribes and field-parses it into the same prefilled draft suggestions, and
 keep the browser transcription path available as a fallback when the audio
-call fails (see [ADR 0013](../../decisions/0013-direct-audio-parse-coexists-with-browser-asr.md)
-and the [voice capture spec](../voice-capture/requirements.md) for the
-recording and payload mechanics).
+call fails (see [ADR 0013](../../decisions/0013-direct-audio-parse-coexists-with-browser-asr.md),
+the [voice capture spec](../voice-capture/requirements.md) for the recording
+and payload mechanics, and the [voice capture design — Direct Audio Path
+(Planned)](../voice-capture/design.md#direct-audio-path-planned) as the
+canonical readiness/rollout reference).
 
 WHEN a user selects a receipt or invoice photo
 THE SYSTEM SHALL send the image to the configured AI provider and produce the

@@ -67,6 +67,21 @@ Settings shows:
 - sync status placeholder
 - import/export safeguard copy
 
+## Capture Flow Across Tabs
+
+The end-to-end capture flow spans two routes:
+
+- 新增 (`/capture`) is the voice-first capture surface: Mode A (整段口說) and
+  Mode B (逐欄口說) turn a spoken or typed description into field-block
+  drafts (see the [voice capture spec](../voice-capture/requirements.md)).
+- 專區 (`/zone`) hosts the non-voice capture tools — the manual transaction
+  draft form, scan receipt/invoice, meal photo, and attachment actions —
+  which moved off `/capture` when it became the voice flow.
+
+Both surfaces hand off the same way: capture produces a local draft that
+appears in the Ledger review queue, and an official record is written only
+through the existing confirmed-record boundary.
+
 ## Minimal Manual Draft Flow
 
 The app-shell spec includes one real, local-only path so the shell is not a dead end:

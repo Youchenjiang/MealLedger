@@ -1,5 +1,8 @@
 # Voice Capture Design
 
+Status: **mode A/B implemented** (branch `feature/voice-capture`, merged to
+main); the direct audio path (ADR 0013) is planned, not implemented.
+
 ## Current State
 
 Mode A and Mode B are implemented on branch `feature/voice-capture`:

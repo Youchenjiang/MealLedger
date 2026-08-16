@@ -1,5 +1,8 @@
 # Voice Capture Requirements
 
+Status: **mode A/B implemented** (branch `feature/voice-capture`, merged to
+main); the direct audio path (ADR 0013) is planned, not implemented.
+
 ## Purpose
 
 Make the Capture page (`/capture`, the bottom-nav center 新增 button) a
@@ -79,6 +82,9 @@ THE SYSTEM SHALL write an official ledger record only through the existing
 confirmed-record boundary, resolving new entities per the entity policy.
 
 ## Direct Audio Path (ADR 0013)
+
+_Planned — not implemented in V1. Design intent and rollout assumptions live
+in the [voice capture design](design.md#direct-audio-path-planned)._
 
 WHEN the user chooses the direct audio path for a single utterance and AI is
 configured

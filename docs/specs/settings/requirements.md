@@ -1,5 +1,9 @@
 # Settings Requirements
 
+Status: **voice/AI entity policy (ADR 0012) implemented**; the in-page
+restructure, theme, delete behavior (ADR 0007), and negative-balance policy
+(ADR 0008) are planned (Phase 4 restructure).
+
 ## Purpose
 
 Define the Settings page (`/settings` + `/account`) structure and the
