@@ -1154,6 +1154,24 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.audit-events") ?? "[]")).toEqual([]);
   });
 
+  test("manages custom categories from the 類別 section", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "類別" }));
+
+    await user.click(screen.getByRole("button", { name: "新增類別" }));
+    await user.type(screen.getByLabelText("New category"), "寵物");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByText("寵物")).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.custom-categories") ?? "[]")).toContain("寵物");
+
+    await user.click(screen.getByRole("button", { name: "刪除" }));
+    expect(screen.queryByText("寵物")).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.custom-categories") ?? "[]")).not.toContain("寵物");
+  });
+
   test("negative-balance policy rejects a write that pushes an account below zero", async () => {
     const user = userEvent.setup();
     renderWorkspace();

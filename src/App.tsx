@@ -919,6 +919,7 @@ function AuthenticatedApp() {
   const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
   const [deleteAction, setDeleteAction] = useState<DeleteAction>(readDeleteAction);
   const [negativeBalancePolicy, setNegativeBalancePolicy] = useState<NegativeBalancePolicy>(readNegativeBalancePolicy);
+  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   // Which capture mode the 新增 header switch shows; shared with the panel.
@@ -955,6 +956,14 @@ function AuthenticatedApp() {
   useEffect(() => {
     writeNegativeBalancePolicy(negativeBalancePolicy);
   }, [negativeBalancePolicy]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
+    } catch {
+      // Category persistence is best effort while the account and record stores remain local-first.
+    }
+  }, [customCategories]);
 
   useEffect(() => {
     try {
@@ -1264,8 +1273,8 @@ function AuthenticatedApp() {
             aliases: readStoredAliases(),
           });
 
+          setCustomCategories(next.categories);
           try {
-            window.localStorage.setItem(categoriesStorageKey, JSON.stringify(next.categories));
             window.localStorage.setItem(tagsStorageKey, JSON.stringify(next.tags));
             window.localStorage.setItem(aliasesStorageKey, JSON.stringify(next.aliases));
           } catch {
@@ -1340,6 +1349,8 @@ function AuthenticatedApp() {
           setDeleteAction,
           negativeBalancePolicy,
           setNegativeBalancePolicy,
+          customCategories,
+          setCustomCategories,
           themeMode,
           onThemeModeChange: setThemeMode,
           navigate,
@@ -1553,6 +1564,8 @@ type RouteRenderContext = {
   setDeleteAction: Dispatch<SetStateAction<DeleteAction>>;
   negativeBalancePolicy: NegativeBalancePolicy;
   setNegativeBalancePolicy: Dispatch<SetStateAction<NegativeBalancePolicy>>;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
   navigate: (item: NavItem) => void;
@@ -1606,6 +1619,8 @@ function renderRoute({
   setDeleteAction,
   negativeBalancePolicy,
   setNegativeBalancePolicy,
+  customCategories,
+  setCustomCategories,
   themeMode,
   onThemeModeChange,
   navigate,
@@ -1751,6 +1766,8 @@ function renderRoute({
           entityPolicy={aiEntityPolicy}
           mode={voiceCaptureMode}
           onModeChange={setVoiceCaptureMode}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
@@ -1764,6 +1781,8 @@ function renderRoute({
           aiEntityPolicy={aiEntityPolicy}
           navigate={navigate}
           draftToEdit={draftToEdit}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
@@ -1793,6 +1812,8 @@ function renderRoute({
           onDeleteActionChange={setDeleteAction}
           negativeBalancePolicy={negativeBalancePolicy}
           onNegativeBalancePolicyChange={setNegativeBalancePolicy}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           authState={authState}
           authMessage={authMessage}
           cloudDataOwnerMatches={cloudDataOwnerMatches}
@@ -3385,6 +3406,8 @@ function VoiceCapturePage({
   entityPolicy,
   mode,
   onModeChange,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveRecord,
   onSaveDraft,
@@ -3393,23 +3416,16 @@ function VoiceCapturePage({
   entityPolicy: AiEntityPolicy;
   mode: "a" | "b";
   onModeChange: (mode: "a" | "b") => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
 }>) {
-  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const categories = useMemo(
     () => [...new Set([...expenseCategories, ...incomeCategories, ...customCategories])],
     [customCategories],
   );
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
-    } catch {
-      // Category persistence is best effort while the account and record stores remain local-first.
-    }
-  }, [customCategories]);
 
   const resolveNewEntities = (suggestion: NewEntityCarrier): LocalAccount[] | false =>
     resolveNewEntitiesFor(suggestion, accounts, customCategories, setCustomCategories, onAddAccount);
@@ -3438,6 +3454,8 @@ function CapturePage({
   draftToEdit,
   onDiscardDraft,
   onFinishDraftEdit,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveInitialFunding,
   onSaveRecord,
@@ -3458,6 +3476,8 @@ function CapturePage({
   draftToEdit: TransactionDraft | null;
   onDiscardDraft: (id: string) => void;
   onFinishDraftEdit: () => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
@@ -3484,7 +3504,6 @@ function CapturePage({
   const [quickAccountBalance, setQuickAccountBalance] = useState("");
   const [quickAccountBalanceDate, setQuickAccountBalanceDate] = useState(localDate());
   const [quickAccountError, setQuickAccountError] = useState("");
-  const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [quickCategoryName, setQuickCategoryName] = useState("");
   const [quickCategoryError, setQuickCategoryError] = useState("");
@@ -3543,14 +3562,6 @@ function CapturePage({
     setAttachmentFiles([]);
     setAttachmentSavedMessage(`${queuedMedia.length} photo${queuedMedia.length === 1 ? "" : "s"} saved locally as attachment evidence.`);
   };
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(categoriesStorageKey, JSON.stringify(customCategories));
-    } catch {
-      // Category persistence is best effort while the account and record stores remain local-first.
-    }
-  }, [customCategories]);
 
   useEffect(() => {
     try {
@@ -4550,6 +4561,8 @@ type SettingsPageProps = AccountPageProps & {
   onDeleteActionChange: (action: DeleteAction) => void;
   negativeBalancePolicy: NegativeBalancePolicy;
   onNegativeBalancePolicyChange: (policy: NegativeBalancePolicy) => void;
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -4568,6 +4581,8 @@ function SettingsPage({
   onDeleteActionChange,
   negativeBalancePolicy,
   onNegativeBalancePolicyChange,
+  customCategories,
+  setCustomCategories,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
@@ -4585,7 +4600,13 @@ function SettingsPage({
       return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
     }
     if (section === "categories") {
-      return <CategoriesPanel records={records} />;
+      return (
+        <CategoriesPanel
+          records={records}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
+        />
+      );
     }
     return (
       <div className="route-stack">
@@ -4713,32 +4734,109 @@ function ThemeControl({ value, onChange }: Readonly<{ value: ThemeMode; onChange
   );
 }
 
-function CategoriesPanel({ records }: Readonly<{ records: LocalLedgerRecord[] }>) {
-  const stored = readStoredCategories();
+function CategoriesPanel({ records, customCategories, setCustomCategories }: Readonly<{
+  records: LocalLedgerRecord[];
+  customCategories: string[];
+  setCustomCategories: Dispatch<SetStateAction<string[]>>;
+}>) {
   const used = new Set(records.map((record) => record.category).filter((value): value is string => Boolean(value)));
-  const categories = [...new Set([...stored, ...used])].sort((a, b) => a.localeCompare(b));
+  const all = [...new Set([...expenseCategories, ...incomeCategories, ...customCategories, ...used])].sort((a, b) => a.localeCompare(b));
   const counts = new Map<string, number>();
-  for (const category of categories) {
+  for (const category of all) {
     counts.set(category, records.filter((record) => record.category === category).length);
   }
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [error, setError] = useState("");
+
+  const isCustom = (name: string) => customCategories.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase());
+  const normalized = (name: string) => name.trim().replace(/\s+/g, " ");
+
+  const addCategory = () => {
+    const name = normalized(newName);
+    if (!name) {
+      setError("Enter a category name before adding it.");
+      return;
+    }
+    if (all.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError("This category already exists.");
+      return;
+    }
+    setCustomCategories((current) => [...current, name]);
+    setNewName("");
+    setAdding(false);
+    setError("");
+  };
+
+  const renameCategory = (previous: string) => {
+    const name = normalized(editName);
+    if (!name) {
+      setError("Enter a category name before saving.");
+      return;
+    }
+    if (name.toLocaleLowerCase() !== previous.toLocaleLowerCase() && all.some((item) => item.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      setError("This category already exists.");
+      return;
+    }
+    setCustomCategories((current) => current.map((item) => item.toLocaleLowerCase() === previous.toLocaleLowerCase() ? name : item));
+    setEditing(null);
+    setError("");
+  };
+
+  const removeCategory = (name: string) => {
+    setCustomCategories((current) => current.filter((item) => item.toLocaleLowerCase() !== name.toLocaleLowerCase()));
+    setError("");
+  };
+
   return (
     <section className="settings-preferences-block" aria-labelledby="categories-title">
       <p className="eyebrow">Classification</p>
       <h2 id="categories-title">類別 Categories</h2>
       <p className="panel-copy">
-        自訂類別與記錄中使用的類別一覽;管理(新增/改名/刪除)將在此區提供。
+        內建類別固定;自訂類別可在此新增、改名或刪除,也會用於口說與手動記帳。
       </p>
-      {categories.length > 0 ? (
+      {adding ? (
+        <div className="category-add-form">
+          <label htmlFor="new-category-name">New category</label>
+          <input id="new-category-name" type="text" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="例如:寵物" />
+          <button className="secondary-action" type="button" onClick={addCategory}>Add</button>
+          <button className="quiet-action" type="button" onClick={() => { setAdding(false); setError(""); }}>Cancel</button>
+        </div>
+      ) : (
+        <button className="secondary-action align-start" type="button" onClick={() => setAdding(true)}>新增類別</button>
+      )}
+      {error ? <p className="auth-message" role="alert">{error}</p> : null}
+      {all.length > 0 ? (
         <ul className="category-list">
-          {categories.map((category) => (
+          {all.map((category) => (
             <li key={category}>
-              <span className="category-list-name">{category}</span>
-              <span className="category-list-count">{counts.get(category)} 筆</span>
+              {editing === category ? (
+                <span className="category-edit-row">
+                  <input type="text" value={editName} onChange={(event) => setEditName(event.target.value)} aria-label={`Rename ${category}`} />
+                  <button className="text-action" type="button" onClick={() => renameCategory(category)}>Save</button>
+                  <button className="quiet-action" type="button" onClick={() => { setEditing(null); setError(""); }}>Cancel</button>
+                </span>
+              ) : (
+                <>
+                  <span className="category-list-name">{category}</span>
+                  <span className="category-list-count">{counts.get(category)} 筆</span>
+                  {isCustom(category) ? (
+                    <span className="category-row-actions">
+                      <button className="text-action" type="button" onClick={() => { setEditing(category); setEditName(category); setError(""); }}>改名</button>
+                      <button className="text-action danger-action" type="button" onClick={() => removeCategory(category)}>刪除</button>
+                    </span>
+                  ) : (
+                    <span className="category-list-builtin">內建</span>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="panel-copy">尚無自訂類別。</p>
+        <p className="panel-copy">尚無類別。</p>
       )}
     </section>
   );

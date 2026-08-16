@@ -1267,6 +1267,67 @@ h2 {
   font-size: 13px;
 }
 
+.category-list-builtin {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.category-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.category-row-actions .text-action {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.category-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-add-form label {
+  flex: 0 0 100%;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.category-add-form input {
+  min-height: 36px;
+  min-width: 0;
+  flex: 1 1 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  font: inherit;
+}
+
+.category-edit-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.category-edit-row input {
+  min-width: 0;
+  flex: 1 1 140px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  font: inherit;
+}
+
 .settings-tabs {
   display: flex;
   flex-wrap: wrap;
