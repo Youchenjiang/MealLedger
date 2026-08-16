@@ -4749,8 +4749,9 @@ function CategoriesPanel({ records, customCategories, setCustomCategories }: Rea
   const used = new Set(records.map((record) => record.category).filter((value): value is string => Boolean(value)));
   const all = [...new Set([...expenseCategories, ...incomeCategories, ...customCategories, ...used])].sort((a, b) => a.localeCompare(b));
   const counts = new Map<string, number>();
-  for (const category of all) {
-    counts.set(category, records.filter((record) => record.category === category).length);
+  for (const record of records) {
+    if (!record.category) continue;
+    counts.set(record.category, (counts.get(record.category) ?? 0) + 1);
   }
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
