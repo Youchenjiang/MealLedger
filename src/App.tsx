@@ -34,6 +34,7 @@ import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
 import { applyResolvedTheme, readStoredTheme, resolveTheme, writeStoredTheme, type ThemeMode } from "./appShell/theme";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
+import { readDeleteAction, writeDeleteAction, type DeleteAction } from "./manualLedger/deletePolicy";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
@@ -915,6 +916,7 @@ function AuthenticatedApp() {
   uploadQueueRef.current = uploadQueue;
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
+  const [deleteAction, setDeleteAction] = useState<DeleteAction>(readDeleteAction);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   // Which capture mode the 新增 header switch shows; shared with the panel.
@@ -943,6 +945,10 @@ function AuthenticatedApp() {
   useEffect(() => {
     writeAiEntityPolicy(aiEntityPolicy);
   }, [aiEntityPolicy]);
+
+  useEffect(() => {
+    writeDeleteAction(deleteAction);
+  }, [deleteAction]);
 
   useEffect(() => {
     try {
@@ -1324,6 +1330,8 @@ function AuthenticatedApp() {
           setAccounts,
           aiEntityPolicy,
           setAiEntityPolicy,
+          deleteAction,
+          setDeleteAction,
           themeMode,
           onThemeModeChange: setThemeMode,
           navigate,
@@ -1533,6 +1541,8 @@ type RouteRenderContext = {
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
   aiEntityPolicy: AiEntityPolicy;
   setAiEntityPolicy: Dispatch<SetStateAction<AiEntityPolicy>>;
+  deleteAction: DeleteAction;
+  setDeleteAction: Dispatch<SetStateAction<DeleteAction>>;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
   navigate: (item: NavItem) => void;
@@ -1582,6 +1592,8 @@ function renderRoute({
   setAccounts,
   aiEntityPolicy,
   setAiEntityPolicy,
+  deleteAction,
+  setDeleteAction,
   themeMode,
   onThemeModeChange,
   navigate,
@@ -1647,6 +1659,7 @@ function renderRoute({
           drafts={drafts}
           accounts={accounts}
           navigate={navigate}
+          deleteAction={deleteAction}
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onEditDraft={(draft) => {
             // Draft completion needs the manual ledger form, which now lives
@@ -1687,9 +1700,17 @@ function renderRoute({
             setAuditEvents((current) => [...current, result.auditEvent]);
             return true;
           }}
-          onVoidRecord={(id) => {
+          onDeleteRecord={(id) => {
             const record = records.find((item) => item.id === id);
             if (!record || record.recordState === "voided") {
+              return;
+            }
+
+            if (deleteAction === "hard-delete") {
+              // 真正刪除 removes the record and its bundle children (ADR 0007).
+              const deletedIds = new Set(records.filter((item) => item.id === id || item.linkedRecordId === id).map((item) => item.id));
+              setRecords((current) => current.filter((item) => !deletedIds.has(item.id)));
+              setAuditEvents((current) => current.filter((event) => !deletedIds.has(event.targetId)));
               return;
             }
 
@@ -1749,6 +1770,8 @@ function renderRoute({
           onEntityPolicyChange={setAiEntityPolicy}
           themeMode={themeMode}
           onThemeModeChange={onThemeModeChange}
+          deleteAction={deleteAction}
+          onDeleteActionChange={setDeleteAction}
           authState={authState}
           authMessage={authMessage}
           cloudDataOwnerMatches={cloudDataOwnerMatches}
@@ -1912,20 +1935,26 @@ type LedgerRecordCardProps = {
   onCancelDetails: () => void;
   onConvertDetails: (fields: UnresolvedExpenseConversion) => boolean;
   onUpdate: (patch: Partial<EditableRecordFields>) => void;
-  onVoid: () => void;
+  onDelete: () => void;
+  deleteAction: DeleteAction;
 };
 
-function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onVoid }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onVoid"> & { isVoided: boolean }>) {
+function LedgerRecordState({ record, isVoided, onCompleteDetails, onEdit, onUpdate, onDelete, deleteAction }: Readonly<Pick<LedgerRecordCardProps, "record" | "onCompleteDetails" | "onEdit" | "onUpdate" | "onDelete" | "deleteAction"> & { isVoided: boolean }>) {
   if (isVoided) return <span className="record-state-label">Voided</span>;
 
   const isRecurring = record.recurrenceStatus === "active" || record.recurrenceStatus === "paused";
+  const hardDelete = deleteAction === "hard-delete";
   return (
     <div className="record-actions">
       {record.kind === "unresolved-expense" ? <button className="text-action" type="button" onClick={onCompleteDetails}>Complete details</button> : null}
       {isRecurring ? <button className="text-action" type="button" onClick={() => onUpdate({ recurrenceStatus: record.recurrenceStatus === "active" ? "paused" : "active" })}>{record.recurrenceStatus === "active" ? "Pause recurring" : "Resume recurring"}</button> : null}
       {isRecurring ? <ConfirmActionButton label="Cancel recurring" message="Cancel future recurrence?" onConfirm={() => onUpdate({ recurrenceStatus: "cancelled" })} /> : null}
       <button className="text-action" type="button" onClick={onEdit}>Edit</button>
-      <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onVoid} />
+      {hardDelete ? (
+        <ConfirmActionButton label="Delete" message="Permanently delete this record? This cannot be undone." onConfirm={onDelete} />
+      ) : (
+        <ConfirmActionButton label="Void" message="Void this record? It remains in history but leaves active totals." onConfirm={onDelete} />
+      )}
     </div>
   );
 }
@@ -1941,7 +1970,8 @@ function LedgerRecordCard({
   onCancelDetails,
   onConvertDetails,
   onUpdate,
-  onVoid,
+  onDelete,
+  deleteAction,
 }: Readonly<LedgerRecordCardProps>) {
   if (isEditingUnresolved && record.recordState !== "voided") {
     return <UnresolvedExpenseEditor record={record} onCancel={onCancelDetails} onConvert={onConvertDetails} />;
@@ -1963,7 +1993,7 @@ function LedgerRecordCard({
         <strong>{record.currency} {record.amount}</strong>
         <span>{record.kind} · {statusLabel}</span>
       </div>
-      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onVoid={onVoid} />
+      <LedgerRecordState record={record} isVoided={isVoided} onCompleteDetails={onCompleteDetails} onEdit={onEdit} onUpdate={onUpdate} onDelete={onDelete} deleteAction={deleteAction} />
     </article>
   );
 }
@@ -1983,7 +2013,8 @@ function LedgerPage({
   onConfirmDraft,
   onUpdateRecord,
   onConvertUnresolved,
-  onVoidRecord,
+  onDeleteRecord,
+  deleteAction,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
@@ -1997,7 +2028,8 @@ function LedgerPage({
   onConfirmDraft: (draft: TransactionDraft) => boolean;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
-  onVoidRecord: (id: string) => void;
+  onDeleteRecord: (id: string) => void;
+  deleteAction: DeleteAction;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -2029,7 +2061,8 @@ function LedgerPage({
           onDiscardDraft={onDiscardDraft}
           onUpdateRecord={onUpdateRecord}
           onConvertUnresolved={onConvertUnresolved}
-          onVoidRecord={onVoidRecord}
+          onDeleteRecord={onDeleteRecord}
+          deleteAction={deleteAction}
           onBeginEditRecord={setEditingRecordId}
           onEndEditRecord={() => setEditingRecordId(null)}
           onBeginUnresolved={setEditingUnresolvedId}
@@ -2054,7 +2087,8 @@ function LedgerRecordsView({
   onDiscardDraft,
   onUpdateRecord,
   onConvertUnresolved,
-  onVoidRecord,
+  onDeleteRecord,
+  deleteAction,
   onBeginEditRecord,
   onEndEditRecord,
   onBeginUnresolved,
@@ -2073,7 +2107,8 @@ function LedgerRecordsView({
   onDiscardDraft: (id: string) => void;
   onUpdateRecord: (id: string, patch: Partial<EditableRecordFields>) => void;
   onConvertUnresolved: (id: string, fields: UnresolvedExpenseConversion) => boolean;
-  onVoidRecord: (id: string) => void;
+  onDeleteRecord: (id: string) => void;
+  deleteAction: DeleteAction;
   onBeginEditRecord: (id: string) => void;
   onEndEditRecord: () => void;
   onBeginUnresolved: (id: string) => void;
@@ -2121,7 +2156,8 @@ function LedgerRecordsView({
                 return converted;
               }}
               onUpdate={(patch) => onUpdateRecord(record.id, patch)}
-              onVoid={() => onVoidRecord(record.id)}
+              onDelete={() => onDeleteRecord(record.id)}
+              deleteAction={deleteAction}
             />
           ))}
         </section>
@@ -4488,6 +4524,8 @@ type SettingsPageProps = AccountPageProps & {
   onEntityPolicyChange: (policy: AiEntityPolicy) => void;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
+  deleteAction: DeleteAction;
+  onDeleteActionChange: (action: DeleteAction) => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -4502,6 +4540,8 @@ function SettingsPage({
   onEntityPolicyChange,
   themeMode,
   onThemeModeChange,
+  deleteAction,
+  onDeleteActionChange,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
@@ -4538,6 +4578,14 @@ function SettingsPage({
           <h2 id="preferences-theme-title">主題 Theme</h2>
           <p className="panel-copy">深色為預設;可切換 深色 / 淺色 / 跟隨系統。</p>
           <ThemeControl value={themeMode} onChange={onThemeModeChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-delete-title">
+          <p className="eyebrow">Ledger records</p>
+          <h2 id="preferences-delete-title">刪除行為 Delete behavior</h2>
+          <p className="panel-copy">
+            明細列的刪除動作:作廢保留記錄於歷史但排除於餘額與報表;真正刪除連同其附屬記錄一併移除。
+          </p>
+          <DeleteActionControl value={deleteAction} onChange={onDeleteActionChange} />
         </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
           <p className="eyebrow">Spoken capture</p>
@@ -4578,6 +4626,25 @@ const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
   { value: "light", label: "淺色" },
   { value: "system", label: "跟隨系統" },
 ];
+
+const DELETE_ACTION_OPTIONS: Array<{ value: DeleteAction; label: string; hint: string }> = [
+  { value: "void", label: "作廢", hint: "保留記錄於歷史,從餘額與報表排除" },
+  { value: "hard-delete", label: "真正刪除", hint: "連同附屬記錄一併移除,無法復原" },
+];
+
+function DeleteActionControl({ value, onChange }: Readonly<{ value: DeleteAction; onChange: (action: DeleteAction) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>刪除動作 Delete action</legend>
+      {DELETE_ACTION_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={option.hint}>
+          <input type="radio" name="delete-action" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 function ThemeControl({ value, onChange }: Readonly<{ value: ThemeMode; onChange: (mode: ThemeMode) => void }>) {
   return (

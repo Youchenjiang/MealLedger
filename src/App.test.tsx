@@ -1132,6 +1132,28 @@ describe("App shell draft flow", () => {
     expect(storedAuditEvents.map((event) => event.eventType)).toEqual(["record-created", "record-updated", "record-voided"]);
   });
 
+  test("hard-delete mode removes the record and its audit history entirely", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await openWorkspace(user);
+    await createExpenseRecord(user);
+
+    // Switch the delete behavior to 真正刪除 in 相關設定.
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
+    await user.click(screen.getByRole("radio", { name: "真正刪除" }));
+    expect(window.localStorage.getItem("mealledger.settings.delete-action")).toBe("hard-delete");
+
+    await user.click(screen.getByRole("button", { name: "明細" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(screen.queryByText(/TWD \d+/)).not.toBeInTheDocument();
+
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual([]);
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.audit-events") ?? "[]")).toEqual([]);
+  });
+
   test("links a friend payback to an existing expense", async () => {
     const user = userEvent.setup();
     renderWorkspace();
