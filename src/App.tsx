@@ -33,6 +33,7 @@ import googleG from "./assets/google-g.svg";
 import facebookF from "./assets/facebook-f.svg";
 import type { AppLocation, AppRoute, AuthState, NavItem } from "./types";
 import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCounterpartyLabel, missingItemNameLabel, monthToPeriodRange, normalizeDraftForm, type DraftForm, type TransactionDraft } from "./appShell/drafts";
+import { applyResolvedTheme, readStoredTheme, resolveTheme, writeStoredTheme, type ThemeMode } from "./appShell/theme";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
@@ -874,8 +875,30 @@ export function App() {
   );
 }
 
+// 深色 default, with 淺色 / 跟隨系統 options. Applies the resolved theme to
+// <html data-theme> (styles.css variables), persists the choice, and follows
+// the OS preference while the mode is 跟隨系統. See src/appShell/theme.ts.
+function useThemeMode() {
+  const [mode, setMode] = useState<ThemeMode>(readStoredTheme);
+
+  useEffect(() => {
+    const apply = () => applyResolvedTheme(resolveTheme(mode));
+    apply();
+    writeStoredTheme(mode);
+    if (mode === "system") {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+    return undefined;
+  }, [mode]);
+
+  return [mode, setMode] as const;
+}
+
 function AuthenticatedApp() {
   const [location, setLocation] = useState<AppLocation>(routeFromLocation);
+  const [themeMode, setThemeMode] = useThemeMode();
   const { state: authState, userId, message: authMessage, signIn, signUp, requestPasswordReset, recoverPasswordFromLink, updatePassword, signInWithOAuth, identities, linkIdentity, unlinkIdentity, signOut } = useAuth();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [accounts, setAccounts] = useState<LocalAccount[]>(readStoredAccounts);
