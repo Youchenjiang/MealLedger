@@ -16,6 +16,21 @@
   and signs edge-proxy requests with the gateway key and session token;
   proxy 401 responses explain the login requirement.
 
+## Edge Function Resilience And CORS
+
+- Transient provider failures (529, 429, 5xx, network/timeout exception)
+  retry with exponential backoff plus jitter and succeed on a later attempt.
+- All attempts failing returns the last status as `ai_request_failed:<status>`
+  with HTTP 502; a 4xx failure does not retry.
+- A single attempt exceeding the per-attempt timeout aborts and is treated as
+  transient.
+- CORS: preflight OPTIONS answers 204 with `apikey` in allow-headers;
+  `access-control-allow-origin` echoes a matching origin from the
+  comma-separated list and is absent for a disallowed origin; non-POST
+  methods answer 405.
+- The auth gate rejects a request without a valid session with 401, and is
+  bypassable when `AI_REQUIRE_AUTH=false`; oversized bodies answer 413.
+
 ## Panel Tests
 
 - Typed text produces suggestions and confirming one creates an official

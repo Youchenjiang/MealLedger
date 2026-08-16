@@ -65,6 +65,46 @@ WHEN a user forgets an email/password account password
 THE SYSTEM SHALL send a password-reset link and require a new password before
 the account can sign in again.
 
+WHEN a password-reset email is sent
+THE SYSTEM SHALL link it to a stable public page — `VITE_AUTH_REDIRECT_URL`
+plus `/account` when configured, otherwise the Supabase Site URL — so the
+link works on any device and never points at the instance that sent the
+request.
+
+WHEN the user opens a recovery link on the app
+THE SYSTEM SHALL restore the recovery session — an implicit-grant link
+(`#access_token=...&type=recovery`) through setSession and a PKCE link
+(`?token_hash=...&type=recovery`) through verifyOtp — and show the
+new-password form instead of signing in.
+
+WHEN the recovery token is invalid or expired
+THE SYSTEM SHALL show an auth error with the provider's message and never
+present a sign-in as if recovery had succeeded.
+
+WHEN a recovery link has been redeemed
+THE SYSTEM SHALL strip the callback tokens from the URL so a reload does not
+try to redeem the single-use token again.
+
+WHEN a late session event fires after a recovery link has already switched the
+view to the new-password form
+THE SYSTEM SHALL keep the recovery form instead of overriding it back to
+sign-in.
+
+WHEN the reset email cannot be sent because of the provider rate limit
+THE SYSTEM SHALL explain the platform limit (Supabase's default email service
+allows 2 emails per hour) and mention the Custom SMTP option instead of
+showing a bare error string.
+
+WHEN the user opens the forgot-password view
+THE SYSTEM SHALL keep the paste-a-reset-link rescue collapsed by default so it
+does not compete with the primary send-link action.
+
+WHEN the user pastes a full recovery or OAuth callback link into the
+forgot-password view
+THE SYSTEM SHALL restore the session through the same callback parser so the
+flow finishes on this device (embedded webviews where the email opens in the
+OS browser).
+
 WHEN a user chooses Google or Facebook sign-in
 THE SYSTEM SHALL complete the provider redirect, validate the resulting
 Supabase session, and apply the same local-data handoff rule as email/password

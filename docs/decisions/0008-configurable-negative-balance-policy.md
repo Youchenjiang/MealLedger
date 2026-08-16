@@ -37,7 +37,8 @@ Becomes harder:
 Follow-up work:
 
 - The setting lands with the settings restructure
-  ([settings-restructure-plan](../product/settings-restructure-plan.md)).
+  ([settings-restructure-plan](../product/settings-restructure-plan.md))
+  and is specified in the [settings spec](../specs/settings/requirements.md).
 
 ## References
 

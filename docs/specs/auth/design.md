@@ -74,10 +74,47 @@ flow they are in:
   **Back to sign in** to return. Sign-in itself no longer fires a reset
   email from a background link.
 - The recovery view (set new password) is its own flow: the app owns callback
-  hash handling (`detectSessionInUrl: false`), maps `type=recovery` hashes to
+  hash handling (`detectSessionInUrl: false`), maps `type=recovery` links to
   the `password-recovery` state directly, and guards the view against late
   `INITIAL_SESSION` / `SIGNED_IN` emissions from supabase-js so the form is
   not overridden back to a sign-in.
+
+## Recovery Link Handling
+
+Recovery links arrive in two shapes and are redeemed by the same callback
+parser (`restoreOAuthCallbackSession`):
+
+- **Implicit-grant** links carry `access_token` / `refresh_token` in the URL
+  fragment with `type=recovery`; they are redeemed with `setSession`.
+- **PKCE** links carry `token_hash` in the query string with `type=recovery`;
+  the single-use hash is redeemed with `verifyOtp({ type: "recovery",
+  token_hash })`. When the client has no `verifyOtp` capability the hash path
+  is ignored.
+
+Either redemption maps to the `password-recovery` state; a failed or expired
+token maps to `auth-error` with the provider's message, never a silent
+sign-in. After redemption `clearAuthCallbackHash` strips the fragment and the
+`token_hash` / `type` query parameters so a reload cannot re-redeem the
+single-use token. `recoveryStartup` suppresses late `INITIAL_SESSION` /
+`SIGNED_IN` emissions that would otherwise override the form.
+
+The email's link target is chosen by `passwordResetRedirect()`: when
+`VITE_AUTH_REDIRECT_URL` is configured it returns
+`<VITE_AUTH_REDIRECT_URL>/account` (stable across devices); when it is unset
+`redirectTo` is omitted so Supabase links the email to its Site URL — the
+link never points at the instance that sent the request.
+
+Embedded webviews (desktop shell, in-app browsers) can strand the callback in
+the OS browser instead of the app. The forgot-password view therefore offers a
+collapsed quiet action, **Reset link opened in another browser? Paste it
+here**, that expands to a URL field and **Use reset link**; pasting any
+recovery or OAuth callback link runs it through the same parser
+(`recoverPasswordFromLink`). The rescue stays collapsed by default so it does
+not compete with the primary **Send reset link** action.
+
+Supabase's default email service caps sends at 2 per hour. `requestPasswordReset`
+maps rate-limit errors to an explanatory message that names the cap and
+mentions configuring Custom SMTP to remove it.
 
 ## Password Visibility Toggle
 

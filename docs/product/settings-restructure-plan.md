@@ -1,6 +1,6 @@
 # 設定分區計畫（Phase 4）
 
-狀態：**計畫，尚未實作**（分支 `feature/settings-restructure`，預期獨立 PR）。本文件為版面重構（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）中設定頁（Phase 4）的拆分細節。
+狀態：**計畫，尚未實作**（分支 `feature/settings-restructure`，預期獨立 PR）。設定行為規格已獨立成 [settings spec](../specs/settings/requirements.md)。本文件為版面重構（底部導覽決策見 [ADR 0006](../decisions/0006-unified-bottom-navigation.md)）中設定頁（Phase 4）的拆分細節。
 
 ---
 

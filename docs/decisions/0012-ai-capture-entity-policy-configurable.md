@@ -67,6 +67,9 @@ Becomes harder:
 
 ## References
 
+- [Settings requirements](../specs/settings/requirements.md)
+- [Settings design](../specs/settings/design.md)
+- [Voice capture requirements](../specs/voice-capture/requirements.md)
 - [Voice capture plan](../product/voice-capture-plan.md)
 - [AI ledger drafts requirements](../specs/ai-ledger-drafts/requirements.md)
 - [Settings restructure plan](../product/settings-restructure-plan.md)
