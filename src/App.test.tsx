@@ -1154,6 +1154,60 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.audit-events") ?? "[]")).toEqual([]);
   });
 
+  test("negative-balance policy rejects a write that pushes an account below zero", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    // Account with a 2500 starting balance.
+    await user.click(screen.getByRole("button", { name: /^明細/u }));
+    await user.click(screen.getByRole("tab", { name: "Accounts" }));
+    await user.click(screen.getByRole("button", { name: "Open first-account setup" }));
+    await user.type(screen.getByLabelText("Account name"), "Daily wallet");
+    await user.click(screen.getByRole("radio", { name: "Enter current balance" }));
+    await user.type(screen.getByLabelText("Current balance"), "2500");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    // Enable the policy in 相關設定.
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
+    await user.click(screen.getByRole("radio", { name: "不允許負餘額" }));
+    expect(window.localStorage.getItem("mealledger.settings.negative-balance-policy")).toBe("reject");
+
+    // An expense over the balance is rejected with a readable reason.
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.clear(screen.getByLabelText("Merchant"));
+    await user.type(screen.getByLabelText("Merchant"), "全聯");
+    await user.clear(screen.getByLabelText("Item name"));
+    await user.type(screen.getByLabelText("Item name"), "香蕉");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "3000");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    expect(screen.getByText(/「Daily wallet」餘額將低於零/)).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ kind: "expense" })]),
+    );
+
+    // Disabling the policy allows the same expense.
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
+    await user.click(screen.getByRole("radio", { name: "允許負餘額" }));
+    await goToCapture(user);
+    await user.selectOptions(screen.getByLabelText("Account"), "Daily wallet");
+    await user.selectOptions(screen.getByLabelText("Category"), "Daily");
+    await user.clear(screen.getByLabelText("Merchant"));
+    await user.type(screen.getByLabelText("Merchant"), "全聯");
+    await user.clear(screen.getByLabelText("Item name"));
+    await user.type(screen.getByLabelText("Item name"), "香蕉");
+    await user.clear(screen.getByLabelText("Amount"));
+    await user.type(screen.getByLabelText("Amount"), "3000");
+    await user.click(screen.getByRole("button", { name: "Save record" }));
+
+    expect(screen.getByText("Record saved to the local ledger.")).toBeInTheDocument();
+  });
+
   test("links a friend payback to an existing expense", async () => {
     const user = userEvent.setup();
     renderWorkspace();

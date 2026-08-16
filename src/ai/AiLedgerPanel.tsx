@@ -34,7 +34,7 @@ export type AiLedgerPanelProps = Readonly<{
   // Writes the official record. extraAccounts carries the accounts that were
   // just created for this write, so validation and balance tracking see them
   // even though the caller's accounts state has not re-rendered yet.
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
   // Prefills the ledger form with the fields the AI could identify so the
   // user can complete the remaining ones (account, category, …) manually.
@@ -457,9 +457,9 @@ function useDraftActions({
       }
       created = resolved;
     }
-    const saved = onSaveRecord(suggestion.draft, created);
-    if (!saved) {
-      setError("這筆記錄無法建立,請檢查帳戶與欄位後手動新增。");
+    const saveReason = onSaveRecord(suggestion.draft, created);
+    if (saveReason !== null) {
+      setError(saveReason);
       return;
     }
     setSuggestions((current) => current.filter((item) => item !== suggestion));

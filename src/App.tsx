@@ -35,6 +35,7 @@ import { canAutoRecordNextCycle, createTransactionDraft, draftKinds, missingCoun
 import { applyResolvedTheme, readStoredTheme, resolveTheme, writeStoredTheme, type ThemeMode } from "./appShell/theme";
 import { createLocalAccount, type LocalAccount } from "./manualLedger/accounts";
 import { readDeleteAction, writeDeleteAction, type DeleteAction } from "./manualLedger/deletePolicy";
+import { negativeBalanceRejectionReason, readNegativeBalancePolicy, writeNegativeBalancePolicy, type NegativeBalancePolicy } from "./manualLedger/negativeBalance";
 import { calculateAccountBalances, formatAccountBalance } from "./manualLedger/balances";
 import { calculateAccountReports, type AccountReport } from "./manualLedger/reports";
 import { appendIdempotentRecords, convertUnresolvedExpense, createOfficialRecordBundle, updateOfficialRecord, voidOfficialRecord, type EditableRecordFields, type LocalAuditEvent, type LocalLedgerRecord, type UnresolvedExpenseConversion } from "./manualLedger/records";
@@ -917,6 +918,7 @@ function AuthenticatedApp() {
   const [persistenceWarning, setPersistenceWarning] = useState(false);
   const [aiEntityPolicy, setAiEntityPolicy] = useState<AiEntityPolicy>(readAiEntityPolicy);
   const [deleteAction, setDeleteAction] = useState<DeleteAction>(readDeleteAction);
+  const [negativeBalancePolicy, setNegativeBalancePolicy] = useState<NegativeBalancePolicy>(readNegativeBalancePolicy);
   const [drafts, setDrafts] = useState<TransactionDraft[]>(readStoredDrafts);
   const [draftToEdit, setDraftToEdit] = useState<TransactionDraft | null>(null);
   // Which capture mode the 新增 header switch shows; shared with the panel.
@@ -949,6 +951,10 @@ function AuthenticatedApp() {
   useEffect(() => {
     writeDeleteAction(deleteAction);
   }, [deleteAction]);
+
+  useEffect(() => {
+    writeNegativeBalancePolicy(negativeBalancePolicy);
+  }, [negativeBalancePolicy]);
 
   useEffect(() => {
     try {
@@ -1332,6 +1338,8 @@ function AuthenticatedApp() {
           setAiEntityPolicy,
           deleteAction,
           setDeleteAction,
+          negativeBalancePolicy,
+          setNegativeBalancePolicy,
           themeMode,
           onThemeModeChange: setThemeMode,
           navigate,
@@ -1543,6 +1551,8 @@ type RouteRenderContext = {
   setAiEntityPolicy: Dispatch<SetStateAction<AiEntityPolicy>>;
   deleteAction: DeleteAction;
   setDeleteAction: Dispatch<SetStateAction<DeleteAction>>;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  setNegativeBalancePolicy: Dispatch<SetStateAction<NegativeBalancePolicy>>;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
   navigate: (item: NavItem) => void;
@@ -1594,6 +1604,8 @@ function renderRoute({
   setAiEntityPolicy,
   deleteAction,
   setDeleteAction,
+  negativeBalancePolicy,
+  setNegativeBalancePolicy,
   themeMode,
   onThemeModeChange,
   navigate,
@@ -1630,7 +1642,7 @@ function renderRoute({
     idempotencyKey: string,
     recordId = `record-${draft.id}`,
     feeRecordId?: string,
-  ): boolean => {
+  ): string | null => {
     const bundle = createOfficialRecordBundle(draft, recordAccounts, {
       userId: recordOwner,
       recordId,
@@ -1640,13 +1652,20 @@ function renderRoute({
     });
 
     if (!bundle) {
-      return false;
+      return "This record could not be saved. Check the selected accounts and amounts.";
+    }
+
+    if (negativeBalancePolicy === "reject") {
+      const reason = negativeBalanceRejectionReason(draft, recordAccounts, records);
+      if (reason) {
+        return reason;
+      }
     }
 
     setRecords((current) => appendIdempotentRecords(current, bundle));
     setAuditEvents((current) => [...current, ...bundle.auditEvents]);
     queueRecordBundle(bundle.records);
-    return true;
+    return null;
   };
 
   switch (route) {
@@ -1668,7 +1687,7 @@ function renderRoute({
             navigate(navItemFor("zone"));
           }}
           onConfirmDraft={(draft) => {
-            if (!saveOfficialRecord(draft, accounts, `draft:${draft.id}`)) {
+            if (saveOfficialRecord(draft, accounts, `draft:${draft.id}`) !== null) {
               return false;
             }
 
@@ -1719,7 +1738,7 @@ function renderRoute({
             setAuditEvents((current) => [...current, result.auditEvent]);
           }}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`)}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `ledger:${draft.id}`) === null}
           onReopenOnboarding={onReopenOnboarding}
         />
       );
@@ -1748,7 +1767,7 @@ function renderRoute({
           onDiscardDraft={(id) => setDrafts((current) => current.filter((draft) => draft.id !== id))}
           onFinishDraftEdit={() => setDraftToEdit(null)}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`)}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `capture:${draft.id}`) === null}
           onSaveRecord={(draft, extraAccounts = []) => saveOfficialRecord(draft, [...accounts, ...extraAccounts], `manual:${draft.id}`)}
           onSaveDraft={(draft) => setDrafts((current) => [...current, draft])}
           onSaveMeal={onSaveMeal}
@@ -1772,6 +1791,8 @@ function renderRoute({
           onThemeModeChange={onThemeModeChange}
           deleteAction={deleteAction}
           onDeleteActionChange={setDeleteAction}
+          negativeBalancePolicy={negativeBalancePolicy}
+          onNegativeBalancePolicyChange={setNegativeBalancePolicy}
           authState={authState}
           authMessage={authMessage}
           cloudDataOwnerMatches={cloudDataOwnerMatches}
@@ -1789,7 +1810,7 @@ function renderRoute({
           onClaimLocalWorkspace={onClaimLocalWorkspace}
           onSignOut={onSignOut}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
-          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
+          onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`) === null}
           onReopenOnboarding={onReopenOnboarding}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
@@ -1797,7 +1818,7 @@ function renderRoute({
               return false;
             }
 
-            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`);
+            return saveOfficialRecord(draft, accounts, `import:${importId}`, `record-${importId}`, `record-${importId}-fee`) === null;
           }}
           onMergeImportDraft={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
@@ -3373,7 +3394,7 @@ function VoiceCapturePage({
   mode: "a" | "b";
   onModeChange: (mode: "a" | "b") => void;
   onAddAccount: (account: LocalAccount) => void;
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
 }>) {
   const [customCategories, setCustomCategories] = useState<string[]>(readStoredCategories);
@@ -3439,7 +3460,7 @@ function CapturePage({
   onFinishDraftEdit: () => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft: (draft: TransactionDraft) => void;
   onSaveMeal: (meal: MealEntry) => void;
   scans: TemporaryScan[];
@@ -3731,8 +3752,9 @@ function CapturePage({
       return;
     }
 
-    if (!onSaveRecord(nextDraft)) {
-      setFormError("This record could not be saved. Check the selected accounts and amounts.");
+    const saveReason = onSaveRecord(nextDraft);
+    if (saveReason !== null) {
+      setFormError(saveReason);
       return;
     }
 
@@ -4526,6 +4548,8 @@ type SettingsPageProps = AccountPageProps & {
   onThemeModeChange: (mode: ThemeMode) => void;
   deleteAction: DeleteAction;
   onDeleteActionChange: (action: DeleteAction) => void;
+  negativeBalancePolicy: NegativeBalancePolicy;
+  onNegativeBalancePolicyChange: (policy: NegativeBalancePolicy) => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
@@ -4542,6 +4566,8 @@ function SettingsPage({
   onThemeModeChange,
   deleteAction,
   onDeleteActionChange,
+  negativeBalancePolicy,
+  onNegativeBalancePolicyChange,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
@@ -4587,6 +4613,14 @@ function SettingsPage({
           </p>
           <DeleteActionControl value={deleteAction} onChange={onDeleteActionChange} />
         </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-negative-title">
+          <p className="eyebrow">Accounting</p>
+          <h2 id="preferences-negative-title">負餘額政策 Negative balance</h2>
+          <p className="panel-copy">
+            開啟後,支出或餘額調整不得使可編輯帳戶餘額低於零(維持與會計規則一致的預設行為)。
+          </p>
+          <NegativeBalancePolicyControl value={negativeBalancePolicy} onChange={onNegativeBalancePolicyChange} />
+        </section>
         <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
           <p className="eyebrow">Spoken capture</p>
           <h2 id="preferences-ai-title">AI 口說偏好</h2>
@@ -4631,6 +4665,25 @@ const DELETE_ACTION_OPTIONS: Array<{ value: DeleteAction; label: string; hint: s
   { value: "void", label: "作廢", hint: "保留記錄於歷史,從餘額與報表排除" },
   { value: "hard-delete", label: "真正刪除", hint: "連同附屬記錄一併移除,無法復原" },
 ];
+
+const NEGATIVE_BALANCE_OPTIONS: Array<{ value: NegativeBalancePolicy; label: string; hint: string }> = [
+  { value: "allow", label: "允許負餘額", hint: "維持現行行為,帳戶餘額可為負" },
+  { value: "reject", label: "不允許負餘額", hint: "支出或餘額調整不得使帳戶餘額低於零" },
+];
+
+function NegativeBalancePolicyControl({ value, onChange }: Readonly<{ value: NegativeBalancePolicy; onChange: (policy: NegativeBalancePolicy) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>負餘額 Negative balance</legend>
+      {NEGATIVE_BALANCE_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option" title={option.hint}>
+          <input type="radio" name="negative-balance" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 function DeleteActionControl({ value, onChange }: Readonly<{ value: DeleteAction; onChange: (action: DeleteAction) => void }>) {
   return (

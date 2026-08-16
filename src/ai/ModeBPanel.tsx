@@ -28,7 +28,7 @@ export type ModeBPanelProps = Readonly<{
   onResolveNewEntities?: (suggestion: NewEntityCarrier) => LocalAccount[] | false;
   // Writes the official record. extraAccounts carries the accounts created
   // for this write so validation sees them before the caller re-renders.
-  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => boolean;
+  onSaveRecord: (draft: TransactionDraft, extraAccounts?: LocalAccount[]) => string | null;
   onSaveDraft?: (draft: TransactionDraft) => void;
 }>;
 
@@ -292,8 +292,9 @@ function useModeBCapture({
       }
       created = resolved;
     }
-    if (!onSaveRecord(result.draft, created)) {
-      setError("這筆記錄無法建立,請檢查帳戶與欄位。");
+    const saveReason = onSaveRecord(result.draft, created);
+    if (saveReason !== null) {
+      setError(saveReason);
       return;
     }
     setDone("saved");
