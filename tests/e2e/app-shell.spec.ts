@@ -157,6 +157,26 @@ test("keeps the desktop shell within its viewport", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("switches the theme from 相關設定 and persists it across reloads", async ({ page }) => {
+  const errors = collectBrowserErrors(page);
+
+  await openWorkspace(page);
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
+  await page.getByRole("radio", { name: "淺色", exact: true }).click();
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  // Restore the default 深色 choice so the rest of the suite is unaffected.
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "相關設定", exact: true }).click();
+  await page.getByRole("radio", { name: "深色", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(errors).toEqual([]);
+});
+
 test("keeps the account page compact and aligned on mobile", async ({ page }) => {
   const errors = collectBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });

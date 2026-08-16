@@ -1154,6 +1154,22 @@ describe("App shell draft flow", () => {
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.audit-events") ?? "[]")).toEqual([]);
   });
 
+  test("theme control persists the choice and applies it to the document", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
+    await user.click(screen.getByRole("radio", { name: "淺色" }));
+
+    expect(window.localStorage.getItem("mealledger.settings.theme")).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
+
+    await user.click(screen.getByRole("radio", { name: "深色" }));
+    expect(window.localStorage.getItem("mealledger.settings.theme")).toBe("dark");
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
   test("manages custom categories from the 類別 section", async () => {
     const user = userEvent.setup();
     renderWorkspace();
