@@ -77,11 +77,11 @@ test("opens the account page with provider sign-in actions", async ({ page }) =>
   const errors = collectBrowserErrors(page);
 
   await openWorkspace(page);
+  // /account merged into Settings: the 登入 section is the default tab.
   await page.getByRole("button", { name: "設定", exact: true }).click();
-  await page.getByRole("button", { name: "Manage cloud access", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
-  expect(page.url()).toMatch(/\/account$/);
+  expect(page.url()).toMatch(/\/settings$/);
   const emailInput = page.getByLabel("Email", { exact: true });
   if (await emailInput.count()) {
     await expect(emailInput).toBeVisible();
@@ -163,7 +163,6 @@ test("keeps the account page compact and aligned on mobile", async ({ page }) =>
 
   await openWorkspace(page);
   await page.getByRole("button", { name: "設定", exact: true }).click();
-  await page.getByRole("button", { name: "Manage cloud access", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Optional cloud sync", exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(errors).toEqual([]);

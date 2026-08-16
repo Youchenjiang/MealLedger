@@ -1225,35 +1225,46 @@ h2 {
   gap: 16px;
 }
 
-.settings-account-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
-  border: 1px solid var(--brand-focus);
+.settings-preferences-block {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--brand-tint-3);
+  background: var(--bg-surface);
 }
 
-.settings-account-entry h2,
-.settings-account-entry p {
+.settings-preferences-block h2 {
   margin: 0;
 }
 
-.settings-account-entry h2 {
-  margin-top: 3px;
-  font-size: 18px;
+.category-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.settings-account-entry > div > p:last-child {
-  margin-top: 5px;
+.category-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+}
+
+.category-list-name {
+  font-weight: 700;
+}
+
+.category-list-count {
   color: var(--text-muted);
-  line-height: 1.45;
-}
-
-.settings-account-entry .secondary-action {
-  flex: 0 0 auto;
+  font-size: 13px;
 }
 
 .settings-tabs {

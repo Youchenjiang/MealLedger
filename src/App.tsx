@@ -21,7 +21,6 @@ import {
   Settings,
   Sparkles,
   Upload,
-  UserRound,
   Wifi,
   WifiOff,
   type LucideIcon,
@@ -66,7 +65,6 @@ const navItems: NavItem[] = [
   { route: "zone", label: "專區", path: "/zone", icon: LayoutGrid },
   { route: "settings", label: "設定", path: "/settings", icon: Settings },
 ];
-const accountNavItem: NavItem = { route: "account", label: "Cloud & account", path: "/account", icon: UserRound };
 
 type RouteDefinition = {
   segments: string[];
@@ -92,7 +90,9 @@ const routeDefinitions: RouteDefinition[] = [
   { segments: ["zone"], route: "zone" },
   { segments: ["settings"], route: "settings" },
   { segments: ["settings", "localization"], route: "settings" },
-  { segments: ["account"], route: "account" },
+  // /account stays reachable as the password-reset redirect target; it renders
+  // the settings page with the 登入 section open (see the settings spec).
+  { segments: ["account"], route: "settings" },
 ];
 
 function navItemFor(route: AppRoute): NavItem {
@@ -1293,7 +1293,7 @@ function AuthenticatedApp() {
       <section className={`workspace${route === "capture" ? " workspace-voice" : ""}`}>
         <WorkspaceHeader
           route={route}
-          statusItems={route !== "settings" && route !== "account" && route !== "capture" ? shellStatusItems(statusItems) : []}
+          statusItems={route !== "settings" && route !== "capture" ? shellStatusItems(statusItems) : []}
           headerAction={route === "capture" ? <AiModeSwitch mode={voiceCaptureMode} onModeChange={setVoiceCaptureMode} /> : undefined}
         />
         {renderRoute({
@@ -1324,6 +1324,8 @@ function AuthenticatedApp() {
           setAccounts,
           aiEntityPolicy,
           setAiEntityPolicy,
+          themeMode,
+          onThemeModeChange: setThemeMode,
           navigate,
           onReopenOnboarding: () => setOnboardingOpen(true),
           onSignIn: signIn,
@@ -1531,6 +1533,8 @@ type RouteRenderContext = {
   setAccounts: Dispatch<SetStateAction<LocalAccount[]>>;
   aiEntityPolicy: AiEntityPolicy;
   setAiEntityPolicy: Dispatch<SetStateAction<AiEntityPolicy>>;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
   navigate: (item: NavItem) => void;
   onReopenOnboarding: () => void;
   onSignIn: (email?: string, password?: string) => Promise<void>;
@@ -1578,6 +1582,8 @@ function renderRoute({
   setAccounts,
   aiEntityPolicy,
   setAiEntityPolicy,
+  themeMode,
+  onThemeModeChange,
   navigate,
   onReopenOnboarding,
   onSignIn,
@@ -1741,10 +1747,27 @@ function renderRoute({
           records={records}
           entityPolicy={aiEntityPolicy}
           onEntityPolicyChange={setAiEntityPolicy}
+          themeMode={themeMode}
+          onThemeModeChange={onThemeModeChange}
+          authState={authState}
+          authMessage={authMessage}
+          cloudDataOwnerMatches={cloudDataOwnerMatches}
+          handoffCounts={handoffCounts}
+          storageStatus={storageStatus}
+          identities={identities}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onRequestPasswordReset={onRequestPasswordReset}
+          onRecoverPasswordFromLink={onRecoverPasswordFromLink}
+          onUpdatePassword={onUpdatePassword}
+          onSignInWithOAuth={onSignInWithOAuth}
+          onLinkIdentity={onLinkIdentity}
+          onUnlinkIdentity={onUnlinkIdentity}
+          onClaimLocalWorkspace={onClaimLocalWorkspace}
+          onSignOut={onSignOut}
           onAddAccount={(account) => setAccounts((current) => [...current, account])}
           onSaveInitialFunding={(account, draft) => saveOfficialRecord(draft, [account, ...accounts], `settings:${draft.id}`)}
           onReopenOnboarding={onReopenOnboarding}
-          onOpenAccount={() => navigate(accountNavItem)}
           onImportRecord={(row, importId) => {
             const draft = toImportedTransactionDraft(row, importId);
             if (!draft) {
@@ -1762,27 +1785,6 @@ function renderRoute({
             setDrafts((current) => current.some((item) => item.id === draft.id) ? current : [...current, draft]);
             return true;
           }}
-        />
-      );
-    case "account":
-      return (
-        <AccountPage
-          authState={authState}
-          authMessage={authMessage}
-          cloudDataOwnerMatches={cloudDataOwnerMatches}
-          handoffCounts={handoffCounts}
-          storageStatus={storageStatus}
-          identities={identities}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-          onRequestPasswordReset={onRequestPasswordReset}
-          onRecoverPasswordFromLink={onRecoverPasswordFromLink}
-          onUpdatePassword={onUpdatePassword}
-          onSignInWithOAuth={onSignInWithOAuth}
-          onLinkIdentity={onLinkIdentity}
-          onUnlinkIdentity={onUnlinkIdentity}
-          onClaimLocalWorkspace={onClaimLocalWorkspace}
-          onSignOut={onSignOut}
         />
       );
     default:
@@ -4477,15 +4479,18 @@ function LedgerAccountsPanel({ accounts, onAddAccount, onSaveInitialFunding, onR
   );
 }
 
-type SettingsPageProps = {
+type SettingsSection = "login" | "portability" | "categories" | "preferences";
+
+type SettingsPageProps = AccountPageProps & {
   accounts: LocalAccount[];
   records: LocalLedgerRecord[];
   entityPolicy: AiEntityPolicy;
   onEntityPolicyChange: (policy: AiEntityPolicy) => void;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
   onAddAccount: (account: LocalAccount) => void;
   onSaveInitialFunding: (account: LocalAccount, draft: TransactionDraft) => boolean;
   onReopenOnboarding: () => void;
-  onOpenAccount: () => void;
   onImportRecord: (row: NormalizedImportRow, importId: string) => boolean;
   onMergeImportDraft: (row: NormalizedImportRow, importId: string) => boolean;
 };
@@ -4495,31 +4500,48 @@ function SettingsPage({
   records,
   entityPolicy,
   onEntityPolicyChange,
+  themeMode,
+  onThemeModeChange,
   onAddAccount,
   onSaveInitialFunding,
   onReopenOnboarding,
-  onOpenAccount,
   onImportRecord,
   onMergeImportDraft,
+  ...accountProps
 }: Readonly<SettingsPageProps>) {
-  const [section, setSection] = useState<"ledger-accounts" | "portability" | "ai-capture">("ledger-accounts");
+  const [section, setSection] = useState<SettingsSection>("login");
 
   const renderSection = () => {
-    if (section === "ledger-accounts") {
-      return (
-        <LedgerAccountsPanel
-          accounts={accounts}
-          onAddAccount={onAddAccount}
-          onSaveInitialFunding={onSaveInitialFunding}
-          onReopenOnboarding={onReopenOnboarding}
-        />
-      );
+    if (section === "login") {
+      return <AccountPage {...accountProps} />;
     }
-    if (section === "ai-capture") {
-      return (
-        <section className="settings-ai-policy" aria-labelledby="ai-capture-title">
+    if (section === "portability") {
+      return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
+    }
+    if (section === "categories") {
+      return <CategoriesPanel records={records} />;
+    }
+    return (
+      <div className="route-stack">
+        <section className="settings-preferences-block" aria-labelledby="preferences-accounts-title">
+          <p className="eyebrow">Accounts</p>
+          <h2 id="preferences-accounts-title">帳戶管理 Account management</h2>
+          <LedgerAccountsPanel
+            accounts={accounts}
+            onAddAccount={onAddAccount}
+            onSaveInitialFunding={onSaveInitialFunding}
+            onReopenOnboarding={onReopenOnboarding}
+          />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-theme-title">
+          <p className="eyebrow">Appearance</p>
+          <h2 id="preferences-theme-title">主題 Theme</h2>
+          <p className="panel-copy">深色為預設;可切換 深色 / 淺色 / 跟隨系統。</p>
+          <ThemeControl value={themeMode} onChange={onThemeModeChange} />
+        </section>
+        <section className="settings-preferences-block" aria-labelledby="preferences-ai-title">
           <p className="eyebrow">Spoken capture</p>
-          <h2 id="ai-capture-title">Voice &amp; AI</h2>
+          <h2 id="preferences-ai-title">AI 口說偏好</h2>
           <p className="panel-copy">
             口說記帳時可否提到尚未建立的帳戶或類別;新帳戶以 TWD 建立(如同預設錢包),事後可在帳戶/類別管理修改。
           </p>
@@ -4534,30 +4556,70 @@ function SettingsPage({
             onChange={(value) => onEntityPolicyChange({ ...entityPolicy, category: value })}
           />
         </section>
-      );
-    }
-    return <ImportExportPanel accounts={accounts} records={records} onImportRecord={onImportRecord} onMergeImportDraft={onMergeImportDraft} />;
+      </div>
+    );
   };
 
   return (
     <section className="settings-page">
-      <section className="settings-account-entry" aria-labelledby="cloud-account-title">
-        <div>
-          <p className="eyebrow">Optional cloud features</p>
-          <h2 id="cloud-account-title">Cloud &amp; account</h2>
-          <p>Keep using MealLedger locally, or sign in when you are ready to sync this workspace.</p>
-        </div>
-        <button className="secondary-action" type="button" onClick={onOpenAccount}>
-          <UserRound size={18} aria-hidden="true" />
-          Manage cloud access
-        </button>
-      </section>
       <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-        <button className={`settings-tab ${section === "ledger-accounts" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ledger-accounts"} onClick={() => setSection("ledger-accounts")}>Money accounts</button>
-        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>Import &amp; export</button>
-        <button className={`settings-tab ${section === "ai-capture" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "ai-capture"} onClick={() => setSection("ai-capture")}>Voice &amp; AI</button>
+        <button className={`settings-tab ${section === "login" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "login"} onClick={() => setSection("login")}>登入</button>
+        <button className={`settings-tab ${section === "portability" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "portability"} onClick={() => setSection("portability")}>匯入匯出</button>
+        <button className={`settings-tab ${section === "categories" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "categories"} onClick={() => setSection("categories")}>類別</button>
+        <button className={`settings-tab ${section === "preferences" ? "active" : ""}`} type="button" role="tab" aria-selected={section === "preferences"} onClick={() => setSection("preferences")}>相關設定</button>
       </div>
       {renderSection()}
+    </section>
+  );
+}
+
+const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
+  { value: "dark", label: "深色" },
+  { value: "light", label: "淺色" },
+  { value: "system", label: "跟隨系統" },
+];
+
+function ThemeControl({ value, onChange }: Readonly<{ value: ThemeMode; onChange: (mode: ThemeMode) => void }>) {
+  return (
+    <fieldset className="entity-policy-row">
+      <legend>主題 Theme</legend>
+      {THEME_OPTIONS.map((option) => (
+        <label key={option.value} className="entity-policy-option">
+          <input type="radio" name="theme" value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function CategoriesPanel({ records }: Readonly<{ records: LocalLedgerRecord[] }>) {
+  const stored = readStoredCategories();
+  const used = new Set(records.map((record) => record.category).filter((value): value is string => Boolean(value)));
+  const categories = [...new Set([...stored, ...used])].sort((a, b) => a.localeCompare(b));
+  const counts = new Map<string, number>();
+  for (const category of categories) {
+    counts.set(category, records.filter((record) => record.category === category).length);
+  }
+  return (
+    <section className="settings-preferences-block" aria-labelledby="categories-title">
+      <p className="eyebrow">Classification</p>
+      <h2 id="categories-title">類別 Categories</h2>
+      <p className="panel-copy">
+        自訂類別與記錄中使用的類別一覽;管理(新增/改名/刪除)將在此區提供。
+      </p>
+      {categories.length > 0 ? (
+        <ul className="category-list">
+          {categories.map((category) => (
+            <li key={category}>
+              <span className="category-list-name">{category}</span>
+              <span className="category-list-count">{counts.get(category)} 筆</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="panel-copy">尚無自訂類別。</p>
+      )}
     </section>
   );
 }
@@ -5119,8 +5181,6 @@ function routeTitle(route: AppRoute) {
       return "Zone";
     case "settings":
       return "Settings";
-    case "account":
-      return "Account";
     default:
       return "Unknown route";
   }

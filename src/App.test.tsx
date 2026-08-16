@@ -100,8 +100,8 @@ describe("App shell draft flow", () => {
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Voice & AI" }));
-    expect(screen.getByRole("heading", { name: "Voice & AI" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "相關設定" }));
+    expect(screen.getByRole("heading", { name: "AI 口說偏好" })).toBeInTheDocument();
 
     const accountRow = screen.getByRole("group", { name: "帳戶 Accounts" });
     await user.click(within(accountRow).getByRole("radio", { name: "直接新增" }));
@@ -340,7 +340,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
 
     expect(screen.getByRole("button", { name: "Export CSV" })).toHaveClass("primary-action");
     expect(screen.getByRole("button", { name: "Export JSON" })).toHaveClass("secondary-action");
@@ -365,7 +365,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
     const file = new File([`date,account,amount\n${testLocalDate()},Cash,417\n`], "ledger.csv", { type: "text/csv" });
     await user.upload(screen.getByLabelText("CSV import file"), file);
 
@@ -380,7 +380,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await addAccount(user, "Daily wallet");
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "ledger.csv", { type: "text/csv" });
@@ -401,7 +401,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate.csv", { type: "text/csv" });
@@ -419,7 +419,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate-actions.csv", { type: "text/csv" });
@@ -441,7 +441,7 @@ describe("App shell draft flow", () => {
     await openWorkspace(user);
     await createExpenseRecord(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
     const file = new File([
       `date,kind,account,amount,currency,merchant,item_name,category\n${testLocalDate()},expense,Daily wallet,417,TWD,全聯,香蕉,日用\n`,
     ], "duplicate-draft.csv", { type: "text/csv" });
@@ -661,7 +661,7 @@ describe("App shell draft flow", () => {
     await user.click(screen.getByRole("button", { name: "概覽" }));
     expect(screen.queryByRole("region", { name: "Application status" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "設定" }));
-    expect(screen.getByRole("tab", { name: "Money accounts" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "登入" })).toHaveAttribute("aria-selected", "true");
   });
 
   test("keeps an offline manual record visibly local-only", async () => {
@@ -687,7 +687,7 @@ describe("App shell draft flow", () => {
 
     await openWorkspace(user);
     await user.click(screen.getByRole("button", { name: "設定" }));
-    await user.click(screen.getByRole("tab", { name: "Import & export" }));
+    await user.click(screen.getByRole("tab", { name: "匯入匯出" }));
     await user.upload(screen.getByLabelText("CSV import file"), new File(["unknown,other\nvalue\n"], "invalid.csv", { type: "text/csv" }));
 
     const rejectionMessage = await screen.findByText(/CSV rejected:/);

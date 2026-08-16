@@ -6,7 +6,6 @@ export type AppRoute =
   | "capture"
   | "zone"
   | "settings"
-  | "account"
   | "not-found";
 
 export type AppLocation = {
