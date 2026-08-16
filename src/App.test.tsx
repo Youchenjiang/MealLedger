@@ -1219,7 +1219,7 @@ describe("App shell draft flow", () => {
     await user.type(screen.getByLabelText("Amount"), "3000");
     await user.click(screen.getByRole("button", { name: "Save record" }));
 
-    expect(screen.getByText(/「Daily wallet」餘額將低於零/)).toBeInTheDocument();
+    expect(screen.getByText(/「Daily wallet」餘額將低於零/u)).toBeInTheDocument();
     expect(JSON.parse(window.localStorage.getItem("mealledger.manual-ledger.records") ?? "[]")).toEqual(
       expect.not.arrayContaining([expect.objectContaining({ kind: "expense" })]),
     );
